@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2f0e9" />
+    <meta name="description" content="En enkel oppgavetimer med egne tider og faste pauser." />
+    <title>Ro — oppgavetimer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <div class="brand" aria-label="Ro">ro</div>
+        <button class="sound-button" id="soundButton" type="button" aria-pressed="true">
+          <span aria-hidden="true">♪</span>
+          <span id="soundLabel">Lyd på</span>
+        </button>
+      </header>
+
+      <section class="timer-card" aria-labelledby="pageTitle">
+        <div class="heading">
+          <p class="eyebrow">Din arbeidsøkt</p>
+          <h1 id="pageTitle">Hva skal du gjøre?</h1>
+          <p>Legg inn oppgavene i rekkefølgen du vil gjøre dem.</p>
+        </div>
+
+        <div class="planner" id="planner">
+          <form class="task-form" id="taskForm">
+            <label>
+              <span>Oppgave</span>
+              <input id="taskName" type="text" maxlength="80" placeholder="f.eks. skrive rapport" autocomplete="off" required />
+            </label>
+            <label class="minutes-input">
+              <span>Tid</span>
+              <span><input id="taskMinutes" type="number" min="1" max="180" value="25" inputmode="numeric" required /> min</span>
+            </label>
+            <button type="submit" aria-label="Legg til oppgave">Legg til</button>
+          </form>
+
+          <ul class="task-list" id="taskList" aria-label="Oppgaver"></ul>
+
+          <div class="pause-setting">
+            <label for="breakMinutes">Pause mellom oppgavene</label>
+            <span><input id="breakMinutes" type="number" min="1" max="60" value="5" inputmode="numeric" /> min</span>
+          </div>
+        </div>
+
+        <p class="plan-summary" id="planSummary">Ingen oppgaver lagt til ennå.</p>
+
+        <div class="timer" id="timer" style="--progress: 0deg">
+          <div class="timer-face">
+            <p class="phase-label" id="phaseLabel">Klar</p>
+            <time id="timerDisplay" datetime="PT0M">00:00</time>
+            <p class="task-label" id="activeTaskLabel">Legg til en oppgave</p>
+            <p class="set-label" id="setLabel">0 av 0</p>
+          </div>
+        </div>
+
+        <div class="progress" id="progress" aria-label="Fremdrift gjennom oppgavene"></div>
+
+        <div class="actions">
+          <button class="primary-button" id="startButton" type="button" disabled>Start</button>
+          <button class="text-button" id="skipButton" type="button" hidden>Hopp over</button>
+          <button class="text-button" id="resetButton" type="button" hidden>Nullstill</button>
+        </div>
+
+        <p class="status" id="status" aria-live="polite">Legg til den første oppgaven din.</p>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,63 @@
+name: PanelCompanion
+options:
+  bundleIdPrefix: no.olefroiland
+  deploymentTarget:
+    iOS: "26.4"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: ""
+targets:
+  PanelCompanion:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    info:
+      path: Config/Info.plist
+      properties:
+        CFBundleDisplayName: Panelkobling
+        NSHealthShareUsageDescription: Panelkobling leser bare skritt for å vise dagens skritt i ditt lokale dashboard.
+        NSLocationWhenInUseUsageDescription: Panelkobling bruker posisjonen til å hente riktig lokalt vær i dashboardet.
+        NSLocalNetworkUsageDescription: Panelkobling sender skjermtid, skritt og posisjon direkte til dashboardet på din Mac.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - no.olefroiland.PanelCompanion.refresh
+        UILaunchScreen: {}
+    entitlements:
+      path: Config/PanelCompanion.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.developer.family-controls.app-and-website-usage: true
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: no.olefroiland.PanelCompanion
+        PRODUCT_NAME: Panelkobling
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: false
+        OTHER_SWIFT_FLAGS: "$(inherited) -DPANEL_USAGE_EXPORT"
+    attributes:
+      SystemCapabilities:
+        com.apple.HealthKit:
+          enabled: 1
+        com.apple.FamilyControls:
+          enabled: 1
+  PanelCompanionUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: PanelCompanion
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: no.olefroiland.PanelCompanionUITests
+        TEST_TARGET_NAME: PanelCompanion
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: true

@@ -1,0 +1,8 @@
+[build]
+  command = "npm --prefix ipad-control-center run build"
+  publish = "ipad-control-center/dist/client"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
