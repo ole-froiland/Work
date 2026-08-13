@@ -16,6 +16,9 @@ På iPad og andre enheter på samme nettverk brukes den stabile lokale adressen
 Mac-funksjonene. Den offentlige Netlify-utgaven viser grensesnittet, men kjører av
 sikkerhetsgrunner ikke Mac-handlinger eller leser lokale konto- og helsedata.
 
+Mac-en bruker LaunchAgent-filen i `macos/com.ole.panel.plist`, slik at den lokale
+broen starter ved innlogging og startes på nytt automatisk hvis prosessen stopper.
+
 Codex og Claude må være installert og innlogget på Mac-en som kjører serveren. Hvis én klient ikke er tilgjengelig, viser panelet en eksplisitt feil for den leverandøren i stedet for et estimat.
 
 ## Vær, skjermtid og skritt
