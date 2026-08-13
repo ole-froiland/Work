@@ -58,6 +58,18 @@ export function buildMonthDays(year, month) {
   });
 }
 
+export function eventOccursOnDay(event, day) {
+  const start = new Date(event?.start ?? "");
+  if (!Number.isFinite(+start)) return false;
+  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+  const eventStart = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  if (!event?.allDay) return +dayStart === +eventStart;
+
+  const end = new Date(event?.end ?? "");
+  if (!Number.isFinite(+end) || +end <= +start) return false;
+  return +dayStart >= +eventStart && +dayStart < +end;
+}
+
 function formatNumber(value) {
   return Number.isFinite(value) ? new Intl.NumberFormat("nb-NO", { maximumFractionDigits: 0 }).format(value) : "Ikke synket";
 }

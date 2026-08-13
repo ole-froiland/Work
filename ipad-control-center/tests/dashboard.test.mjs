@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMetricDetails, buildMonthDays, formatAppName, formatMinutes, formatTimer } from "../src/dashboard.js";
+import { buildMetricDetails, buildMonthDays, eventOccursOnDay, formatAppName, formatMinutes, formatTimer } from "../src/dashboard.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
@@ -29,6 +29,13 @@ test("builds a six-week month grid starting on Monday", () => {
   assert.deepEqual(august2026[0], { value: 27, currentMonth: false });
   assert.deepEqual(august2026[5], { value: 1, currentMonth: true });
   assert.deepEqual(august2026[41], { value: 6, currentMonth: false });
+});
+
+test("shows an all-day trip on every included calendar day", () => {
+  const trip = { start: "2027-01-10T00:00:00", end: "2027-01-20T00:00:00", allDay: true };
+  assert.equal(eventOccursOnDay(trip, new Date(2027, 0, 10)), true);
+  assert.equal(eventOccursOnDay(trip, new Date(2027, 0, 19)), true);
+  assert.equal(eventOccursOnDay(trip, new Date(2027, 0, 20)), false);
 });
 
 test("builds honest metric details from synced device values", () => {

@@ -24,7 +24,7 @@ import {
   WifiHigh,
   X,
 } from "@phosphor-icons/react";
-import { buildMetricDetails, buildMonthDays, formatMinutes, formatTimer } from "./dashboard.js";
+import { buildMetricDetails, buildMonthDays, eventOccursOnDay, formatMinutes, formatTimer } from "./dashboard.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -206,7 +206,7 @@ function formatEventTime(value) {
 }
 
 function eventsOnDay(events, date) {
-  return events.filter((event) => isSameCalendarDay(event.start, date));
+  return events.filter((event) => eventOccursOnDay(event, date));
 }
 
 function eventStyle(event) {
