@@ -49,6 +49,45 @@ export async function updateSyncCalendar(input) {
   return { ...snapshot, connected: true, stale: false };
 }
 
+export async function mutateMacAppleCalendar(input, runner = execFileAsync) {
+  if (input?.operation !== "create" || !Array.isArray(input.events) || input.events.length < 1 || input.events.length > 20) {
+    throw new Error("Ugyldig kalenderendring");
+  }
+  const events = input.events.map(normalizeWritableEvent);
+  const script = `
+    const calendarApp = Application('Calendar');
+    const preferred = ['Hjem', 'Home', 'Kalender', 'Calendar', 'Privat', 'Personal'];
+    const calendars = calendarApp.calendars();
+    const target = preferred.map(name => calendars.find(calendar => calendar.name() === name)).find(Boolean) || calendars[0];
+    if (!target) throw new Error('Fant ingen Apple-kalender');
+    const input = ${JSON.stringify(events)};
+    const created = input.map(value => {
+      const event = calendarApp.Event({
+        summary: value.title,
+        startDate: new Date(value.start),
+        endDate: new Date(value.end),
+        alldayEvent: value.allDay
+      });
+      target.events.push(event);
+      return { id: 'apple-local:' + event.uid(), ...value, calendarName: target.name(), source: 'apple', tone: 'amber', kind: 'meeting' };
+    });
+    JSON.stringify(created);
+  `;
+  const { stdout } = await runner("/usr/bin/osascript", ["-l", "JavaScript", "-e", script], {
+    timeout: 30_000,
+    maxBuffer: 512 * 1024,
+  });
+  const created = normalizeSyncCalendar({ events: JSON.parse(stdout) }).events;
+  const createdKeys = new Set(created.map(eventFingerprint));
+  appleCache = {
+    events: [...appleCache.events.filter((event) => !createdKeys.has(eventFingerprint(event))), ...created]
+      .sort((a, b) => +new Date(a.start) - +new Date(b.start)),
+    updatedAt: Date.now(),
+    ready: true,
+  };
+  return { events: created };
+}
+
 export async function getSyncCalendar() {
   let snapshot = { updatedAt: null, events: [], connected: false, stale: false };
   try {
@@ -130,4 +169,19 @@ export async function readMacAppleCalendar(runner = execFileAsync, now = new Dat
 
 function eventFingerprint(event) {
   return `${String(event?.title ?? '').trim().toLowerCase()}|${new Date(event?.start ?? '').toISOString()}|${new Date(event?.end ?? '').toISOString()}`;
+}
+
+function normalizeWritableEvent(value) {
+  const title = shortText(value?.title, 300);
+  const start = new Date(value?.start ?? "");
+  const end = new Date(value?.end ?? "");
+  if (!title || !Number.isFinite(+start) || !Number.isFinite(+end) || +end <= +start) {
+    throw new Error("Hendelsen mangler gyldig navn eller tidspunkt");
+  }
+  return {
+    title,
+    start: start.toISOString(),
+    end: end.toISOString(),
+    allDay: value?.allDay === true,
+  };
 }

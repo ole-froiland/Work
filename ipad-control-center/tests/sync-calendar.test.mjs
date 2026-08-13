@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeCalendarEvents, normalizeSyncCalendar, readMacAppleCalendar } from "../server/sync-calendar-service.mjs";
+import { mergeCalendarEvents, mutateMacAppleCalendar, normalizeSyncCalendar, readMacAppleCalendar } from "../server/sync-calendar-service.mjs";
 import { normalizeSyncNoteCommand, normalizeSyncNotes } from "../server/sync-notes-service.mjs";
 
 test("normalizes and sorts trusted Sync calendar snapshots", () => {
@@ -41,6 +41,30 @@ test("reads and normalizes events returned by the local Calendar app", async () 
     { id: events[0].id, title: events[0].title, source: events[0].source },
     { id: "apple-local:one", title: "Cowork", source: "apple" },
   );
+});
+
+test("creates a validated event in the local Apple Calendar", async () => {
+  let invocation;
+  const runner = async (...args) => {
+    invocation = args;
+    return { stdout: JSON.stringify([{
+      id: "apple-local:new",
+      title: "Cowork",
+      start: "2026-08-18T08:00:00.000Z",
+      end: "2026-08-18T10:00:00.000Z",
+      source: "apple",
+      tone: "amber",
+      kind: "meeting",
+      calendarName: "Hjem",
+    }]) };
+  };
+  const result = await mutateMacAppleCalendar({
+    operation: "create",
+    events: [{ title: "Cowork", start: "2026-08-18T08:00:00.000Z", end: "2026-08-18T10:00:00.000Z" }],
+  }, runner);
+  assert.equal(invocation[0], "/usr/bin/osascript");
+  assert.match(invocation[1][3], /target\.events\.push/);
+  assert.equal(result.events[0].id, "apple-local:new");
 });
 
 test("rejects malformed payload shapes without fabricating events", () => {

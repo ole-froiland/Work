@@ -150,6 +150,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .calendar-date-strip svg { color: var(--lime); }
 .calendar-date-strip strong { color: var(--text); font-size: 12px; text-transform: capitalize; }
 .calendar-date-strip span { margin-left: auto; font-size: 11px; }
+.calendar-add { min-height: 30px; display: flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: #1c2229; color: var(--text); cursor: pointer; font-size: 11px; font-weight: 700; }
 .calendar-stage { min-height: 0; padding: 10px 18px 6px; overflow: hidden; overscroll-behavior: none; }
 
 .day-calendar { position: relative; min-height: 585px; }
@@ -252,9 +253,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .focus-primary svg, .icon-button svg { width: 19px; height: 19px; }
 .icon-button { width: 46px; flex: 0 0 auto; display: grid; place-items: center; }
 .task-list { min-height: 0; display: grid; gap: 7px; overflow-y: auto; overscroll-behavior: contain; }
-.task-list li { min-height: 44px; display: grid; grid-template-columns: 32px 1fr; align-items: center; gap: 8px; padding: 5px 7px; border-radius: 10px; background: #1a1f26; }
+.task-list li { min-height: 44px; display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; align-items: center; gap: 8px; padding: 5px 7px; border-radius: 10px; background: #1a1f26; }
 .task-list li > button { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 1px solid #39414a; border-radius: 9px; background: transparent; color: var(--lime-ink); cursor: pointer; }
 .task-list li > button svg { width: 12px; }
+.task-list li > button.note-calendar { border-color: transparent; color: var(--muted); }
+.task-list li > button.note-calendar:hover { border-color: var(--line); color: var(--lime); }
 .task-list li > span { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .task-list li.done > button { border-color: var(--lime); background: var(--lime); }
 .task-list li.done > span { color: var(--dim); text-decoration: line-through; }
@@ -293,6 +296,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .modal-actions button { min-height: 40px; padding: 0 13px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; }
 .modal-actions button:last-child { border-color: var(--lime); background: var(--lime); color: var(--lime-ink); font-weight: 700; }
+.modal-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.modal-title button { width: 34px; height: 34px; display: grid; flex: 0 0 auto; place-items: center; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; }
+.calendar-time-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.calendar-time-fields label { margin: 0; }
+.calendar-time-fields input { margin-top: 7px; }
+.save-button { width: 100%; min-height: 44px; margin-top: 16px; border: 0; border-radius: 11px; background: var(--lime); color: var(--lime-ink); cursor: pointer; font-weight: 800; }
 .metric-popover { position: absolute; bottom: calc(100% + 12px); z-index: 12; width: min(360px, calc(100% - 24px)); padding: 16px; border: 1px solid #46515e; border-radius: 18px; background: #191f26; box-shadow: 0 22px 65px rgba(0,0,0,.55); text-align: left; animation: popover-in 140ms ease-out; }
 /* Bobla holder seg alltid innenfor kalenderpanelet, som klipper alt utenfor.
    Bare pilen flytter seg mot knappen den hører til. */

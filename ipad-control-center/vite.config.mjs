@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { getDeviceMetrics, updateDeviceMetrics } from "./server/device-metrics-service.mjs";
 import { runMacAction } from "./server/mac-action-service.mjs";
 import { getUsageSnapshot } from "./server/usage-service.mjs";
-import { getSyncCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
+import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
 import {
   acknowledgeSyncNoteCommand,
   enqueueSyncNoteCommand,
@@ -132,7 +132,12 @@ function syncCalendarApi() {
             return;
           }
           if (request.method === "POST") {
-            sendJson(response, 200, await updateSyncCalendar(await readJsonBody(request, 512_000)));
+            const body = await readJsonBody(request, 512_000);
+            if (body.kind === "mutation") {
+              sendJson(response, 200, await mutateMacAppleCalendar(body));
+              return;
+            }
+            sendJson(response, 200, await updateSyncCalendar(body));
             return;
           }
           sendJson(response, 405, { error: "Method not allowed" });

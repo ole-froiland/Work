@@ -260,7 +260,7 @@ function WeekCalendar({ date, events }) {
   );
 }
 
-function MonthCalendar({ date, events }) {
+function MonthCalendar({ date, events, onSelectDay, onDropNote }) {
   const days = buildMonthDays(date.getFullYear(), date.getMonth());
   const first = new Date(date.getFullYear(), date.getMonth(), 1);
   const gridStart = new Date(first);
@@ -271,7 +271,14 @@ function MonthCalendar({ date, events }) {
       {days.map((day, index) => {
         const cellDate = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
         const count = eventsOnDay(events, cellDate).length;
-        return <button className={`${day.currentMonth ? "" : "outside"} ${isSameCalendarDay(new Date(), cellDate) ? "today" : ""}`} type="button" key={cellDate.toISOString()}>
+        return <button
+          className={`${day.currentMonth ? "" : "outside"} ${isSameCalendarDay(new Date(), cellDate) ? "today" : ""}`}
+          type="button"
+          onClick={() => onSelectDay(cellDate)}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => onDropNote(event, cellDate)}
+          key={cellDate.toISOString()}
+        >
           {day.value}
           {count > 0 && <i title={`${count} arrangement${count === 1 ? "" : "er"}`} />}
         </button>;
@@ -306,6 +313,7 @@ function App() {
   const [syncCalendar, setSyncCalendar] = useState({ events: [], connected: false, stale: false });
   const [syncNotes, setSyncNotes] = useState({ notes: [], connected: false, stale: false, pending: 0 });
   const [newNote, setNewNote] = useState("");
+  const [calendarComposer, setCalendarComposer] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(() => Boolean(fullscreenElement()));
   const [mirrorDevice, setMirrorDevice] = useState(() => localStorage.getItem("panel-mirror-device") || "iPad");
   const [mirrorDraft, setMirrorDraft] = useState(mirrorDevice);
@@ -660,6 +668,51 @@ function App() {
     }
   }
 
+  function openCalendarComposer(day = date, title = "", noteId = null) {
+    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9, 0);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const localValue = (value) => {
+      const shifted = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
+      return shifted.toISOString().slice(0, 16);
+    };
+    setCalendarComposer({ title, start: localValue(start), end: localValue(end), noteId });
+  }
+
+  function dropNoteInCalendar(event, day = date) {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      const note = JSON.parse(event.dataTransfer.getData("application/x-sync-note"));
+      if (note?.title) openCalendarComposer(day, note.title, note.id ?? null);
+    } catch {
+      setToast("Kunne ikke lese notatet");
+    }
+  }
+
+  async function saveCalendarEvent(event) {
+    event.preventDefault();
+    const title = calendarComposer?.title.trim();
+    if (!title) return;
+    try {
+      const response = await fetch("/api/sync-calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "mutation",
+          operation: "create",
+          events: [{ title, start: new Date(calendarComposer.start).toISOString(), end: new Date(calendarComposer.end).toISOString(), noteId: calendarComposer.noteId }],
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setSyncCalendar((current) => ({ ...current, connected: true, events: [...current.events, ...(result.events ?? [])] }));
+      setCalendarComposer(null);
+      setToast("Lagt inn i Apple Kalender");
+    } catch (error) {
+      setToast(`Kunne ikke legge inn hendelsen (${error.message})`);
+    }
+  }
+
   async function refreshUsage() {
     setUsageLoading(true);
     try {
@@ -717,11 +770,11 @@ function App() {
               </div>
             </div>
           </div>
-          <div className="calendar-date-strip"><CalendarBlank size={19} weight="duotone" /><strong>{syncCalendar.connected ? `${selectedDayEvents.length} arrangement${selectedDayEvents.length === 1 ? "" : "er"}` : "Sync-kalender ikke tilkoblet"}</strong><span>{syncCalendar.connected ? `${formatMinutes(plannedMinutes)} planlagt${syncCalendar.stale ? " · sist synket" : ""}` : "Åpne kalenderen i Sync"}</span></div>
-          <div className="calendar-stage">
+          <div className="calendar-date-strip"><CalendarBlank size={19} weight="duotone" /><strong>{syncCalendar.connected ? `${selectedDayEvents.length} arrangement${selectedDayEvents.length === 1 ? "" : "er"}` : "Apple Kalender kobles til"}</strong><span>{syncCalendar.connected ? `${formatMinutes(plannedMinutes)} planlagt${syncCalendar.stale ? " · sist synket" : ""}` : "Venter på Kalender på Mac-en"}</span><button className="calendar-add" type="button" onClick={() => openCalendarComposer()} aria-label="Nytt arrangement"><Plus size={16} weight="bold" /> Ny</button></div>
+          <div className="calendar-stage" onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropNoteInCalendar(event)}>
             {view === "day" && <DayCalendar date={date} events={calendarEvents} now={now} />}
             {view === "week" && <WeekCalendar date={date} events={calendarEvents} />}
-            {view === "month" && <MonthCalendar date={date} events={calendarEvents} />}
+            {view === "month" && <MonthCalendar date={date} events={calendarEvents} onSelectDay={(day) => { setDate(day); openCalendarComposer(day); }} onDropNote={dropNoteInCalendar} />}
           </div>
           <footer className="system-strip">
             <MiniStatus icon={Laptop} label="Skjermtid · i går" value={hasScreenTimeSource ? formatMinutes(deviceMetrics?.screenTime?.yesterdayMinutes) : "Koble iPhone"} detail={hasScreenTimeSource ? `Snitt uke: ${formatMinutes(deviceMetrics?.screenTime?.weeklyAverageMinutes)}` : "Device Activity · iPhone + iPad"} tone="violet" onClick={() => setActiveMetric((current) => current?.id === "screenTime" ? null : { id: "screenTime", icon: Laptop, tone: "violet", anchor: 0 })} />
@@ -794,7 +847,7 @@ function App() {
           <section className="panel-card task-card">
             <div className="section-heading"><div><span className="eyebrow">Sync</span><h2>Notater</h2></div><span className="task-count">{syncNotes.connected ? syncNotes.notes.length : "–"}</span></div>
             <ul className="task-list">
-              {syncNotes.notes.map((note) => <li key={note.id}><button type="button" onClick={() => completeSyncNote(note)} aria-label={`Fullfør ${note.title}`} /><span>{note.title}</span></li>)}
+              {syncNotes.notes.map((note) => <li draggable onDragStart={(event) => event.dataTransfer.setData("application/x-sync-note", JSON.stringify(note))} key={note.id}><button type="button" onClick={() => completeSyncNote(note)} aria-label={`Fullfør ${note.title}`} /><span>{note.title}</span><button className="note-calendar" type="button" onClick={() => openCalendarComposer(date, note.title, note.id)} aria-label={`Legg ${note.title} i kalenderen`}><CalendarBlank size={16} /></button></li>)}
             </ul>
             {syncNotes.notes.length === 0 && <p className="notes-empty">{syncNotes.connected ? "Ingen aktive notater" : "Åpne Sync på Mac-en for å koble til"}</p>}
             <form className="add-task" onSubmit={addSyncNote}><Plus size={17} /><input value={newNote} onChange={(event) => setNewNote(event.target.value)} placeholder="Skriv et notat" aria-label="Nytt Sync-notat" /><button type="submit">Legg til</button></form>
@@ -824,6 +877,23 @@ function App() {
               <input id="mirrorDevice" type="text" value={mirrorDraft} onChange={(event) => setMirrorDraft(event.target.value)} placeholder="iPad" />
               <p className="modal-hint">Fokusknappen kjører snarveiene «Fokus på» og «Fokus av» på Mac-en. De er allerede installert. For at iPhone og iPad skal følge etter må «Del på tvers av enheter» være på i Systeminnstillinger → Fokus.</p>
               <div className="modal-actions"><button type="button" onClick={() => { setBridgeDraft(""); }}>Bruk demo</button><button type="submit">Lagre tilkobling</button></div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {calendarComposer && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCalendarComposer(null); }}>
+          <section className="bridge-modal calendar-composer" role="dialog" aria-modal="true" aria-labelledby="calendarComposerTitle">
+            <div className="modal-title"><div><span className="eyebrow">Apple Kalender</span><h2 id="calendarComposerTitle">Nytt arrangement</h2></div><button type="button" onClick={() => setCalendarComposer(null)} aria-label="Lukk"><X /></button></div>
+            <form className="bridge-form" onSubmit={saveCalendarEvent}>
+              <label htmlFor="calendarTitle">Navn</label>
+              <input id="calendarTitle" value={calendarComposer.title} onChange={(event) => setCalendarComposer((current) => ({ ...current, title: event.target.value }))} autoFocus required />
+              <div className="calendar-time-fields">
+                <label>Start<input type="datetime-local" value={calendarComposer.start} onChange={(event) => setCalendarComposer((current) => ({ ...current, start: event.target.value }))} required /></label>
+                <label>Slutt<input type="datetime-local" value={calendarComposer.end} onChange={(event) => setCalendarComposer((current) => ({ ...current, end: event.target.value }))} required /></label>
+              </div>
+              <button className="save-button" type="submit">Legg inn i Apple Kalender</button>
             </form>
           </section>
         </div>
