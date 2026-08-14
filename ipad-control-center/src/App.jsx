@@ -24,7 +24,7 @@ import {
   WifiHigh,
   X,
 } from "@phosphor-icons/react";
-import { buildMetricDetails, buildMonthDays, eventOccursOnDay, formatMinutes, formatTimer } from "./dashboard.js";
+import { buildMetricDetails, buildMonthDays, eventOccursOnDay, formatMinutes, formatTimer, readUsageResponse } from "./dashboard.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -390,8 +390,7 @@ function App() {
     async function load() {
       try {
         const response = await fetch("/api/usage", { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const snapshot = await response.json();
+        const snapshot = await readUsageResponse(response);
         if (active) setUsage(snapshot);
       } catch (error) {
         if (active) setUsage({
@@ -717,8 +716,7 @@ function App() {
     setUsageLoading(true);
     try {
       const response = await fetch("/api/usage?refresh=1", { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setUsage(await response.json());
+      setUsage(await readUsageResponse(response));
       setToast("Bruksdata er oppdatert");
     } catch {
       setToast("Kunne ikke oppdatere bruksdata");

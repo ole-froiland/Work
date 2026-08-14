@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMetricDetails, buildMonthDays, eventOccursOnDay, formatAppName, formatMinutes, formatTimer } from "../src/dashboard.js";
+import { buildMetricDetails, buildMonthDays, eventOccursOnDay, formatAppName, formatMinutes, formatTimer, readUsageResponse } from "../src/dashboard.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
@@ -13,6 +13,19 @@ test("formats synced screen time", () => {
   assert.equal(formatMinutes(214), "3 t 34 min");
   assert.equal(formatMinutes(42), "42 min");
   assert.equal(formatMinutes(null), "Ikke synket");
+});
+
+test("explains that AI usage requires the local Mac panel when Netlify returns HTML", async () => {
+  const response = new Response("<!doctype html>", { headers: { "Content-Type": "text/html; charset=UTF-8" } });
+
+  await assert.rejects(readUsageResponse(response), /Ole-sin-MacBook-Air\.local:4173/);
+});
+
+test("reads AI usage JSON from the local Mac panel", async () => {
+  const snapshot = { codex: { ok: true }, claude: { ok: true } };
+  const response = Response.json(snapshot);
+
+  assert.deepEqual(await readUsageResponse(response), snapshot);
 });
 
 test("shows friendly app names instead of iOS bundle identifiers", () => {

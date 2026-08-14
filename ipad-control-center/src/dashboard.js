@@ -14,6 +14,15 @@ export function formatMinutes(value) {
   return `${hours} t ${String(remainder).padStart(2, "0")} min`;
 }
 
+export async function readUsageResponse(response) {
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error("Åpne http://Ole-sin-MacBook-Air.local:4173 for å se AI-bruk");
+  }
+  return response.json();
+}
+
 const APP_DISPLAY_NAMES = new Map([
   ["com.burbn.instagram", "Instagram"],
   ["com.toyopagroup.picaboo", "Snapchat"],
