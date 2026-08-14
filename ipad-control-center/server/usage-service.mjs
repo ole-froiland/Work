@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import { spawn } from "node:child_process";
-import { createReadStream } from "node:fs";
+import { accessSync, constants, createReadStream } from "node:fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 
@@ -155,6 +155,39 @@ function formatWindowLabel(minutes) {
   return `${minutes} min`;
 }
 
+function canExecute(path) {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveCodexExecutable({
+  path = process.env.PATH ?? "",
+  home = homedir(),
+  configuredPath = process.env.PANEL_CODEX_PATH,
+  isExecutable = canExecute,
+} = {}) {
+  const candidates = [
+    configuredPath,
+    ...path.split(delimiter).filter(Boolean).map((directory) => join(directory, "codex")),
+    join(home, ".npm-global", "bin", "codex"),
+    join(home, ".local", "bin", "codex"),
+    "/Applications/ChatGPT.app/Contents/Resources/codex",
+  ].filter(Boolean);
+  const executable = [...new Set(candidates)].find(isExecutable);
+  if (executable) return executable;
+  throw new Error("Fant ikke Codex-klienten på Mac-en. Installer eller åpne Codex og prøv igjen.");
+}
+
+function codexLaunchError(error) {
+  return error?.code === "ENOENT"
+    ? new Error("Fant ikke Codex-klienten på Mac-en. Installer eller åpne Codex og prøv igjen.")
+    : error;
+}
+
 class CodexRpcClient {
   process = null;
   nextId = 1;
@@ -168,10 +201,10 @@ class CodexRpcClient {
 
   async ensureStarted() {
     if (this.process && !this.process.killed) return this.ready;
-    this.process = spawn("codex", ["app-server"], { stdio: ["pipe", "pipe", "ignore"] });
+    this.process = spawn(resolveCodexExecutable(), ["app-server"], { stdio: ["pipe", "pipe", "ignore"] });
     const lines = createInterface({ input: this.process.stdout });
     lines.on("line", (line) => this.handleLine(line));
-    this.process.once("error", (error) => this.rejectAll(error));
+    this.process.once("error", (error) => this.rejectAll(codexLaunchError(error)));
     this.process.once("exit", () => {
       this.rejectAll(new Error("Codex app-server stoppet"));
       this.process = null;

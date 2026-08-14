@@ -1,7 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { normalizeClaudeUsage, normalizeCodexUsage, summarizeClaudeRecords } from "../server/usage-service.mjs";
+import {
+  normalizeClaudeUsage,
+  normalizeCodexUsage,
+  resolveCodexExecutable,
+  summarizeClaudeRecords,
+} from "../server/usage-service.mjs";
+
+test("finds Codex outside the limited LaunchAgent PATH", () => {
+  const executable = resolveCodexExecutable({
+    path: "/usr/local/bin:/usr/bin:/bin",
+    home: "/Users/test",
+    isExecutable: (candidate) => candidate === "/Users/test/.npm-global/bin/codex",
+  });
+
+  assert.equal(executable, "/Users/test/.npm-global/bin/codex");
+});
+
+test("reports a friendly error when Codex is not installed", () => {
+  assert.throws(
+    () => resolveCodexExecutable({ path: "/usr/bin:/bin", home: "/Users/test", isExecutable: () => false }),
+    /Fant ikke Codex-klienten/,
+  );
+});
 
 test("normalizes Codex provider values without estimating", () => {
   const result = normalizeCodexUsage({
