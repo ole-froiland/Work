@@ -7,6 +7,8 @@ test("kjenner bare hvitelistede handlinger", () => {
   assert.equal(isMacAction("screen-mirror"), true);
   assert.equal(isMacAction("sync-projects"), true);
   assert.equal(isMacAction("nhh-subjects"), true);
+  assert.equal(isMacAction("link-site"), true);
+  assert.equal(isMacAction("private-accounts"), true);
   assert.equal(isMacAction("rm"), false);
   assert.equal(isMacAction(undefined), false);
 });
@@ -67,7 +69,9 @@ test("åpner Sync-prosjekter i Chrome med fast adresse", async () => {
     platform: "darwin",
     exec: async (command, args) => { calls.push([command, args]); },
   });
-  assert.deepEqual(calls, [["open", ["-a", "Google Chrome", "https://sync-co-op.netlify.app/projects"]]]);
+  assert.equal(calls[0][0], "osascript");
+  assert.equal(calls[0][1].at(-1), "https://sync-co-op.netlify.app/projects");
+  assert.ok(calls[0][1].includes("open location target"), "adressen sendes som argument, ikke som skripttekst");
   assert.equal(result.target, "chrome");
 });
 
@@ -77,8 +81,28 @@ test("åpner den lokale NHH-siden i Chrome med fast adresse", async () => {
     platform: "darwin",
     exec: async (command, args) => { calls.push([command, args]); },
   });
-  assert.deepEqual(calls, [["open", ["-a", "Google Chrome", "file:///Users/ole-froiland/Desktop/Prosjekter/nhh/index.html#/fag"]]]);
+  assert.equal(calls[0][1].at(-1), "file:///Users/ole-froiland/Desktop/Prosjekter/nhh/index.html#/fag");
   assert.equal(result.target, "chrome");
+});
+
+test("åpner linksiden i Chrome med fast adresse", async () => {
+  const calls = [];
+  const result = await runMacAction("link-site", {
+    platform: "darwin",
+    exec: async (command, args) => { calls.push([command, args]); },
+  });
+  assert.equal(calls[0][1].at(-1), "https://mine-lenker-ole-froiland.netlify.app");
+  assert.equal(result.target, "chrome");
+});
+
+test("åpner privat regnskap i Chrome med fast adresse", async () => {
+  const calls = [];
+  const result = await runMacAction("private-accounts", {
+    platform: "darwin",
+    exec: async (command, args) => { calls.push([command, args]); },
+  });
+  assert.equal(calls[0][1].at(-1), "https://privat-regnskap-ole.netlify.app");
+  assert.equal(result.label, "Privat regnskap");
 });
 
 function sidecarExec(calls, { stdout = '{"device":"iPad (7)","state":"connected"}', fail } = {}) {

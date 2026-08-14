@@ -15,6 +15,7 @@ import {
   Footprints,
   GraduationCap,
   Laptop,
+  LinkSimple,
   MonitorArrowUp,
   MoonStars,
   MusicNotes,
@@ -27,6 +28,7 @@ import {
   SpeakerHigh,
   SpotifyLogo,
   Television,
+  Wallet,
   WifiHigh,
   X,
 } from "@phosphor-icons/react";
@@ -41,7 +43,11 @@ const staticQuickActions = [
 const macLinkActions = [
   { id: "sync-projects", label: "Prosjekter", detail: "Åpne Sync-prosjekter i Chrome på Mac-en", icon: FolderOpen, tone: "violet" },
   { id: "nhh-subjects", label: "NHH-fag", detail: "Åpne fagoversikten i Chrome på Mac-en", icon: GraduationCap, tone: "blue" },
+  { id: "link-site", label: "Linksiden", detail: "Åpne lenkesamlingen i Chrome på Mac-en", icon: LinkSimple, tone: "lime" },
+  { id: "private-accounts", label: "Privat regnskap", detail: "Åpne privat regnskap i Chrome på Mac-en", icon: Wallet, tone: "orange" },
 ];
+
+const macLinkActionIds = new Set(macLinkActions.map((action) => action.id));
 
 function isStandaloneApp() {
   return Boolean(window.navigator.standalone) || window.matchMedia("(display-mode: standalone)").matches;
@@ -140,9 +146,8 @@ function QuickAction({ action, onTrigger }) {
 function MacLinkAction({ action, onTrigger }) {
   const Icon = action.icon;
   return (
-    <button className={`right-shortcut tone-${action.tone}`} type="button" onClick={() => onTrigger(action)} aria-label={action.detail} title={action.detail}>
-      <span className="action-icon"><Icon size={24} weight="duotone" /></span>
-      <strong>{action.label}</strong>
+    <button className={`right-shortcut tone-${action.tone}`} type="button" onClick={() => onTrigger(action)} title={`${action.label} · ${action.detail}`} aria-label={`${action.label} · ${action.detail}`}>
+      <span className="action-icon"><Icon size={28} weight="fill" /></span>
     </button>
   );
 }
@@ -826,7 +831,7 @@ function App() {
       });
       return;
     }
-    if (action.id === "sync-projects" || action.id === "nhh-subjects") {
+    if (macLinkActionIds.has(action.id)) {
       await runOnMac({ action: action.id }, {
         done: () => `${action.label} åpnes i Chrome på Mac-en`,
         failed: `Kunne ikke åpne ${action.label} på Mac-en`,

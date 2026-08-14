@@ -15,9 +15,31 @@ const focusShortcuts = {
 const chromeTargets = {
   "sync-projects": "https://sync-co-op.netlify.app/projects",
   "nhh-subjects": "file:///Users/ole-froiland/Desktop/Prosjekter/nhh/index.html#/fag",
+  "link-site": "https://mine-lenker-ole-froiland.netlify.app",
+  "private-accounts": "https://privat-regnskap-ole.netlify.app",
 };
 
 let sidecarBuild = null;
+
+// `open -a "Google Chrome" <url>` avslutter med 0 uten å åpne fanen, så knappene
+// så ut til å virke mens ingenting skjedde. Apple-hendelsen gjør jobben. Adressen
+// sendes som argument til skriptet, ikke som tekst i det, slik at den aldri tolkes.
+async function openInChrome(exec, action, url, label) {
+  try {
+    await exec("osascript", [
+      "-e", "on run {target}",
+      "-e", 'tell application "Google Chrome"',
+      "-e", "open location target",
+      "-e", "activate",
+      "-e", "end tell",
+      "-e", "end run",
+      url,
+    ]);
+  } catch (error) {
+    throw new Error(`Fikk ikke åpnet ${label} i Chrome (${firstErrorLine(error, "Chrome svarte ikke")})`);
+  }
+  return { action, target: "chrome", label };
+}
 
 function normalizeDeviceName(value) {
   const name = typeof value === "string" && value.trim() ? value.trim() : defaultMirrorDevice;
@@ -90,12 +112,16 @@ const macActions = {
     }
   },
   async "sync-projects"(exec) {
-    await exec("open", ["-a", "Google Chrome", chromeTargets["sync-projects"]]);
-    return { action: "sync-projects", target: "chrome", label: "Sync-prosjekter" };
+    return openInChrome(exec, "sync-projects", chromeTargets["sync-projects"], "Sync-prosjekter");
   },
   async "nhh-subjects"(exec) {
-    await exec("open", ["-a", "Google Chrome", chromeTargets["nhh-subjects"]]);
-    return { action: "nhh-subjects", target: "chrome", label: "NHH-fag" };
+    return openInChrome(exec, "nhh-subjects", chromeTargets["nhh-subjects"], "NHH-fag");
+  },
+  async "link-site"(exec) {
+    return openInChrome(exec, "link-site", chromeTargets["link-site"], "Linksiden");
+  },
+  async "private-accounts"(exec) {
+    return openInChrome(exec, "private-accounts", chromeTargets["private-accounts"], "Privat regnskap");
   },
   async "screen-mirror"(exec, payload) {
     const device = normalizeDeviceName(payload?.device);
