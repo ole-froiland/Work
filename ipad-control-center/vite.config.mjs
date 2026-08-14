@@ -4,6 +4,7 @@ import { getDeviceMetrics, updateDeviceMetrics } from "./server/device-metrics-s
 import { runMacAction } from "./server/mac-action-service.mjs";
 import { getUsageSnapshot } from "./server/usage-service.mjs";
 import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
+import { completeSpotifyAuth, getSpotifyState, listSpotifyDevices, runSpotifyCommand } from "./server/spotify-service.mjs";
 import {
   acknowledgeSyncNoteCommand,
   enqueueSyncNoteCommand,
@@ -213,6 +214,59 @@ function syncNotesApi() {
   };
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]);
+}
+
+function sendAuthPage(response, status, title, message) {
+  response.statusCode = status;
+  response.setHeader("Content-Type", "text/html; charset=utf-8");
+  response.setHeader("Cache-Control", "no-store");
+  response.end(`<!doctype html><html lang="nb"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0e12;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,sans-serif;text-align:center}main{max-width:32rem;padding:2rem}h1{font-size:1.5rem;margin:0 0 .75rem}p{color:#8d97a3;line-height:1.6;margin:0}</style></head><body><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></main></body></html>`);
+}
+
+function spotifyApi() {
+  return {
+    name: "local-spotify-api",
+    configureServer(server) {
+      server.middlewares.use("/api/spotify", async (request, response) => {
+        const url = new URL(request.url ?? "/", "http://127.0.0.1");
+        if (request.method === "GET" && url.pathname === "/callback") {
+          try {
+            await completeSpotifyAuth({
+              code: url.searchParams.get("code"),
+              state: url.searchParams.get("state"),
+              error: url.searchParams.get("error"),
+            });
+            sendAuthPage(response, 200, "Spotify er koblet til", "Du kan lukke dette vinduet. Panelet viser nå avspillingen på alle enhetene dine.");
+          } catch (error) {
+            sendAuthPage(response, 400, "Innloggingen feilet", error instanceof Error ? error.message : "Ukjent feil");
+          }
+          return;
+        }
+        try {
+          if (request.method === "GET") {
+            if (url.searchParams.get("devices") === "1") {
+              sendJson(response, 200, { ok: true, devices: await listSpotifyDevices() });
+              return;
+            }
+            sendJson(response, 200, await getSpotifyState());
+            return;
+          }
+          if (request.method === "POST") {
+            const body = await readJsonBody(request);
+            sendJson(response, 200, { ok: true, ...(await runSpotifyCommand(body.command, body)) });
+            return;
+          }
+          sendJson(response, 405, { ok: false, error: "Method not allowed" });
+        } catch (error) {
+          sendJson(response, 400, { ok: false, error: error instanceof Error ? error.message : "Ukjent feil" });
+        }
+      });
+    },
+  };
+}
+
 function macActionApi() {
   return {
     name: "local-mac-action-api",
@@ -249,5 +303,5 @@ export default defineConfig({
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [usageApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), macActionApi(), react()],
+  plugins: [usageApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), spotifyApi(), macActionApi(), react()],
 });
