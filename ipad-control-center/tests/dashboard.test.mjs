@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMetricDetails, buildMonthDays, eventOccursOnDay, formatAppName, formatMinutes, formatTimer, readUsageResponse } from "../src/dashboard.js";
+import { buildMetricDetails, buildMonthDays, eventOccursOnDay, formatAppName, formatMinutes, formatTimer, readUsageResponse, resolvePanelRedirect } from "../src/dashboard.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
@@ -26,6 +26,18 @@ test("reads AI usage JSON from the local Mac panel", async () => {
   const response = Response.json(snapshot);
 
   assert.deepEqual(await readUsageResponse(response), snapshot);
+});
+
+test("redirects the public panel to the Mac that owns the private data", () => {
+  assert.equal(
+    resolvePanelRedirect({ hostname: "ole-work-panel.netlify.app" }),
+    "http://Ole-sin-MacBook-Air.local:4173",
+  );
+  assert.equal(resolvePanelRedirect({ hostname: "Ole-sin-MacBook-Air.local" }), null);
+});
+
+test("allows the public shell to be opened explicitly for diagnostics", () => {
+  assert.equal(resolvePanelRedirect({ hostname: "ole-work-panel.netlify.app", search: "?public=1" }), null);
 });
 
 test("shows friendly app names instead of iOS bundle identifiers", () => {

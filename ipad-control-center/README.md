@@ -13,8 +13,9 @@ npm run dev
 
 På iPad og andre enheter på samme nettverk brukes den stabile lokale adressen
 `http://Ole-sin-MacBook-Air.local:4173`. Denne adressen gir tilgang til de private
-Mac-funksjonene. Den offentlige Netlify-utgaven viser grensesnittet, men kjører av
-sikkerhetsgrunner ikke Mac-handlinger eller leser lokale konto- og helsedata.
+Mac-funksjonene. Netlify-adressen videresender automatisk til denne adressen, siden
+den offentlige serveren av sikkerhetsgrunner ikke kan lese lokale konto- og helsedata.
+Legg til `?public=1` på Netlify-adressen for å åpne det offentlige skallet ved feilsøking.
 
 Mac-en bruker LaunchAgent-filen i `macos/com.ole.panel.plist`, slik at den lokale
 broen starter ved innlogging og startes på nytt automatisk hvis prosessen stopper.

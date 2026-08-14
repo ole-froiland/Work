@@ -14,11 +14,20 @@ export function formatMinutes(value) {
   return `${hours} t ${String(remainder).padStart(2, "0")} min`;
 }
 
+export const LOCAL_PANEL_URL = "http://Ole-sin-MacBook-Air.local:4173";
+
+export function resolvePanelRedirect({ hostname = "", search = "" } = {}) {
+  const isPanelDeploy = hostname === "ole-work-panel.netlify.app"
+    || hostname.endsWith("--ole-work-panel.netlify.app");
+  const keepPublicShell = new URLSearchParams(search).get("public") === "1";
+  return isPanelDeploy && !keepPublicShell ? LOCAL_PANEL_URL : null;
+}
+
 export async function readUsageResponse(response) {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
-    throw new Error("Åpne http://Ole-sin-MacBook-Air.local:4173 for å se AI-bruk");
+    throw new Error(`Åpne ${LOCAL_PANEL_URL} for å se AI-bruk`);
   }
   return response.json();
 }
