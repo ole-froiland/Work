@@ -80,6 +80,62 @@ POST /api/mac-action
 
 Utvid/Forminsk-knappen er ren nettleser-fullskjerm.
 
+## Musikk
+
+Kortet rett under hurtigknappene viser sporet som spilles nå, med cover, artist og
+framdrift, og har knapper for forrige, spill/pause og neste. Det bruker Spotify
+Connect, så knappene treffer enheten som faktisk spiller — iPhone, Mac, iPad eller
+en høyttaler — og ikke bare Spotify på Mac-en. Enhetsknappen til høyre lister alle
+tilgjengelige Spotify-enheter og flytter avspillingen dit du trykker.
+
+Panelet henter status hvert femte sekund mens noe spilles, og sjeldnere ellers.
+Framdriften telles lokalt mellom hentingene. Panelet finner aldri på verdier: mangler
+oppsettet, står ingen enhet aktiv, eller krever handlingen Premium, sier kortet det
+rett ut.
+
+Panelet er allerede satt opp mot Spotify-appen «Panel» (Development Mode) på kontoen
+`olefroiland`. Oppsettet under trengs bare hvis tilkoblingen må lages på nytt:
+
+1. Lag en app på [developer.spotify.com](https://developer.spotify.com/dashboard) og
+   legg inn `http://127.0.0.1:4173/api/spotify/callback` som Redirect URI. Spotify
+   godtar bare HTTPS eller ren loopback, derfor IP-adressen og ikke `localhost`.
+   Kryss av for Web API.
+2. Åpne panelinnstillingene, lim inn Client ID-en i feltet «Spotify Client ID» og
+   lagre. ID-en kan også settes med `PANEL_SPOTIFY_CLIENT_ID`.
+3. Trykk «Koble til Spotify» på musikkortet. Innloggingen åpnes i nettleseren på
+   Mac-en, siden tilbakekallingsadressen peker på Mac-en selv. Kommandoen returnerer
+   også adressen, så den kan åpnes manuelt hvis Mac-nettleseren ikke kommer fram.
+   Etter innlogging virker kortet også fra iPad.
+
+Innloggingen bruker PKCE, så det trengs ingen client secret. Client ID og
+refresh-token ligger med rettighetene `0600` i
+`~/Library/Caches/ipad-control-center/spotify.json` og sendes aldri til nettleseren;
+panelet snakker bare med den lokale broen. Panelet ber bare om de tre tillatelsene
+det trenger: `user-read-playback-state`, `user-modify-playback-state` og
+`user-read-currently-playing`. Ingen tilgang til bibliotek eller spillelister.
+
+Spotify strammet inn Development Mode i februar 2026, og det gjelder denne appen:
+
+- **Spotify Premium er påkrevd.** Uten Premium virker ikke kortet i det hele tatt.
+- **Én Client ID per utvikler**, og maks fem autoriserte brukere per app.
+- **Refresh-tokenet varer 180 dager.** Etter det slutter kortet å virke og sier
+  «Spotify-tilgangen er utløpt. Koble til på nytt.» Da trykker du «Koble til Spotify»
+  én gang til. Regn med det rundt februar 2027.
+
+Alle avspillingsendepunktene panelet bruker står fortsatt på Spotifys liste over
+tilgjengelige endepunkter etter innstrammingen.
+
+## Neste aktivitet
+
+Kortet mellom Mac-snarveiene og fokusøkten henter neste avtale fra Apple Kalender og
+viser navn, når den er, og hvor lenge det er til. Det har samme høyde som musikkortet
+i venstre spalte — begge følger `--media-card` i `styles.css`.
+
+Kortet svarer på «hva er det neste jeg skal», så en avtale som ennå ikke har startet
+går foran en som pågår. Er det ingenting igjen på klokka, viser kortet avtalen som
+pågår med sluttidspunkt, og ellers en heldagsoppføring. Nedtellingen runder nedover,
+slik at den aldri viser mer tid enn du faktisk har.
+
 ## Fokusøkt
 
 Kortet i høyre kolonne styrer en økt med aktivitet, lengde, pause og antall sett. Økt og pause veksler automatisk: en fullført økt går over i pause, og pausen går videre til neste sett til alle settene er tatt. Kortet skifter farge i pausen, og du kan pause, hoppe videre eller avslutte underveis. Aktivitet, lengder og sett huskes i nettleseren.

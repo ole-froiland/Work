@@ -9,6 +9,8 @@ import {
   CaretRight,
   Check,
   CloudSun,
+  DeviceMobile,
+  DeviceTabletSpeaker,
   FolderOpen,
   Footprints,
   GraduationCap,
@@ -19,12 +21,16 @@ import {
   Pause,
   Play,
   Plus,
+  SkipBack,
   SkipForward,
   SlidersHorizontal,
+  SpeakerHigh,
+  SpotifyLogo,
+  Television,
   WifiHigh,
   X,
 } from "@phosphor-icons/react";
-import { buildMetricDetails, buildMonthDays, eventOccursOnDay, formatMinutes, formatTimer, readUsageResponse } from "./dashboard.js";
+import { buildMetricDetails, buildMonthDays, describeNextEvent, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, readUsageResponse } from "./dashboard.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -79,24 +85,6 @@ function ClaudeLogo({ size = 18 }) {
 function formatUsagePercent(value) {
   if (!Number.isFinite(value)) return "–";
   return `${new Intl.NumberFormat("nb-NO", { maximumFractionDigits: 6 }).format(value)} %`;
-}
-
-function formatResetTime(value, active, now) {
-  if (!active) return { countdown: "Starter ved neste bruk", absolute: "Ingen aktiv periode" };
-  if (!value) return { countdown: "Nullstilling ikke oppgitt", absolute: "Leverandøren oppga ikke tidspunkt" };
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return { countdown: "Ugyldig nullstilling", absolute: "–" };
-  const totalMinutes = Math.max(0, Math.ceil((date.getTime() - now.getTime()) / 60_000));
-  const days = Math.floor(totalMinutes / 1_440);
-  const hours = Math.floor((totalMinutes % 1_440) / 60);
-  const minutes = totalMinutes % 60;
-  const countdown = days > 0
-    ? `${days} ${days === 1 ? "dag" : "dager"} ${hours} ${hours === 1 ? "time" : "timer"} igjen`
-    : hours > 0 ? `${hours} ${hours === 1 ? "time" : "timer"} ${minutes} min igjen` : `${minutes} min igjen`;
-  const absolute = new Intl.DateTimeFormat("nb-NO", {
-    weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-  }).format(date);
-  return { countdown, absolute };
 }
 
 function UsageProvider({ name, icon: Icon, tone, data, now }) {
@@ -156,6 +144,257 @@ function MacLinkAction({ action, onTrigger }) {
       <span className="action-icon"><Icon size={24} weight="duotone" /></span>
       <strong>{action.label}</strong>
     </button>
+  );
+}
+
+const deviceIcons = {
+  Computer: Laptop,
+  Smartphone: DeviceMobile,
+  Tablet: DeviceTabletSpeaker,
+  TV: Television,
+  Speaker: SpeakerHigh,
+  CastVideo: Television,
+};
+
+function deviceIconFor(type) {
+  return deviceIcons[type] ?? SpeakerHigh;
+}
+
+// Kortet styrer Spotify Connect, så knappene treffer enheten som faktisk
+// spiller – iPhone, Mac eller iPad – og ikke bare Spotify på Mac-en.
+function NowPlayingCard({ onToast, onConfigure }) {
+  const [player, setPlayer] = useState(null);
+  const [readAt, setReadAt] = useState(() => Date.now());
+  const [clock, setClock] = useState(() => Date.now());
+  const [devices, setDevices] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const authorized = Boolean(player?.authorized);
+  const playing = Boolean(player?.playing);
+  const pollMs = !authorized ? 30_000 : playing ? 5_000 : 15_000;
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      try {
+        const response = await fetch("/api/spotify", { cache: "no-store" });
+        const snapshot = await response.json();
+        if (!active) return;
+        setPlayer(snapshot);
+        setReadAt(Date.now());
+        setClock(Date.now());
+      } catch (error) {
+        if (active) setPlayer({ ok: false, configured: true, authorized: false, error: `Fikk ikke kontakt med panelet (${error.message})` });
+      }
+    }
+    load();
+    const interval = window.setInterval(load, pollMs);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [pollMs]);
+
+  // Sporet går videre mellom hentingene, så framdriften telles lokalt.
+  useEffect(() => {
+    if (!playing) return undefined;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [playing]);
+
+  async function send(command, payload = {}) {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/spotify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command, ...payload }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      return result;
+    } catch (error) {
+      onToast(error.message);
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refresh() {
+    try {
+      const response = await fetch("/api/spotify", { cache: "no-store" });
+      setPlayer(await response.json());
+      setReadAt(Date.now());
+      setClock(Date.now());
+    } catch {
+      // Neste automatiske henting rydder opp.
+    }
+  }
+
+  // Spotify bruker et halvsekund på å bekrefte en kommando, så visningen
+  // oppdateres lokalt først og hentes på nytt like etter.
+  async function control(command, optimistic) {
+    if (optimistic) setPlayer((current) => (current ? { ...current, ...optimistic } : current));
+    const result = await send(command);
+    window.setTimeout(refresh, result ? 600 : 0);
+  }
+
+  async function openDevices() {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/spotify?devices=1", { cache: "no-store" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setDevices(result.devices);
+    } catch (error) {
+      onToast(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pickDevice(device) {
+    setDevices(null);
+    const result = await send("transfer", { deviceId: device.id });
+    if (result) {
+      onToast(`Spiller på ${device.name}`);
+      window.setTimeout(refresh, 900);
+    }
+  }
+
+  async function connect() {
+    const result = await send("authorize");
+    if (result) onToast("Fullfør Spotify-innloggingen i nettleseren på Mac-en");
+  }
+
+  if (!player) {
+    return (
+      <section className="panel-card now-playing-card">
+        <div className="now-playing-setup"><p>Kobler til Spotify …</p></div>
+      </section>
+    );
+  }
+
+  if (!player.configured || !player.authorized) {
+    const needsClientId = !player.configured;
+    return (
+      <section className="panel-card now-playing-card">
+        <div className="now-playing-setup">
+          <span className="now-playing-brand"><SpotifyLogo size={19} weight="fill" /> Spotify</span>
+          <p>{needsClientId
+            ? "Legg inn en Spotify Client ID for å styre musikken på alle enhetene dine."
+            : player.error || "Koble panelet til Spotify-kontoen din."}</p>
+          <button type="button" onClick={needsClientId ? onConfigure : connect} disabled={busy}>
+            {needsClientId ? "Legg inn Client ID" : "Koble til Spotify"}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const track = player.track;
+  const duration = track?.durationMs ?? 0;
+  const elapsed = playing ? Math.max(0, clock - readAt) : 0;
+  const progress = duration > 0 ? Math.min(duration, (player.progressMs ?? 0) + elapsed) : 0;
+  const DeviceIcon = deviceIconFor(player.device?.type);
+
+  return (
+    <section className="panel-card now-playing-card">
+      <div className="now-playing-top">
+        <span className="now-playing-art">
+          {track?.artwork ? <img src={track.artwork} alt="" /> : <MusicNotes size={20} weight="fill" />}
+        </span>
+        <span className="now-playing-text">
+          <strong>{track?.title || (player.ok ? "Ingenting spilles" : "Spotify svarte ikke")}</strong>
+          <small>{player.ok ? (track?.artist || "Velg en enhet og start musikken") : player.error}</small>
+        </span>
+      </div>
+
+      <div className="now-playing-progress" role="progressbar" aria-label="Avspilt del av sporet" aria-valuemin={0} aria-valuemax={100} aria-valuenow={duration > 0 ? Math.round((progress / duration) * 100) : 0}>
+        <span style={{ width: duration > 0 ? `${(progress / duration) * 100}%` : "0%" }} />
+      </div>
+
+      <div className="now-playing-controls">
+        <button type="button" onClick={() => control("previous")} disabled={busy} aria-label="Forrige spor"><SkipBack size={16} weight="fill" /></button>
+        <button
+          className="is-primary"
+          type="button"
+          onClick={() => control(playing ? "pause" : "play", { playing: !playing })}
+          disabled={busy}
+          aria-label={playing ? "Pause" : "Spill av"}
+        >
+          {playing ? <Pause size={16} weight="fill" /> : <Play size={16} weight="fill" />}
+        </button>
+        <button type="button" onClick={() => control("next")} disabled={busy} aria-label="Neste spor"><SkipForward size={16} weight="fill" /></button>
+        <button className="now-playing-device" type="button" onClick={openDevices} disabled={busy} aria-label="Velg hvilken enhet som spiller">
+          <DeviceIcon size={15} weight="duotone" />
+          <strong>{player.device?.name || "Velg enhet"}</strong>
+        </button>
+      </div>
+
+      {devices && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDevices(null); }}>
+          <section className="bridge-modal device-picker" role="dialog" aria-modal="true" aria-labelledby="deviceTitle">
+            <div className="modal-title">
+              <div><span className="eyebrow">Spotify Connect</span><h2 id="deviceTitle">Spill på</h2></div>
+              <button type="button" onClick={() => setDevices(null)} aria-label="Lukk"><X /></button>
+            </div>
+            {devices.length > 0 ? (
+              <ul className="device-list">
+                {devices.map((device) => {
+                  const Icon = deviceIconFor(device.type);
+                  return (
+                    <li key={device.id}>
+                      <button
+                        className={device.isActive ? "is-active" : ""}
+                        type="button"
+                        onClick={() => pickDevice(device)}
+                        disabled={device.isRestricted}
+                        aria-label={device.isActive ? `${device.name} spiller nå` : `Spill på ${device.name}`}
+                      >
+                        <span className="status-icon tone-lime"><Icon size={19} weight="duotone" /></span>
+                        <span><strong>{device.name}</strong><small>{device.isRestricted ? "Kan ikke styres herfra" : device.isActive ? "Spiller nå" : device.type}</small></span>
+                        {device.isActive && <i />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="modal-hint">Spotify ser ingen enheter akkurat nå. Åpne Spotify på iPhone, Mac eller iPad, så dukker de opp her.</p>
+            )}
+          </section>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Neste avtale fra Apple Kalender, i samme høyde som musikkortet i venstre spalte.
+function NextEventCard({ events, connected, now }) {
+  const next = useMemo(() => describeNextEvent(events, now), [events, now]);
+
+  if (!next) {
+    return (
+      <section className="panel-card next-event-card is-empty">
+        <span className="eyebrow">Neste aktivitet</span>
+        <p>{connected ? "Ingenting mer på planen" : "Apple Kalender kobles til"}</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className={`panel-card next-event-card tone-${calendarTone[next.tone] || "violet"}${next.ongoing ? " is-ongoing" : ""}`}>
+      <div className="next-event-top">
+        <span className="next-event-icon"><CalendarBlank size={19} weight="duotone" /></span>
+        <span className="next-event-text">
+          <span className="eyebrow">Neste aktivitet</span>
+          <strong title={next.title}>{next.title}</strong>
+        </span>
+      </div>
+      <div className="next-event-meta">
+        <span>{next.when}</span>
+        <strong>{next.countdown}</strong>
+      </div>
+    </section>
   );
 }
 
@@ -317,6 +556,7 @@ function App() {
   const [isFullscreen, setIsFullscreen] = useState(() => Boolean(fullscreenElement()));
   const [mirrorDevice, setMirrorDevice] = useState(() => localStorage.getItem("panel-mirror-device") || "iPad");
   const [mirrorDraft, setMirrorDraft] = useState(mirrorDevice);
+  const [spotifyClientDraft, setSpotifyClientDraft] = useState("");
 
   useEffect(() => {
     const clock = window.setInterval(() => setNow(new Date()), 30_000);
@@ -613,8 +853,29 @@ function App() {
     }
   }
 
-  function saveBridge(event) {
+  // Client ID lagres bare på Mac-en, aldri i nettleseren.
+  async function saveSpotifyClientId() {
+    const clientId = spotifyClientDraft.trim();
+    if (!clientId) return true;
+    try {
+      const response = await fetch("/api/spotify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "configure", clientId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setSpotifyClientDraft("");
+      return true;
+    } catch (error) {
+      setToast(`Spotify: ${error.message}`);
+      return false;
+    }
+  }
+
+  async function saveBridge(event) {
     event.preventDefault();
+    if (!(await saveSpotifyClientId())) return;
     const device = mirrorDraft.trim() || "iPad";
     setMirrorDevice(device);
     localStorage.setItem("panel-mirror-device", device);
@@ -733,6 +994,8 @@ function App() {
             {visibleActions.map((action) => <QuickAction action={action} onTrigger={triggerAction} key={action.id} />)}
           </section>
 
+          <NowPlayingCard onToast={setToast} onConfigure={() => setSettingsOpen(true)} />
+
           <section className="panel-card usage-card">
             <div className="section-heading usage-heading">
               <div><h2>AI-bruk</h2></div>
@@ -786,6 +1049,8 @@ function App() {
           <section className="right-shortcuts" aria-label="Åpne på Mac-en">
             {macLinkActions.map((action) => <MacLinkAction action={action} onTrigger={triggerAction} key={action.id} />)}
           </section>
+
+          <NextEventCard events={calendarEvents} connected={syncCalendar.connected} now={now} />
 
           <section className={`panel-card focus-card ${focusPhase === "break" ? "is-break" : ""}`}>
             <div className="focus-top">
@@ -873,6 +1138,9 @@ function App() {
               <input id="bridgeUrl" type="url" value={bridgeDraft} onChange={(event) => setBridgeDraft(event.target.value)} placeholder="http://macbook.local:3030" />
               <label htmlFor="mirrorDevice">Enhet for skjermdeling</label>
               <input id="mirrorDevice" type="text" value={mirrorDraft} onChange={(event) => setMirrorDraft(event.target.value)} placeholder="iPad" />
+              <label htmlFor="spotifyClientId">Spotify Client ID</label>
+              <input id="spotifyClientId" type="text" value={spotifyClientDraft} onChange={(event) => setSpotifyClientDraft(event.target.value)} placeholder="Lagret på Mac-en" autoComplete="off" spellCheck="false" />
+              <p className="modal-hint">Musikkortet styrer Spotify Connect, altså enheten som faktisk spiller. Lag en app på developer.spotify.com med adressen <code>http://127.0.0.1:4173/api/spotify/callback</code>, lim inn Client ID-en her og fullfør innloggingen i nettleseren på Mac-en. Feltet er tomt fordi ID-en bare ligger på Mac-en.</p>
               <p className="modal-hint">Fokusknappen kjører snarveiene «Fokus på» og «Fokus av» på Mac-en. De er allerede installert. For at iPhone og iPad skal følge etter må «Del på tvers av enheter» være på i Systeminnstillinger → Fokus.</p>
               <div className="modal-actions"><button type="button" onClick={() => { setBridgeDraft(""); }}>Bruk demo</button><button type="submit">Lagre tilkobling</button></div>
             </form>

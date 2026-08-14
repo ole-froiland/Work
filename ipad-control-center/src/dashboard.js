@@ -88,6 +88,118 @@ export function eventOccursOnDay(event, day) {
   return +dayStart >= +eventStart && +dayStart < +end;
 }
 
+// Nullstillingstidspunktet kommer fra leverandøren. Claude sender «is_active: false»
+// for ukesvinduet selv når det både har forbruk og et oppgitt tidspunkt, så
+// nedtellingen skal vises så lenge tidspunktet finnes — flagget avgjør bare
+// teksten når leverandøren ikke oppga noe tidspunkt i det hele tatt.
+export function formatResetTime(value, active, now) {
+  if (!value) {
+    return active
+      ? { countdown: "Nullstilling ikke oppgitt", absolute: "Leverandøren oppga ikke tidspunkt" }
+      : { countdown: "Starter ved neste bruk", absolute: "Ingen aktiv periode" };
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return { countdown: "Ugyldig nullstilling", absolute: "–" };
+  const totalMinutes = Math.max(0, Math.ceil((date.getTime() - now.getTime()) / 60_000));
+  const days = Math.floor(totalMinutes / 1_440);
+  const hours = Math.floor((totalMinutes % 1_440) / 60);
+  const minutes = totalMinutes % 60;
+  const countdown = days > 0
+    ? `${days} ${days === 1 ? "dag" : "dager"} ${hours} ${hours === 1 ? "time" : "timer"} igjen`
+    : hours > 0 ? `${hours} ${hours === 1 ? "time" : "timer"} ${minutes} min igjen` : `${minutes} min igjen`;
+  const absolute = new Intl.DateTimeFormat("nb-NO", {
+    weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+  }).format(date);
+  return { countdown, absolute };
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function formatEventClock(date) {
+  return new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+// «I dag» og «I morgen» er tydeligere enn datoen på de dagene det gjelder.
+function formatEventDay(date, now) {
+  const offset = Math.round((+startOfDay(date) - +startOfDay(now)) / 86_400_000);
+  if (offset === 0) return "I dag";
+  if (offset === 1) return "I morgen";
+  if (offset > 1 && offset < 7) return new Intl.DateTimeFormat("nb-NO", { weekday: "long" }).format(date);
+  return new Intl.DateTimeFormat("nb-NO", { day: "numeric", month: "short" }).format(date);
+}
+
+export function formatCountdown(milliseconds) {
+  const minutes = Math.max(0, Math.floor(milliseconds / 60_000));
+  if (minutes < 1) return "starter nå";
+  if (minutes < 60) return `om ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  if (hours < 24) return restMinutes ? `om ${hours} t ${restMinutes} min` : `om ${hours} t`;
+  const days = Math.floor(hours / 24);
+  const restHours = hours % 24;
+  return restHours ? `om ${days} d ${restHours} t` : `om ${days} d`;
+}
+
+function describeEntry(entry, extra) {
+  const { event } = entry;
+  return {
+    id: event.id,
+    title: event.title || "Uten navn",
+    tone: event.tone || "violet",
+    calendarName: event.calendarName || (event.source === "sync" ? "Sync" : event.source) || "",
+    ...extra,
+  };
+}
+
+// Kortet svarer på «hva er det neste jeg skal». Et møte som ennå ikke har startet
+// vinner derfor over et som pågår, og heldagsoppføringer kommer sist siden de
+// ikke har et klokkeslett å telle ned til.
+export function describeNextEvent(events, now = new Date()) {
+  const entries = (Array.isArray(events) ? events : [])
+    .map((event) => ({ event: event ?? {}, start: new Date(event?.start ?? ""), end: new Date(event?.end ?? "") }))
+    .filter((entry) => Number.isFinite(+entry.start));
+
+  const timed = entries.filter((entry) => !entry.event.allDay);
+
+  const upcoming = timed
+    .filter((entry) => +entry.start > +now)
+    .sort((a, b) => +a.start - +b.start)[0];
+  if (upcoming) {
+    const hasEnd = Number.isFinite(+upcoming.end) && +upcoming.end > +upcoming.start;
+    return describeEntry(upcoming, {
+      ongoing: false,
+      when: `${formatEventDay(upcoming.start, now)} ${formatEventClock(upcoming.start)}${hasEnd ? `–${formatEventClock(upcoming.end)}` : ""}`,
+      countdown: formatCountdown(+upcoming.start - +now),
+    });
+  }
+
+  const ongoing = timed
+    .filter((entry) => Number.isFinite(+entry.end) && +entry.start <= +now && +entry.end > +now)
+    .sort((a, b) => +a.end - +b.end)[0];
+  if (ongoing) {
+    return describeEntry(ongoing, {
+      ongoing: true,
+      when: `Slutter ${formatEventClock(ongoing.end)}`,
+      countdown: "pågår nå",
+    });
+  }
+
+  const allDay = entries
+    .filter((entry) => entry.event.allDay && Number.isFinite(+entry.end) && +entry.end > +now)
+    .sort((a, b) => +a.start - +b.start)[0];
+  if (allDay) {
+    return describeEntry(allDay, {
+      ongoing: +allDay.start <= +now,
+      when: formatEventDay(allDay.start, now),
+      countdown: "hele dagen",
+    });
+  }
+
+  return null;
+}
+
 function formatNumber(value) {
   return Number.isFinite(value) ? new Intl.NumberFormat("nb-NO", { maximumFractionDigits: 0 }).format(value) : "Ikke synket";
 }
