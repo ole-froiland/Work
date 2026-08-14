@@ -43,11 +43,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .right-rail { grid-template-rows: auto auto auto 1fr auto; }
 .panel-card { border: 1px solid var(--line); border-radius: 20px; background: var(--panel); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025), 0 8px 22px rgba(0, 0, 0, .18); overflow: hidden; }
 .quick-grid { min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); justify-items: center; gap: 8px; }
-.quick-action { width: min(100%, var(--tile)); height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 1px solid #46515e; border-radius: 16px; background: #171c23; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025); cursor: pointer; transition: transform 140ms ease, background 140ms ease, border-color 140ms ease; }
-.quick-action:hover { transform: translateY(-2px); background: var(--panel-raised); border-color: #3b434d; }
-.quick-action:active { transform: scale(.98); }
-.action-icon { width: min(66%, 44px); height: auto; flex: 0 0 auto; aspect-ratio: 1; display: grid; place-items: center; border-radius: 14px; }
-.action-icon svg { width: min(55%, 24px); height: auto; aspect-ratio: 1; }
+/* Ikonet er knappen. Ingen ramme eller boks rundt — flaten i seg selv er
+   trykkflaten, slik appikoner ser ut. */
+.quick-action { width: min(100%, var(--tile)); height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 0; border-radius: 18px; background: transparent; cursor: pointer; transition: transform 140ms ease, filter 140ms ease; }
+.quick-action:hover { transform: translateY(-2px); filter: brightness(1.08); }
+.quick-action:active { transform: scale(.96); }
+.action-icon { width: 100%; height: 100%; min-width: 0; display: grid; place-items: center; border-radius: 18px; }
+.action-icon svg { width: 55%; height: auto; aspect-ratio: 1; }
 .tone-lime .action-icon, .status-icon.tone-lime, .avatar.tone-lime { color: var(--lime-ink); background: var(--lime); }
 .tone-violet .action-icon, .status-icon.tone-violet, .avatar.tone-violet { color: #251d48; background: var(--violet); }
 .tone-blue .action-icon, .status-icon.tone-blue, .avatar.tone-blue { color: #08243b; background: var(--blue); }
@@ -66,7 +68,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
     aspect-ratio: 70 / 52;
     border-radius: 19px;
   }
-  .dashboard-shell.is-fullscreen .action-icon { width: 38px; }
+  .dashboard-shell.is-fullscreen .action-icon { border-radius: 19px; }
 }
 
 .usage-card, .agent-card, .focus-card, .task-card, .sync-card { padding: 17px; }
@@ -74,9 +76,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .agent-card { height: 100%; min-height: 0; background: #151a21; }
 /* Fire ikonknapper i samme mål og stil som hurtigknappene øverst til venstre. */
 .right-shortcuts { min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); justify-items: center; gap: 8px; }
-.right-shortcut { width: min(100%, var(--tile)); height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 1px solid #46515e; border-radius: 16px; background: #171c23; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025); cursor: pointer; transition: transform 140ms ease, background 140ms ease, border-color 140ms ease; }
-.right-shortcut:hover { transform: translateY(-2px); background: var(--panel-raised); border-color: #3b434d; }
-.right-shortcut:active { transform: scale(.98); }
+.right-shortcut { width: min(100%, var(--tile)); height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 0; border-radius: 18px; background: transparent; cursor: pointer; transition: transform 140ms ease, filter 140ms ease; }
+.right-shortcut:hover { transform: translateY(-2px); filter: brightness(1.08); }
+.right-shortcut:active { transform: scale(.96); }
 .task-card { min-height: 0; display: flex; flex-direction: column; background: #151b22; }
 .sync-card { background: #172028; }
 .section-heading { justify-content: space-between; margin-bottom: 16px; }
@@ -401,9 +403,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   .dashboard-grid { height: calc(100dvh - 20px); gap: 8px; }
   .left-rail, .right-rail { gap: 8px; }
   .quick-grid, .right-shortcuts { gap: 6px; }
-  .quick-action, .right-shortcut { border-radius: 14px; }
-  .action-icon { width: 38px; height: 38px; border-radius: 12px; }
-  .action-icon svg { width: 21px; height: 21px; }
+  .quick-action, .right-shortcut, .action-icon { border-radius: 15px; }
   .agent-card, .focus-card, .task-card, .sync-card { padding: 12px; }
   .now-playing-card, .next-event-card { gap: 6px; padding: 8px 10px; }
   .now-playing-art, .next-event-icon { width: 36px; height: 36px; border-radius: 10px; }
