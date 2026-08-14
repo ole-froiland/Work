@@ -7,3 +7,7 @@ test("keeps the local panel on its documented stable port", () => {
   assert.equal(viteConfig.server.port, 4173);
   assert.equal(viteConfig.server.strictPort, true);
 });
+
+test("allows the lowercase local hostname sent by browsers", () => {
+  assert.ok(viteConfig.server.allowedHosts.includes("ole-sin-macbook-air.local"));
+});

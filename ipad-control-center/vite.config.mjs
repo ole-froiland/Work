@@ -244,7 +244,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 4173,
     strictPort: true,
-    allowedHosts: ["terminal.local", "Ole-sin-MacBook-Air.local"],
+    allowedHosts: ["terminal.local", "ole-sin-macbook-air.local"],
     warmup: {
       clientFiles: ["./src/main.jsx"],
     },
