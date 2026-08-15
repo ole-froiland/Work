@@ -491,7 +491,9 @@ function DayCalendar({ date, events, now }) {
 function WeekCalendar({ date, events }) {
   const monday = new Date(date);
   monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-  const days = Array.from({ length: 5 }, (_, index) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index));
+  // Hele uken, ikke bare mandag–fredag. Uten lørdag og søndag forsvant dagens
+  // dato fra rutenettet i helgene, selv om toppteksten talte med arrangementene.
+  const days = Array.from({ length: 7 }, (_, index) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index));
   return (
     <div className="week-calendar">
       {days.map((day) => (

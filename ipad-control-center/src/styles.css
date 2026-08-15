@@ -230,7 +230,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .now-line::after { content: ""; height: 1px; flex: 1; background: #ff6874; }
 .now-line span { width: 7px; height: 7px; border-radius: 50%; background: #ff6874; }
 
-.week-calendar { min-height: 560px; display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line-soft); border-radius: 13px; overflow: hidden; }
+.week-calendar { min-height: 560px; display: grid; grid-template-columns: repeat(7, 1fr); border: 1px solid var(--line-soft); border-radius: 13px; overflow: hidden; }
 .week-day { position: relative; padding: 13px 8px; border-right: 1px solid var(--line-soft); color: var(--muted); text-align: center; }
 .week-day:last-child { border-right: 0; }
 .week-day > span { display: block; font-size: 11px; text-transform: uppercase; }
