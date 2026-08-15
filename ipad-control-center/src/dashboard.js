@@ -126,6 +126,43 @@ export function describeSyncAge(source, now = new Date(), fallback = "Venter på
   return `Sist synket for ${days} ${days === 1 ? "døgn" : "døgn"} siden`;
 }
 
+// Samler alle tilkoblingene på ett sted. Hver sjekk sier hva som er galt og hva
+// man gjør med det, slik at statusstripa kan være taus når alt virker.
+export function buildStatusChecks({ syncCalendar, syncNotes, deviceMetrics, usage } = {}, now = new Date()) {
+  const events = Array.isArray(syncCalendar?.events) ? syncCalendar.events : [];
+  const notes = Array.isArray(syncNotes?.notes) ? syncNotes.notes : [];
+  const providerDetail = (provider) => {
+    if (!provider) return "Henter kvotedata …";
+    return provider.ok ? "Kvoten er hentet" : provider.error || "Leverandøren svarte ikke";
+  };
+  return [
+    {
+      id: "calendar",
+      label: "Apple Kalender",
+      ok: Boolean(syncCalendar?.connected),
+      detail: syncCalendar?.connected
+        ? `${events.length} hendelser hentet`
+        : "Åpne Kalender på Mac-en",
+    },
+    {
+      id: "notes",
+      label: "Sync-notater",
+      ok: Boolean(syncNotes?.connected),
+      detail: syncNotes?.connected ? `${notes.length} notater hentet` : "Åpne Sync på Mac-en",
+    },
+    {
+      id: "mobile",
+      label: "iPhone-verdier",
+      ok: Boolean(deviceMetrics?.syncConnected),
+      detail: deviceMetrics?.syncConnected
+        ? "Skjermtid, skritt og posisjon er ferske"
+        : `${describeSyncAge(deviceMetrics?.sources?.steps, now, "Har aldri sendt")}. Åpne Panelkobling på iPhonen.`,
+    },
+    { id: "codex", label: "Codex-bruk", ok: Boolean(usage?.codex?.ok), detail: providerDetail(usage?.codex) },
+    { id: "claude", label: "Claude-bruk", ok: Boolean(usage?.claude?.ok), detail: providerDetail(usage?.claude) },
+  ];
+}
+
 function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }

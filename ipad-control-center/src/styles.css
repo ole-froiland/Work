@@ -31,7 +31,7 @@ button { color: inherit; -webkit-tap-highlight-color: transparent; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
 
 .dashboard-shell { width: 100%; height: 100dvh; padding: 14px; overflow: hidden; background: var(--bg); }
-.mini-status, .section-heading, .agent-list li, .focus-actions, .sync-heading { display: flex; align-items: center; }
+.mini-status, .section-heading, .agent-list li, .focus-actions { display: flex; align-items: center; }
 .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); }
 .connection-dot.ready { background: var(--lime); box-shadow: 0 0 0 3px rgba(216,255,98,.1); }
 .connection-dot.sending { background: var(--blue); }
@@ -71,7 +71,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   .dashboard-shell.is-fullscreen .action-icon { border-radius: 19px; }
 }
 
-.usage-card, .agent-card, .focus-card, .task-card, .sync-card { padding: 17px; }
+.usage-card, .agent-card, .focus-card, .task-card { padding: 17px; }
 .usage-card { min-height: 0; padding: 10px 13px; border-color: #526170; background: #19212a; }
 .agent-card { height: 100%; min-height: 0; background: #151a21; }
 /* Fire ikonknapper i samme mål og stil som hurtigknappene øverst til venstre. */
@@ -80,7 +80,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .right-shortcut:hover { transform: translateY(-2px); filter: brightness(1.08); }
 .right-shortcut:active { transform: scale(.96); }
 .task-card { min-height: 0; display: flex; flex-direction: column; background: #151b22; }
-.sync-card { background: #172028; }
 .section-heading { justify-content: space-between; margin-bottom: 16px; }
 .section-heading h2, .calendar-toolbar h1, .bridge-modal h2 { margin: 2px 0 0; font-size: 20px; line-height: 1; letter-spacing: -0.04em; }
 .eyebrow { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
@@ -320,16 +319,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .add-task input::placeholder { color: var(--dim); }
 .add-task button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: #272e36; color: var(--muted); cursor: pointer; font-size: 11px; }
 .notes-empty { margin: auto 0; color: var(--muted); font-size: 11px; text-align: center; }
-.sync-heading { gap: 8px; }
-.sync-heading svg { color: var(--blue); }
-.sync-heading div { min-width: 0; display: flex; flex: 1; flex-direction: column; }
-.sync-heading strong { font-size: 12px; }
-.sync-heading small, .sync-heading > span { color: var(--muted); font-size: 11px; }
-.sync-items { display: flex; gap: 12px; margin-top: 12px; color: var(--muted); font-size: 11px; }
-.sync-items span { display: flex; align-items: center; gap: 5px; }
-.sync-items i { width: 5px; height: 5px; border-radius: 50%; background: var(--dim); }
-.sync-items i.tone-lime { background: var(--lime); }
-.sync-items i.tone-blue { background: var(--blue); }
+/* Statusstripa er rolig når alt virker og roper bare når noe er galt. */
+.status-strip { min-height: 40px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 0 12px; border: 1px solid var(--line); border-radius: 14px; background: #151b22; color: var(--muted); cursor: pointer; transition: background 140ms ease, border-color 140ms ease; }
+.status-strip:hover { border-color: #596776; background: var(--panel-raised); }
+.status-strip svg:first-child { color: var(--lime); }
+.status-strip strong { overflow: hidden; font-size: 12px; font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.status-strip svg:last-child { color: var(--dim); }
+.status-strip.has-problem { border-color: #6b4a2a; background: #241a12; color: var(--orange); }
+.status-strip.has-problem svg:first-child { color: var(--orange); }
+.status-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.status-list li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 11px; padding: 10px 11px; border: 1px solid #343c45; border-radius: 12px; background: #101419; }
+.status-list li > i { width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: var(--lime); }
+.status-list li.is-broken { border-color: #6b4a2a; }
+.status-list li.is-broken > i { background: var(--orange); }
+.status-list li > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.status-list strong { font-size: 13px; }
+.status-list small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.status-list li.is-broken small { color: #ffc79a; }
+
 
 .toast { position: fixed; left: 50%; bottom: 25px; z-index: 20; display: flex; align-items: center; gap: 8px; padding: 11px 14px; border: 1px solid #38414a; border-radius: 12px; background: #20262d; box-shadow: 0 16px 50px rgba(0,0,0,.35); font-size: 12px; transform: translateX(-50%); }
 .toast svg { color: var(--lime); }
@@ -394,7 +401,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   .focus-segment button { font-size: 12px; }
   .calendar-toolbar { align-items: flex-start; }
   .toolbar-actions { flex-direction: column-reverse; align-items: flex-end; }
-  .sync-items { flex-direction: column; gap: 5px; }
 }
 
 @media (max-height: 850px) and (orientation: landscape) {
@@ -404,7 +410,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   .left-rail, .right-rail { gap: 8px; }
   .quick-grid, .right-shortcuts { gap: 6px; }
   .quick-action, .right-shortcut, .action-icon { border-radius: 15px; }
-  .agent-card, .focus-card, .task-card, .sync-card { padding: 12px; }
+  .agent-card, .focus-card, .task-card { padding: 12px; }
   .now-playing-card, .next-event-card { gap: 6px; padding: 8px 10px; }
   .now-playing-art, .next-event-icon { width: 36px; height: 36px; border-radius: 10px; }
   .now-playing-controls > button { min-height: 32px; }
@@ -449,7 +455,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   .task-list li > button { width: 28px; height: 28px; }
   .add-task { min-height: 36px; margin-top: 6px; }
   .add-task button { min-height: 30px; }
-  .sync-items { margin-top: 8px; }
 }
 
 @media (max-width: 820px) and (orientation: portrait) {
@@ -459,7 +464,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   .left-rail, .right-rail { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: none; }
   .left-rail { height: calc(100dvh - 20px); flex: 0 0 calc(100dvh - 20px); grid-template-columns: 1fr; grid-template-rows: auto auto auto minmax(90px, 1fr); }
   .quick-grid, .agent-card, .task-card { grid-column: 1 / -1; }
-  .right-rail .sync-card { grid-column: 1 / -1; }
 }
 
 @media (max-width: 560px) {

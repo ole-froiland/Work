@@ -29,10 +29,11 @@ import {
   SpotifyLogo,
   Television,
   Wallet,
+  Warning,
   WifiHigh,
   X,
 } from "@phosphor-icons/react";
-import { buildMetricDetails, buildMonthDays, describeNextEvent, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, readUsageResponse } from "./dashboard.js";
+import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeNextEvent, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, readUsageResponse } from "./dashboard.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -403,6 +404,50 @@ function NextEventCard({ events, connected, now }) {
   );
 }
 
+// Taus når alt virker, tydelig når noe ikke gjør det. Detaljene ligger bak et
+// trykk, slik at kortet ikke bruker plass på å fortelle at det går bra.
+function StatusStrip({ checks }) {
+  const [open, setOpen] = useState(false);
+  const broken = checks.filter((check) => !check.ok);
+  const summary = broken.length === 0
+    ? "Alt er tilkoblet"
+    : `${broken.length} ${broken.length === 1 ? "ting virker ikke" : "ting virker ikke"}`;
+
+  return (
+    <>
+      <button
+        className={`status-strip ${broken.length ? "has-problem" : ""}`}
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`${summary}. Trykk for detaljer`}
+      >
+        {broken.length ? <Warning size={16} weight="fill" /> : <WifiHigh size={16} weight="bold" />}
+        <strong>{summary}</strong>
+        <CaretRight size={13} weight="bold" />
+      </button>
+
+      {open && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+          <section className="bridge-modal status-modal" role="dialog" aria-modal="true" aria-labelledby="statusTitle">
+            <div className="modal-title">
+              <div><span className="eyebrow">Tilkobling</span><h2 id="statusTitle">{summary}</h2></div>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Lukk"><X /></button>
+            </div>
+            <ul className="status-list">
+              {checks.map((check) => (
+                <li className={check.ok ? "is-ok" : "is-broken"} key={check.id}>
+                  <i />
+                  <span><strong>{check.label}</strong><small>{check.detail}</small></span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
 function MiniStatus({ icon: Icon, label, value, detail, tone, onClick }) {
   return (
     <button className="mini-status" type="button" onClick={onClick} aria-haspopup="dialog" aria-label={`Vis mer om ${label}`} data-metric-trigger>
@@ -702,6 +747,10 @@ function App() {
   // kortet si når mobilen sist sendte, ikke bare «Ikke synket».
   const hasScreenTimeSource = Number.isFinite(deviceMetrics?.screenTime?.yesterdayMinutes);
   const hasStepsSource = Number.isFinite(deviceMetrics?.steps?.today);
+  const statusChecks = useMemo(
+    () => buildStatusChecks({ syncCalendar, syncNotes, deviceMetrics, usage }, now),
+    [syncCalendar, syncNotes, deviceMetrics, usage, now],
+  );
   const screenTimeAge = describeSyncAge(deviceMetrics?.sources?.screenTime, now, "Device Activity · iPhone + iPad");
   const stepsAge = describeSyncAge(deviceMetrics?.sources?.steps, now, "HealthKit · Apple Helse");
   const hasLocationSource = deviceMetrics?.sources?.location?.provider === "CoreLocation";
@@ -1127,10 +1176,7 @@ function App() {
             <form className="add-task" onSubmit={addSyncNote}><Plus size={17} /><input value={newNote} onChange={(event) => setNewNote(event.target.value)} placeholder="Skriv et notat" aria-label="Nytt Sync-notat" /><button type="submit">Legg til</button></form>
           </section>
 
-          <section className="panel-card sync-card">
-            <div className="sync-heading"><WifiHigh size={21} weight="bold" /><div><strong>Tilkoblingsstatus</strong><small>{deviceMetrics?.syncConnected ? "iPhone/iPad er koblet" : "Mobiltilgang mangler"}</small></div><span>{deviceMetrics?.weather?.ok ? "live" : "venter"}</span></div>
-            <div className="sync-items"><span><i className={syncCalendar.connected && syncNotes.connected ? "tone-lime" : ""} />{syncCalendar.connected && syncNotes.connected ? "Sync koblet" : "Sync venter"}</span><span><i className={deviceMetrics?.syncConnected ? "tone-blue" : ""} />{deviceMetrics?.syncConnected ? "Mobilverdier synkronisert" : "Skjermtid og skritt venter"}</span></div>
-          </section>
+          <StatusStrip checks={statusChecks} />
         </aside>
       </section>
 

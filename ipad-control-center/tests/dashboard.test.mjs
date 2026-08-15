@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMetricDetails, buildMonthDays, describeNextEvent, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, readUsageResponse, resolvePanelRedirect } from "../src/dashboard.js";
+import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeNextEvent, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, readUsageResponse, resolvePanelRedirect } from "../src/dashboard.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
@@ -203,4 +203,43 @@ test("falls back to naming the source when the phone has never synced", () => {
   assert.equal(describeSyncAge(undefined, now, "HealthKit · Apple Helse"), "HealthKit · Apple Helse");
   assert.equal(describeSyncAge({ provider: "HealthKit" }, now, "reserve"), "reserve");
   assert.equal(describeSyncAge({ observedAt: "2026-08-14T21:20:00.000Z" }, now, "reserve"), "reserve");
+});
+
+test("reports every connection with what to do about it", () => {
+  const now = new Date("2026-08-15T11:45:00.000Z");
+  const checks = buildStatusChecks({
+    syncCalendar: { connected: true, events: [{ id: "a" }, { id: "b" }] },
+    syncNotes: { connected: true, notes: [{ id: "n" }] },
+    deviceMetrics: { syncConnected: true },
+    usage: { codex: { ok: true }, claude: { ok: true } },
+  }, now);
+
+  assert.deepEqual(checks.map((check) => check.id), ["calendar", "notes", "mobile", "codex", "claude"]);
+  assert.equal(checks.every((check) => check.ok), true);
+  assert.equal(checks[0].detail, "2 hendelser hentet");
+});
+
+test("explains each broken connection instead of only flagging it", () => {
+  const now = new Date("2026-08-15T11:45:00.000Z");
+  const checks = buildStatusChecks({
+    syncCalendar: { connected: false, events: [] },
+    syncNotes: { connected: false, notes: [] },
+    deviceMetrics: { syncConnected: false, sources: { steps: { provider: "HealthKit", observedAt: "2026-08-13T11:45:00.000Z" } } },
+    usage: { codex: { ok: false, error: "Codex er ikke innlogget" }, claude: { ok: true } },
+  }, now);
+
+  const byId = Object.fromEntries(checks.map((check) => [check.id, check]));
+  assert.equal(checks.filter((check) => !check.ok).length, 4);
+  assert.equal(byId.calendar.detail, "Åpne Kalender på Mac-en");
+  assert.equal(byId.notes.detail, "Åpne Sync på Mac-en");
+  assert.match(byId.mobile.detail, /Sist synket for 2 døgn siden\. Åpne Panelkobling/);
+  assert.equal(byId.codex.detail, "Codex er ikke innlogget");
+  assert.equal(byId.claude.ok, true);
+});
+
+test("does not claim a fault before the data has loaded", () => {
+  const checks = buildStatusChecks({}, new Date("2026-08-15T11:45:00.000Z"));
+  const byId = Object.fromEntries(checks.map((check) => [check.id, check]));
+  assert.equal(byId.codex.detail, "Henter kvotedata …");
+  assert.equal(byId.mobile.detail, "Har aldri sendt. Åpne Panelkobling på iPhonen.");
 });
