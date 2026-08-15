@@ -66,6 +66,11 @@ final class MetricsSyncModel: ObservableObject {
             async let steps = fetchStepMetrics()
             async let location = locationProvider.currentLocation()
             let values = try await (steps, location)
+            // Statusen skal vise om kilden svarte, ikke om opplastingen gikk
+            // gjennom. Sto de på «Ikke godkjent» til etter upload, så det ut som
+            // manglende tillatelser når feilen i virkeligheten var adressen.
+            stepsStatus = "Klar"
+            locationStatus = "Klar"
             #if PANEL_USAGE_EXPORT
             let screenTime = try await fetchScreenTime()
             screenTimeStatus = "Klar"
@@ -74,8 +79,6 @@ final class MetricsSyncModel: ObservableObject {
             screenTimeStatus = "Krever Xcode 26.4+"
             #endif
             try await upload(screenTime: screenTime, steps: values.0, location: values.1)
-            stepsStatus = "Klar"
-            locationStatus = "Klar"
             lastSync = .now
         } catch {
             errorMessage = error.localizedDescription
