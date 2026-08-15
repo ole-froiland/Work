@@ -8,3 +8,4 @@ dist/
 **/.playwright-cli/
 **/output/
 *.log
+**/ios-companion/build/

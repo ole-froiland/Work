@@ -6,7 +6,10 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    DEVELOPMENT_TEAM: ""
+    # Teamet som eier provisioneringsprofilen for no.olefroiland.PanelCompanion.
+    # Uten dette må signeringen velges manuelt i Xcode ved hver reinstallasjon.
+    # Overstyr med `xcodebuild DEVELOPMENT_TEAM=...` hvis appen skal signeres av et annet team.
+    DEVELOPMENT_TEAM: KK679X38PZ
 targets:
   PanelCompanion:
     type: application

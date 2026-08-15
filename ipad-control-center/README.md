@@ -30,6 +30,18 @@ En vanlig nettside får ikke lese Apples Skjermtid- eller Helsedata direkte. Der
 
 Skjermtidseksport er Apples nye EU-funksjon for iOS 26.4+. Prosjektet aktiverer koden automatisk når det bygges med iPhoneOS 26.4 SDK eller nyere. Skritt og lokasjon bygger allerede med SDK 26.2. Mac-en må ha et Apple-utviklersertifikat før appen kan signeres og installeres på en fysisk iPhone.
 
+Installer eller reinstaller appen på telefonen. Koble iPhonen til med kabel, lås
+den opp, og kjør:
+
+```bash
+./ios-companion/install-on-iphone.sh
+```
+
+Skriptet bygger, installerer og starter appen. Signeringen er låst til teamet som
+eier provisioneringsprofilen (`DEVELOPMENT_TEAM` i `project.yml`), så det trengs
+ingen manuelle valg i Xcode. Finner det ingen tilkoblet telefon, sier det fra i
+stedet for å bygge mot en simulator.
+
 Generer Xcode-prosjektet og kontroller at det bygger:
 
 ```bash

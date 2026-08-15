@@ -120,14 +120,14 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					90FBE8E44E6F55A7393AD214 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = KK679X38PZ;
 						ProvisioningStyle = Automatic;
 						TestTargetID = D578E9B25E369E7C74FB9E9E;
 					};
 					D578E9B25E369E7C74FB9E9E = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = KK679X38PZ;
 						ProvisioningStyle = Automatic;
-						SystemCapabilities = "[\"com.apple.HealthKit\": [\"enabled\": 1], \"com.apple.FamilyControls\": [\"enabled\": 1]]";
+						SystemCapabilities = "[\"com.apple.FamilyControls\": [\"enabled\": 1], \"com.apple.HealthKit\": [\"enabled\": 1]]";
 					};
 				};
 			};
@@ -277,7 +277,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = KK679X38PZ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -352,7 +352,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = KK679X38PZ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
