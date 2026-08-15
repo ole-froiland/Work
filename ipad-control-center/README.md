@@ -60,6 +60,17 @@ POST /api/device-metrics
 }
 ```
 
+Appen synker i forgrunnen når den åpnes, og ellers via `BGAppRefreshTask`. Neste
+bakgrunnskjøring planlegges uansett om synken lyktes. Lå kallet bare på
+suksessgrenen, døde kjeden for godt første gang en synk feilet — typisk når
+telefonen var utenfor hjemmenettet og `.local`-adressen ikke svarte — og appen
+våknet aldri igjen av seg selv. Merk at iOS selv bestemmer når bakgrunnsjobben
+kjøres; 30 minutter er tidligste tidspunkt, ikke en garanti, og jobben kjøres
+ikke i det hele tatt hvis appen er tvangsavsluttet fra appbytteren.
+
+Kortene skiller mellom «har aldri vært koblet til» og «sluttet å sende»: mangler
+ferske verdier, viser de hvor lenge siden mobilen sist sendte.
+
 Verdiene valideres sammen med kilde og observasjonstid før de lagres lokalt i `~/Library/Caches/ipad-control-center/device-metrics.json`. Panelet avviser nettleserverdier, ukjente leverandører og data som er eldre enn ett døgn. Felt som mangler, beholder sist synkroniserte verdi, men vises ikke når kilden er utdatert.
 
 ## Hurtigknapper

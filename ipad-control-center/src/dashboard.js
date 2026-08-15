@@ -113,6 +113,19 @@ export function formatResetTime(value, active, now) {
   return { countdown, absolute };
 }
 
+// «Ikke synket» alene sier ikke om mobilen aldri har vært koblet til, eller om
+// den sluttet å sende for to dager siden. Alderen på siste observasjon skiller.
+export function describeSyncAge(source, now = new Date(), fallback = "Venter på iPhone") {
+  const observed = new Date(source?.observedAt ?? "");
+  if (!source?.provider || Number.isNaN(observed.getTime())) return fallback;
+  const minutes = Math.max(0, Math.floor((now.getTime() - observed.getTime()) / 60_000));
+  if (minutes < 60) return `Sist synket for ${minutes} min siden`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Sist synket for ${hours} ${hours === 1 ? "time" : "timer"} siden`;
+  const days = Math.floor(hours / 24);
+  return `Sist synket for ${days} ${days === 1 ? "døgn" : "døgn"} siden`;
+}
+
 function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }

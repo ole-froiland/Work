@@ -50,7 +50,14 @@ final class MetricsSyncModel: ObservableObject {
         guard !isSyncing else { return }
         isSyncing = true
         errorMessage = nil
-        defer { isSyncing = false }
+        // Neste bakgrunnskjøring må planlegges uansett utfall. Lå kallet bare på
+        // suksessgrenen, døde kjeden for godt første gang en synk feilet — for
+        // eksempel når telefonen var utenfor hjemmenettet og .local-adressen
+        // ikke svarte. Da våknet appen aldri igjen av seg selv.
+        defer {
+            isSyncing = false
+            scheduleBackgroundRefresh()
+        }
 
         do {
             if requestPermissions {
@@ -70,7 +77,6 @@ final class MetricsSyncModel: ObservableObject {
             stepsStatus = "Klar"
             locationStatus = "Klar"
             lastSync = .now
-            scheduleBackgroundRefresh()
         } catch {
             errorMessage = error.localizedDescription
         }

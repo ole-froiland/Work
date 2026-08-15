@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMetricDetails, buildMonthDays, describeNextEvent, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, readUsageResponse, resolvePanelRedirect } from "../src/dashboard.js";
+import { buildMetricDetails, buildMonthDays, describeNextEvent, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, readUsageResponse, resolvePanelRedirect } from "../src/dashboard.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
@@ -185,4 +185,22 @@ test("says so plainly when the provider gave no reset time at all", () => {
 test("never counts below zero once the reset has passed", () => {
   const now = new Date("2026-08-14T19:14:00.000Z");
   assert.equal(formatResetTime("2026-08-10T00:00:00.000Z", true, now).countdown, "0 min igjen");
+});
+
+test("says how long ago the phone last synced instead of only 'not synced'", () => {
+  const now = new Date("2026-08-14T21:45:00.000Z");
+  const at = (iso) => ({ provider: "HealthKit", observedAt: iso });
+
+  assert.equal(describeSyncAge(at("2026-08-14T21:20:00.000Z"), now), "Sist synket for 25 min siden");
+  assert.equal(describeSyncAge(at("2026-08-14T18:45:00.000Z"), now), "Sist synket for 3 timer siden");
+  assert.equal(describeSyncAge(at("2026-08-14T20:45:00.000Z"), now), "Sist synket for 1 time siden");
+  assert.equal(describeSyncAge(at("2026-08-12T14:56:00.000Z"), now), "Sist synket for 2 døgn siden");
+});
+
+test("falls back to naming the source when the phone has never synced", () => {
+  const now = new Date("2026-08-14T21:45:00.000Z");
+
+  assert.equal(describeSyncAge(undefined, now, "HealthKit · Apple Helse"), "HealthKit · Apple Helse");
+  assert.equal(describeSyncAge({ provider: "HealthKit" }, now, "reserve"), "reserve");
+  assert.equal(describeSyncAge({ observedAt: "2026-08-14T21:20:00.000Z" }, now, "reserve"), "reserve");
 });

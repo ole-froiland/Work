@@ -32,7 +32,7 @@ import {
   WifiHigh,
   X,
 } from "@phosphor-icons/react";
-import { buildMetricDetails, buildMonthDays, describeNextEvent, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, readUsageResponse } from "./dashboard.js";
+import { buildMetricDetails, buildMonthDays, describeNextEvent, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, readUsageResponse } from "./dashboard.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -696,8 +696,12 @@ function App() {
   const monthTitle = useMemo(() => new Intl.DateTimeFormat("nb-NO", { month: "long", year: "numeric" }).format(date), [date]);
   const fullDate = useMemo(() => new Intl.DateTimeFormat("nb-NO", { weekday: "long", day: "numeric", month: "long" }).format(date), [date]);
   const timeLabel = new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(now);
-  const hasScreenTimeSource = deviceMetrics?.sources?.screenTime?.provider === "DeviceActivity";
-  const hasStepsSource = deviceMetrics?.sources?.steps?.provider === "HealthKit";
+  // Kilden kan være kjent selv om verdiene er for gamle til å vises. Da skal
+  // kortet si når mobilen sist sendte, ikke bare «Ikke synket».
+  const hasScreenTimeSource = Number.isFinite(deviceMetrics?.screenTime?.yesterdayMinutes);
+  const hasStepsSource = Number.isFinite(deviceMetrics?.steps?.today);
+  const screenTimeAge = describeSyncAge(deviceMetrics?.sources?.screenTime, now, "Device Activity · iPhone + iPad");
+  const stepsAge = describeSyncAge(deviceMetrics?.sources?.steps, now, "HealthKit · Apple Helse");
   const hasLocationSource = deviceMetrics?.sources?.location?.provider === "CoreLocation";
   const calendarEvents = Array.isArray(syncCalendar.events) ? syncCalendar.events : [];
   const selectedDayEvents = eventsOnDay(calendarEvents, date);
@@ -1043,8 +1047,8 @@ function App() {
             {view === "month" && <MonthCalendar date={date} events={calendarEvents} onSelectDay={(day) => { setDate(day); openCalendarComposer(day); }} onDropNote={dropNoteInCalendar} />}
           </div>
           <footer className="system-strip">
-            <MiniStatus icon={Laptop} label="Skjermtid · i går" value={hasScreenTimeSource ? formatMinutes(deviceMetrics?.screenTime?.yesterdayMinutes) : "Koble iPhone"} detail={hasScreenTimeSource ? `Snitt uke: ${formatMinutes(deviceMetrics?.screenTime?.weeklyAverageMinutes)}` : "Device Activity · iPhone + iPad"} tone="violet" onClick={() => setActiveMetric((current) => current?.id === "screenTime" ? null : { id: "screenTime", icon: Laptop, tone: "violet", anchor: 0 })} />
-            <MiniStatus icon={Footprints} label="Skritt · i dag" value={hasStepsSource && Number.isFinite(deviceMetrics?.steps?.today) ? new Intl.NumberFormat("nb-NO").format(deviceMetrics.steps.today) : "Koble iPhone"} detail={hasStepsSource ? formatStepComparison(deviceMetrics?.steps?.today, deviceMetrics?.steps?.weeklyAverage) : "HealthKit · Apple Helse"} tone="lime" onClick={() => setActiveMetric((current) => current?.id === "steps" ? null : { id: "steps", icon: Footprints, tone: "lime", anchor: 1 })} />
+            <MiniStatus icon={Laptop} label="Skjermtid · i går" value={hasScreenTimeSource ? formatMinutes(deviceMetrics?.screenTime?.yesterdayMinutes) : "Ikke synket"} detail={hasScreenTimeSource ? `Snitt uke: ${formatMinutes(deviceMetrics?.screenTime?.weeklyAverageMinutes)}` : screenTimeAge} tone="violet" onClick={() => setActiveMetric((current) => current?.id === "screenTime" ? null : { id: "screenTime", icon: Laptop, tone: "violet", anchor: 0 })} />
+            <MiniStatus icon={Footprints} label="Skritt · i dag" value={hasStepsSource ? new Intl.NumberFormat("nb-NO").format(deviceMetrics.steps.today) : "Ikke synket"} detail={hasStepsSource ? formatStepComparison(deviceMetrics?.steps?.today, deviceMetrics?.steps?.weeklyAverage) : stepsAge} tone="lime" onClick={() => setActiveMetric((current) => current?.id === "steps" ? null : { id: "steps", icon: Footprints, tone: "lime", anchor: 1 })} />
             <MiniStatus icon={CloudSun} label={`${deviceMetrics?.weather?.label || "Mosterøy"}${hasLocationSource ? "" : " · reserve"}`} value={deviceMetrics?.weather?.ok ? `${Math.round(deviceMetrics.weather.temperature)}° · ${deviceMetrics.weather.condition}` : "Vær utilgjengelig"} detail={hasLocationSource && deviceMetrics?.weather?.ok && Number.isFinite(deviceMetrics.weather.apparentTemperature) ? `Føles som ${Math.round(deviceMetrics.weather.apparentTemperature)}°` : "Koble iPhone for posisjon"} tone="orange" onClick={() => setActiveMetric((current) => current?.id === "weather" ? null : { id: "weather", icon: CloudSun, tone: "orange", anchor: 2 })} />
             {activeMetric && <MetricDetail metric={activeMetric} metrics={deviceMetrics} />}
           </footer>
