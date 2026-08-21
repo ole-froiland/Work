@@ -4,10 +4,13 @@ import assert from "node:assert/strict";
 import {
   describeClaudeActivity,
   findRecordedTitle,
+  needsUserResponse,
   orderSessions,
   parseRecords,
+  readHead,
   readTitleFromHead,
   resolveSessionState,
+  selectVisibleSessions,
   summarizeClaudeSession,
   summarizeCodexSession,
 } from "../server/agent-session-service.mjs";
@@ -46,6 +49,21 @@ test("reads a finished Claude turn as done, not as work in progress", () => {
 
   assert.equal(session.state, "done");
   assert.equal(session.activity, null);
+});
+
+test("only marks a completed answer as needing a reply when it ends with a question", () => {
+  assert.equal(needsUserResponse("Ferdig."), false);
+  assert.equal(needsUserResponse("Hvilken løsning vil du bruke?"), true);
+
+  const claude = summarizeClaudeSession([
+    { type: "assistant", timestamp: "2026-08-21T11:59:00.000Z", message: { content: [{ type: "text", text: "Kan du velge mappe?" }] } },
+  ], { id: "claude", now: NOW });
+  assert.equal(claude.state, "needs_input");
+
+  const codex = summarizeCodexSession([
+    { type: "event_msg", timestamp: "2026-08-21T11:59:00.000Z", payload: { type: "task_complete", last_agent_message: "Alt er ferdig." } },
+  ], { id: "codex", now: NOW });
+  assert.equal(codex.state, "done");
 });
 
 test("flags a session that stopped mid-turn instead of calling it active", () => {
@@ -113,6 +131,7 @@ test("reads Codex turn events as working and done", () => {
   assert.equal(working.activity, "Kjører kommandoer");
   assert.equal(working.title, "Push changes to main");
   assert.equal(working.provider, "codex");
+  assert.equal(working.project, "Work");
 
   const finished = summarizeCodexSession([
     ...records,
@@ -120,6 +139,34 @@ test("reads Codex turn events as working and done", () => {
   ], { id: "x", now: NOW });
   assert.equal(finished.state, "done");
   assert.equal(finished.activity, null);
+});
+
+test("keeps a long Codex turn working after task_started scrolls out of the tail", () => {
+  const session = summarizeCodexSession([
+    { type: "response_item", timestamp: "2026-08-21T11:59:00.000Z", payload: { type: "reasoning" } },
+    { type: "response_item", timestamp: "2026-08-21T11:59:10.000Z", payload: { type: "custom_tool_call", name: "exec" } },
+    { type: "response_item", timestamp: "2026-08-21T11:59:20.000Z", payload: { type: "custom_tool_call_output" } },
+  ], { id: "x", now: NOW });
+
+  assert.equal(session.state, "working");
+  assert.equal(session.activity, "Kjører kommandoer");
+});
+
+test("reads Codex metadata when the first JSON line is larger than eight kilobytes", async (t) => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const directory = await mkdtemp(join(tmpdir(), "panel-codex-head-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "session.jsonl");
+  await writeFile(path, `${JSON.stringify({
+    type: "session_meta",
+    timestamp: "2026-08-21T11:00:00.000Z",
+    payload: { cwd: "/Users/ole/Desktop/Prosjekter/Work", instructions: "x".repeat(12_000) },
+  })}\n`);
+
+  const session = summarizeCodexSession(parseRecords(await readHead(path)), { id: "x", now: NOW });
+  assert.equal(session.project, "Work");
 });
 
 test("does not turn a Codex attachment message into the session name", () => {
@@ -140,7 +187,18 @@ test("shows running sessions before finished ones, newest first", () => {
     { id: "stalled", state: "stalled", lastActivityAt: "2026-08-21T11:40:00.000Z" },
   ]);
 
-  assert.deepEqual(ordered.map((session) => session.id), ["new-working", "old-working", "stalled", "done"]);
+  assert.deepEqual(ordered.map((session) => session.id), ["new-working", "old-working", "done", "stalled"]);
+});
+
+test("keeps only the three most relevant sessions in the card", () => {
+  const visible = selectVisibleSessions([
+    { id: "done-old", state: "done", lastActivityAt: "2026-08-21T10:00:00.000Z" },
+    { id: "done-new", state: "done", lastActivityAt: "2026-08-21T11:00:00.000Z" },
+    { id: "needs-input", state: "needs_input", lastActivityAt: "2026-08-21T10:30:00.000Z" },
+    { id: "working", state: "working", lastActivityAt: "2026-08-21T11:30:00.000Z" },
+  ]);
+
+  assert.deepEqual(visible.map((session) => session.id), ["working", "needs-input", "done-new"]);
 });
 
 test("survives the half-written last line of a log that is still being appended", () => {

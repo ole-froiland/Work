@@ -69,6 +69,28 @@ export function isSocialApp(value) {
   return SOCIAL_APP_NAMES.has(formatAppName(value).toLowerCase());
 }
 
+const SOCIAL_APP_ICON_KEYS = new Map([
+  ["instagram", "instagram"],
+  ["snapchat", "snapchat"],
+  ["linkedin", "linkedin"],
+  ["facebook", "facebook"],
+  ["messenger", "messenger"],
+  ["youtube", "youtube"],
+  ["tiktok", "tiktok"],
+  ["x", "x"],
+  ["twitter", "x"],
+  ["threads", "threads"],
+  ["reddit", "reddit"],
+  ["pinterest", "pinterest"],
+  ["tumblr", "tumblr"],
+  ["discord", "discord"],
+  ["twitch", "twitch"],
+]);
+
+export function socialAppIconKey(value) {
+  return SOCIAL_APP_ICON_KEYS.get(formatAppName(value).toLowerCase()) ?? "app";
+}
+
 export function formatAppName(value) {
   const name = typeof value === "string" ? value.trim() : "";
   if (!name) return "Ukjent app";
@@ -214,20 +236,24 @@ export function formatAgentAge(value, now = new Date()) {
 
 const AGENT_STATES = {
   working: { label: "Jobber", tone: "working" },
-  stalled: { label: "Står stille", tone: "stalled" },
-  done: { label: "Venter", tone: "done" },
+  stalled: { label: "Avsluttet", tone: "ended" },
+  needs_input: { label: "Trenger svar", tone: "input" },
+  done: { label: "Ferdig", tone: "done" },
 };
 
-// Merkelappen sier tilstanden, teksten ved siden av sier hva som skjer. De to
-// skal aldri gjenta hverandre: en økt som venter viser mappa si i stedet.
+// Merkelappen sier tilstanden, mens mappa og aktiviteten står hver for seg.
+// Dermed forsvinner ikke mappen når en økt jobber, og «ferdig» blandes ikke
+// sammen med en tur som stoppet før den rakk å svare.
 export function describeAgentSession(session, now = new Date()) {
   const state = AGENT_STATES[session?.state] ?? { label: "Ukjent", tone: "done" };
   const age = formatAgentAge(session?.lastActivityAt, now);
   const detail = session?.state === "working"
     ? `${session.subagent ? "Underagent jobber" : session.activity ?? "Tenker"} · ${age}`
     : session?.state === "stalled"
-      ? `Stoppet for ${age.replace(" siden", "")}`
-      : [session?.project, age].filter(Boolean).join(" · ");
+      ? `Stoppet uten svar · ${age}`
+      : session?.state === "needs_input"
+        ? `Venter på svar · ${age}`
+        : `Fullført · ${age}`;
   return {
     id: session?.id,
     provider: session?.provider,
@@ -256,7 +282,8 @@ export function summarizeAgentSessions(snapshot, now = new Date()) {
   const sessions = (Array.isArray(snapshot.sessions) ? snapshot.sessions : [])
     .map((session) => describeAgentSession(session, now));
   const busy = sessions.filter((session) => session.tone === "working");
-  const stalled = sessions.filter((session) => session.tone === "stalled");
+  const ended = sessions.filter((session) => session.tone === "ended");
+  const needsInput = sessions.filter((session) => session.tone === "input");
   const done = sessions.filter((session) => session.tone === "done");
 
   const names = [...new Set(busy.map((session) => (session.provider === "codex" ? "Codex" : "Claude")))];
@@ -264,13 +291,15 @@ export function summarizeAgentSessions(snapshot, now = new Date()) {
     ? names.length === 1
       ? `${names[0]} jobber med ${busy.length} ${taskWord(busy.length)}`
       : `${busy.length} ${taskWord(busy.length)} kjører`
-    : stalled.length
-      ? `${stalled.length} ${taskWord(stalled.length)} står stille`
+    : needsInput.length
+      ? `${needsInput.length} ${taskWord(needsInput.length)} trenger svar`
       : done.length
-        ? "Ingenting kjører nå"
-        : "Ingen økter de siste åtte timene";
+        ? `${done.length} ${taskWord(done.length)} er ${done.length === 1 ? "ferdig" : "ferdige"}`
+        : ended.length
+          ? `${ended.length} ${taskWord(ended.length)} er avsluttet`
+          : "Ingen økter de siste åtte timene";
 
-  return { headline, activeCount: busy.length + stalled.length, count: sessions.length, sessions, empty: sessions.length === 0 };
+  return { headline, activeCount: busy.length, count: sessions.length, sessions, empty: sessions.length === 0 };
 }
 
 function startOfDay(date) {
@@ -360,6 +389,42 @@ export function describeNextEvent(events, now = new Date()) {
   return null;
 }
 
+function formatRemaining(milliseconds) {
+  const minutes = Math.max(1, Math.ceil(milliseconds / 60_000));
+  if (minutes < 60) return `${minutes} min igjen`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  if (hours < 24) return restMinutes ? `${hours} t ${restMinutes} min igjen` : `${hours} t igjen`;
+  const days = Math.floor(hours / 24);
+  const restHours = hours % 24;
+  return restHours ? `${days} d ${restHours} t igjen` : `${days} d igjen`;
+}
+
+// Aktivitetskortet skal først svare på «hva holder jeg på med nå?», men uten
+// å gjemme det som kommer etterpå. Derfor returneres begge tilstandene hver for
+// seg i stedet for at en fremtidig avtale alltid vinner over en pågående.
+export function describeCalendarActivity(events, now = new Date()) {
+  const candidates = Array.isArray(events) ? events : [];
+  const ongoing = candidates
+    .map((event) => ({ event: event ?? {}, start: new Date(event?.start ?? ""), end: new Date(event?.end ?? "") }))
+    .filter((entry) => !entry.event.allDay && Number.isFinite(+entry.start) && Number.isFinite(+entry.end) && +entry.start <= +now && +entry.end > +now)
+    .sort((a, b) => +a.end - +b.end)[0];
+
+  const current = ongoing
+    ? describeEntry(ongoing, {
+      ongoing: true,
+      when: `Slutter ${formatEventClock(ongoing.end)}`,
+      remaining: formatRemaining(+ongoing.end - +now),
+    })
+    : null;
+
+  const nextEvents = current
+    ? candidates.filter((event) => !event?.allDay && +new Date(event?.start ?? "") > +now)
+    : candidates;
+
+  return { current, next: describeNextEvent(nextEvents, now) };
+}
+
 function formatNumber(value) {
   return Number.isFinite(value) ? new Intl.NumberFormat("nb-NO", { maximumFractionDigits: 0 }).format(value) : "Ikke synket";
 }
@@ -398,7 +463,11 @@ export function buildMetricDetails(type, metrics = {}) {
         ? metrics.screenTime.topApps
           .filter((app) => isSocialApp(app?.name))
           .slice(0, 5)
-          .map((app) => ({ name: formatAppName(app.name), value: formatMinutes(app.minutes) }))
+          .map((app) => ({
+            name: formatAppName(app.name),
+            icon: socialAppIconKey(app.name),
+            value: formatMinutes(app.minutes),
+          }))
         : [],
       rows: [
         ["I går", formatMinutes(yesterday)],

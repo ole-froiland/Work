@@ -4,6 +4,7 @@ import {
   ArrowCounterClockwise,
   ArrowsIn,
   ArrowsOut,
+  AppWindow,
   CalendarBlank,
   CaretLeft,
   CaretRight,
@@ -11,29 +12,43 @@ import {
   CloudSun,
   DeviceMobile,
   DeviceTabletSpeaker,
+  DiscordLogo,
+  FacebookLogo,
   FolderOpen,
   Footprints,
   GraduationCap,
+  InstagramLogo,
   Laptop,
+  LinkedinLogo,
   LinkSimple,
+  MessengerLogo,
   MonitorArrowUp,
   MoonStars,
   MusicNotes,
   Pause,
+  PinterestLogo,
   Play,
   Plus,
+  RedditLogo,
   SkipBack,
   SkipForward,
   SlidersHorizontal,
+  SnapchatLogo,
   SpeakerHigh,
   SpotifyLogo,
   Television,
+  ThreadsLogo,
+  TiktokLogo,
+  TumblrLogo,
+  TwitchLogo,
   Wallet,
   Warning,
   WifiHigh,
   X,
+  XLogo,
+  YoutubeLogo,
 } from "@phosphor-icons/react";
-import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeNextEvent, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, needsCompanionUpdate, readUsageResponse, summarizeAgentSessions } from "./dashboard.js";
+import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeCalendarActivity, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, needsCompanionUpdate, readUsageResponse, summarizeAgentSessions } from "./dashboard.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -72,6 +87,24 @@ async function setFullscreen(active) {
 }
 
 const calendarTone = { violet: "violet", emerald: "lime", amber: "orange", sky: "blue" };
+
+const socialAppIcons = {
+  app: AppWindow,
+  discord: DiscordLogo,
+  facebook: FacebookLogo,
+  instagram: InstagramLogo,
+  linkedin: LinkedinLogo,
+  messenger: MessengerLogo,
+  pinterest: PinterestLogo,
+  reddit: RedditLogo,
+  snapchat: SnapchatLogo,
+  threads: ThreadsLogo,
+  tiktok: TiktokLogo,
+  tumblr: TumblrLogo,
+  twitch: TwitchLogo,
+  x: XLogo,
+  youtube: YoutubeLogo,
+};
 
 function CodexLogo({ size = 18 }) {
   return (
@@ -181,6 +214,7 @@ function AgentActivityCard({ snapshot, now }) {
             <span className="agent-row">
               <strong title={`${session.title} · ${session.project}`}>{session.title}</strong>
               <span className="agent-row-meta">
+                <small className="agent-folder"><FolderOpen size={13} weight="fill" />{session.project || "Ukjent mappe"}</small>
                 <i className={`agent-chip is-${session.tone}`}>{session.label}</i>
                 <small>{session.detail}</small>
               </span>
@@ -416,9 +450,12 @@ function NowPlayingCard({ onToast, onConfigure }) {
 
 // Neste avtale fra Apple Kalender, i samme høyde som musikkortet i venstre spalte.
 function NextEventCard({ events, connected, now }) {
-  const next = useMemo(() => describeNextEvent(events, now), [events, now]);
+  const activity = useMemo(() => describeCalendarActivity(events, now), [events, now]);
+  const current = activity.current;
+  const next = activity.next;
+  const primary = current || next;
 
-  if (!next) {
+  if (!primary) {
     return (
       <section className="panel-card next-event-card is-empty">
         <span className="eyebrow">Neste aktivitet</span>
@@ -428,17 +465,23 @@ function NextEventCard({ events, connected, now }) {
   }
 
   return (
-    <section className={`panel-card next-event-card tone-${calendarTone[next.tone] || "violet"}${next.ongoing ? " is-ongoing" : ""}`}>
+    <section className={`panel-card next-event-card tone-${calendarTone[primary.tone] || "violet"}${current ? " is-ongoing" : ""}`}>
       <div className="next-event-top">
         <span className="next-event-icon"><CalendarBlank size={19} weight="duotone" /></span>
         <span className="next-event-text">
-          <span className="eyebrow">Neste aktivitet</span>
-          <strong title={next.title}>{next.title}</strong>
+          <span className="next-event-kicker">
+            <span className="eyebrow">{current ? "Pågår nå" : "Neste aktivitet"}</span>
+            {current && <em>{current.remaining}</em>}
+          </span>
+          <strong title={primary.title}>{primary.title}</strong>
         </span>
       </div>
       <div className="next-event-meta">
-        <span>{next.when}</span>
-        <strong>{next.countdown}</strong>
+        {current ? (
+          next
+            ? <><span title={`Neste: ${next.title}`}>Neste: {next.title}</span><strong>{next.countdown}</strong></>
+            : <><span>{current.when}</span><strong>Ingen neste</strong></>
+        ) : <><span>{next.when}</span><strong>{next.countdown}</strong></>}
       </div>
     </section>
   );
@@ -510,7 +553,10 @@ function MetricDetail({ metric, metrics }) {
         {detail.notice && <p className="metric-notice">{detail.notice}</p>}
         {detail.apps && <div className="metric-apps">
           <span className="eyebrow">Mest brukt i går</span>
-          {detail.apps.length > 0 ? detail.apps.map((app, index) => <div key={app.name}><i>{index + 1}</i><strong>{app.name}</strong><span>{app.value}</span></div>) : <p>{detail.appsEmpty}</p>}
+          {detail.apps.length > 0 ? detail.apps.map((app, index) => {
+            const AppIcon = socialAppIcons[app.icon] ?? AppWindow;
+            return <div key={app.name}><i>{index + 1}</i><b className={`metric-app-icon is-${app.icon}`} aria-hidden="true"><AppIcon size={17} weight="fill" /></b><strong>{app.name}</strong><span>{app.value}</span></div>;
+          }) : <p>{detail.appsEmpty}</p>}
         </div>}
         <dl className="metric-details">
           {detail.rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}

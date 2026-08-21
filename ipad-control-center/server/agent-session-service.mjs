@@ -47,6 +47,12 @@ const CODEX_EVENT_ACTIVITY = new Map([
   ["agent_message", "Skriver svar"],
 ]);
 
+const CODEX_TOOL_ACTIVITY = new Map([
+  ["exec", "Kjører kommandoer"],
+  ["apply_patch", "Endrer filer"],
+  ["view_image", "Ser på bilde"],
+]);
+
 export function describeClaudeActivity(toolName) {
   if (!toolName) return null;
   const match = CLAUDE_TOOL_ACTIVITY.find(([pattern]) => pattern.test(toolName));
@@ -59,14 +65,18 @@ function shorten(value, limit = 68) {
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
 }
 
+export function needsUserResponse(value) {
+  return /\?\s*$/.test(String(value ?? "").trim());
+}
+
 function projectName(directory) {
   const name = basename(String(directory ?? "")).trim();
   return name && name !== "/" ? name : "Ukjent mappe";
 }
 
-// Tilstanden er det kortet faktisk spørres om: jobber den, er den ferdig, eller
-// har den stoppet opp? «pending» er sant når siste hendelse var midt i en tur —
-// et verktøykall, et verktøysvar eller en ny beskjed fra Ole.
+// Tilstanden er det kortet faktisk spørres om: jobber den, venter den på Ole,
+// eller ble den avsluttet midt i en tur? «pending» er sant når siste hendelse
+// var et verktøykall, et verktøysvar eller en ny beskjed fra Ole.
 export function resolveSessionState(pending, lastActivityAt, now = Date.now()) {
   const age = Math.max(0, now - lastActivityAt);
   if (age > RECENT_MS) return "idle";
@@ -85,6 +95,7 @@ export function summarizeClaudeSession(records, { id, title: fallbackTitle = "",
   let directory = "";
   let activity = null;
   let pending = false;
+  let awaitingResponse = false;
   let lastActivityAt = 0;
   let subagentAt = 0;
 
@@ -103,9 +114,12 @@ export function summarizeClaudeSession(records, { id, title: fallbackTitle = "",
       if (tool) {
         activity = describeClaudeActivity(tool.name);
         pending = true;
+        awaitingResponse = false;
       } else if (contentBlocks(record).some((block) => block?.type === "text")) {
+        const text = contentBlocks(record).filter((block) => block?.type === "text").map((block) => block.text ?? "").join("\n");
         activity = null;
         pending = false;
+        awaitingResponse = needsUserResponse(text);
       }
       continue;
     }
@@ -113,6 +127,7 @@ export function summarizeClaudeSession(records, { id, title: fallbackTitle = "",
       const isToolResult = contentBlocks(record).some((block) => block?.type === "tool_result");
       if (!isToolResult) activity = null;
       pending = true;
+      if (!isToolResult) awaitingResponse = false;
     }
   }
 
@@ -123,7 +138,7 @@ export function summarizeClaudeSession(records, { id, title: fallbackTitle = "",
     provider: "claude",
     title: shorten(title || prompt || project, 42) || "Uten navn",
     project,
-    state: resolveSessionState(pending, lastActivityAt, now),
+    state: !pending && awaitingResponse ? "needs_input" : resolveSessionState(pending, lastActivityAt, now),
     activity,
     prompt: shorten(prompt),
     subagent: subagentAt > 0 && now - subagentAt <= WORKING_MS,
@@ -136,6 +151,7 @@ export function summarizeCodexSession(records, { id, title = "", now = Date.now(
   let prompt = "";
   let activity = null;
   let pending = false;
+  let awaitingResponse = false;
   let lastActivityAt = 0;
 
   for (const record of records) {
@@ -147,6 +163,17 @@ export function summarizeCodexSession(records, { id, title = "", now = Date.now(
     if (!Number.isFinite(stamp)) continue;
     lastActivityAt = Math.max(lastActivityAt, stamp);
 
+    // Lange turer kan skyve task_started utenfor halen vi leser. Nyere Codex-
+    // logger har likevel response_item-hendelser for tenking, tekst og verktøy;
+    // de er sikre bevis på at turen fortsatt pågår fram til task_complete.
+    if (record.type === "response_item") {
+      if (payload.type === "reasoning") activity = "Tenker";
+      if (payload.type === "message") activity = "Skriver svar";
+      if (payload.type === "custom_tool_call") activity = CODEX_TOOL_ACTIVITY.get(payload.name) ?? "Bruker verktøy";
+      if (["reasoning", "message", "custom_tool_call", "custom_tool_call_output"].includes(payload.type)) pending = true;
+      continue;
+    }
+
     if (record.type !== "event_msg") continue;
     if (payload.type === "user_message") {
       // Vedlegg sendes som en egen beskjed med maskintekst («# Files mentioned
@@ -154,6 +181,7 @@ export function summarizeCodexSession(records, { id, title = "", now = Date.now(
       const message = String(payload.message ?? "");
       if (message && !message.startsWith("#")) prompt = message;
       pending = true;
+      awaitingResponse = false;
       activity = null;
       continue;
     }
@@ -163,11 +191,15 @@ export function summarizeCodexSession(records, { id, title = "", now = Date.now(
     }
     if (payload.type === "task_complete") {
       pending = false;
+      awaitingResponse = needsUserResponse(payload.last_agent_message);
       activity = null;
       continue;
     }
     const known = CODEX_EVENT_ACTIVITY.get(payload.type);
-    if (known) activity = known;
+    if (known) {
+      activity = known;
+      pending = true;
+    }
   }
 
   if (!lastActivityAt) return null;
@@ -177,7 +209,7 @@ export function summarizeCodexSession(records, { id, title = "", now = Date.now(
     provider: "codex",
     title: shorten(title || prompt || project, 42) || "Uten navn",
     project,
-    state: resolveSessionState(pending, lastActivityAt, now),
+    state: !pending && awaitingResponse ? "needs_input" : resolveSessionState(pending, lastActivityAt, now),
     activity,
     prompt: shorten(prompt),
     subagent: false,
@@ -200,7 +232,7 @@ async function readTail(path, bytes = TAIL_BYTES) {
   }
 }
 
-async function readHead(path, bytes = 8 * 1024) {
+export async function readHead(path, bytes = HEAD_BYTES) {
   const handle = await open(path, "r");
   try {
     const buffer = Buffer.alloc(bytes);
@@ -313,7 +345,7 @@ async function loadCodexSessions(now) {
   return sessions.filter(Boolean);
 }
 
-const STATE_ORDER = { working: 0, stalled: 1, done: 2, idle: 3 };
+const STATE_ORDER = { working: 0, needs_input: 1, done: 2, stalled: 3, idle: 4 };
 
 export function orderSessions(sessions) {
   return [...sessions].sort((first, second) => {
@@ -321,6 +353,13 @@ export function orderSessions(sessions) {
     if (byState) return byState;
     return Date.parse(second.lastActivityAt) - Date.parse(first.lastActivityAt);
   });
+}
+
+export function selectVisibleSessions(sessions) {
+  const latest = [...sessions]
+    .sort((first, second) => Date.parse(second.lastActivityAt) - Date.parse(first.lastActivityAt))
+    .slice(0, 3);
+  return orderSessions(latest);
 }
 
 async function captureProvider(load) {
@@ -336,7 +375,7 @@ export async function getAgentSessions({ now = Date.now() } = {}) {
     captureProvider(() => loadClaudeSessions(now)),
     captureProvider(() => loadCodexSessions(now)),
   ]);
-  const sessions = orderSessions([...claude.sessions, ...codex.sessions].filter((session) => session.state !== "idle"));
+  const sessions = selectVisibleSessions([...claude.sessions, ...codex.sessions].filter((session) => session.state !== "idle"));
   return {
     updatedAt: new Date(now).toISOString(),
     ok: !claude.error && !codex.error,

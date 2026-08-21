@@ -2,53 +2,58 @@
 
 ## Evidence
 
-- Source visual truth 1: `/var/folders/bx/x598dj4x52163bx0hbhdrw3c0000gn/T/codex-clipboard-26264b48-7b4c-4b38-9ae6-af2fcd5ae0b5.png` (2934 × 128 px, top-bar removal target)
-- Source visual truth 2: `/var/folders/bx/x598dj4x52163bx0hbhdrw3c0000gn/T/codex-clipboard-1aa473ae-7a85-44b6-9d2e-601bb4597572.png` (586 × 1560 px, left-rail density target)
-- Implementation URL: `http://192.168.68.104:4173/`
-- Browser-rendered viewport inspected: 1280 × 720 CSS px, device density controlled by the Codex in-app browser
-- Implementation screenshot: unavailable. The in-app browser rendered and exposed the full accessibility/DOM tree, but every `Page.captureScreenshot` request timed out before producing a file.
-- State: landscape dashboard, day calendar selected, live usage and weather loaded, mobile metrics unsynced.
+- Source visual truth 1: `/var/folders/bx/x598dj4x52163bx0hbhdrw3c0000gn/T/codex-clipboard-7dc84c1e-46f1-477f-a6a1-f4b63cee2e5f.png` (572 × 686 px, Oppgaver-kort before state).
+- Source visual truth 2: `/var/folders/bx/x598dj4x52163bx0hbhdrw3c0000gn/T/codex-clipboard-0d9b785e-7873-42d8-8ad0-9c0eab0c955f.png` (596 × 230 px, Neste aktivitet before state).
+- Browser-rendered implementation: `output/playwright/activity-cards-after-1366x768.png` (1366 × 768 px).
+- Focused implementation crops: `output/playwright/agent-card-after.png` (280 × 267 px) and `output/playwright/next-event-after.png` (278 × 104 px).
+- Combined comparison input: `output/playwright/activity-cards-design-compare.png` (1192 × 916 px).
+- Viewport: 1366 × 768 CSS px in the Codex in-app browser, device density 1.
+- Density normalization: the two Retina source crops were treated as 2× references; the implementation crops were scaled 2× with Lanczos only for the combined comparison board.
+- State: live landscape dashboard, three recent agent tasks, no event currently in progress, next event shown for tomorrow.
 
 ## Full-view comparison evidence
 
-The browser-rendered DOM and measured layout confirm: no `.topbar` exists; the dashboard shell is 1280 × 720; document size is 1280 × 720; calendar bounds are x=298, y=10, w=686, h=700; all four quick actions are 48 px high; the bottom status row is visible; and there is no page overflow. The reference requests removal of the full-width header and major reduction of the quick-action height, which the measured implementation satisfies.
+The complete 1366 × 768 browser capture preserves the existing three-column dashboard, typography, color tokens, card radii, and landscape no-scroll layout. The only visual changes are confined to the requested Oppgaver and activity cards.
 
-## Focused-region evidence
+## Focused-region comparison evidence
 
-- Calendar toolbar: date and current clock are rendered beside the month heading; settings remain reachable from the same toolbar.
-- Left rail: four quick actions are 48 px high and remain practical touch targets.
-- Bottom status: `Skjermtid · i går`, weekly average, today’s steps, current weather, and sync state all appear in the browser DOM.
-- Primary interactions tested: settings dialog opened and closed; month and day calendar tabs were clicked; manual usage refresh remains available.
-- Browser console: a console-log capture API was unavailable on this browser surface. Build and runtime API checks showed no errors.
+- Oppgaver: before measurement showed a 244 px list with 298 px rows. After the fix both list and rows measure 254 px at the compact landscape breakpoint, with `scrollWidth === clientWidth`; long task details truncate inside the card instead of creating horizontal scrolling.
+- Activity card: the title/icon group is vertically centered in the space above the divider. The live next-event state matches the existing visual language and keeps the date and countdown aligned.
+- Ongoing-event state: covered by a deterministic UI-data test at 11:15, showing `Skole`, `45 min igjen`, and `Neste: Trening` with its countdown. The live calendar had no ongoing event at capture time, so this state could not be photographed without fabricating calendar data.
+- Browser console: no warnings or errors were reported during the final capture.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: existing SF Pro system stack and hierarchy preserved; compact controls use the same weights and scale as the surrounding dashboard.
-- Spacing and layout rhythm: header space removed; grid expanded to the full viewport; compact 48 px action rows and 66 px bottom strip preserve the three-column rhythm.
-- Colors and visual tokens: existing dark surfaces, higher-contrast borders, lime/violet/blue/orange semantic colors preserved.
-- Image quality and assets: no raster imagery exists in the target region; existing Phosphor icon family is preserved, with no placeholder or custom SVG substitution.
-- Copy and content: date/time moved to the calendar; bottom labels use Norwegian and distinguish unsynced mobile data from live weather.
+- Fonts and typography: existing SF Pro system stack, weights, line heights, uppercase eyebrow labels, and ellipsis behavior are preserved.
+- Spacing and layout rhythm: existing card dimensions and rail spacing are preserved; task rows now fit their parent, and the activity header is optically centered without changing card height.
+- Colors and visual tokens: existing dark surfaces, borders, lime working state, orange calendar accent, and muted secondary text are reused.
+- Image quality and asset fidelity: no new raster assets were required. Existing Phosphor calendar/folder icons and provider marks remain unchanged.
+- Copy and content: existing Norwegian labels remain. The new state uses `Pågår nå`, remaining time such as `45 min igjen`, and `Neste: …` for the following event.
 
 ## Findings
 
-- [P1] Required browser screenshot could not be captured.
-  - Location: full dashboard.
-  - Evidence: the implementation rendered and was measurable in the in-app browser, but repeated screenshot calls timed out.
-  - Impact: a combined source/implementation visual comparison cannot be produced, so visual QA cannot honestly pass.
-  - Fix: recapture the current in-app browser tab once its screenshot service responds, create a combined comparison image, then re-run this gate.
+No actionable P0, P1, or P2 differences remain in the requested regions.
 
 ## Comparison history
 
-- Current pass: functional and layout measurements completed; screenshot capture remained blocked. No visual fixes were made from an unavailable combined comparison.
+- Initial finding [P1]: task rows were 54 px wider than the list and forced horizontal scrolling.
+- Fix: constrained each row to its grid width, allowed the final detail to shrink, and disabled horizontal list overflow.
+- Post-fix evidence: list and all three rows measure 254 px wide with no horizontal overflow at 1366 × 768.
+- Initial finding [P2]: a future event always displaced an event already in progress, and the activity header sat at the top of its available region.
+- Fix: separated current and next event descriptions, added remaining-time copy, and centered the title/icon group in the upper grid row.
+- Post-fix evidence: focused visual comparison passes for the live next-event state; current-plus-next behavior passes its deterministic test.
 
 ## Implementation checklist
 
-- [x] Remove global top bar.
-- [x] Move date, clock, and settings access into calendar toolbar.
-- [x] Reduce quick actions to compact touch-safe rows.
-- [x] Add screen-time yesterday/weekly average, steps, and live weather to bottom strip.
-- [x] Preserve a truthful unsynced state for Apple-protected data.
-- [x] Verify unit tests, production build, Sites bundle, API responses, DOM, interactions, and overflow.
-- [ ] Capture browser-rendered screenshot and complete combined visual comparison.
+- [x] Remove horizontal scrolling from Oppgaver.
+- [x] Preserve readable title, folder, status, and activity text.
+- [x] Center the activity title/icon group.
+- [x] Show an ongoing activity with time remaining.
+- [x] Show the following activity and its countdown when available.
+- [x] Verify compact landscape layout, browser console, tests, and build.
 
-final result: blocked
+## Follow-up polish
+
+No P3 follow-up is required for this pass.
+
+final result: passed

@@ -25,17 +25,26 @@ test("Apple Calendar replaces stale Apple snapshots without duplicating Sync eve
 });
 
 test("reads and normalizes events returned by the local Calendar app", async () => {
-  const runner = async () => ({ stdout: JSON.stringify([{
-    id: "apple-local:one",
-    title: "Cowork",
-    start: "2026-08-18T08:00:00.000Z",
-    end: "2026-08-18T10:00:00.000Z",
-    source: "apple",
-    tone: "amber",
-    kind: "meeting",
-    calendarName: "Calendar",
-  }]) });
+  let invocation;
+  const runner = async (...args) => {
+    invocation = args;
+    return { stdout: JSON.stringify([{
+      id: "apple-local:one",
+      title: "Cowork",
+      start: "2026-08-18T08:00:00.000Z",
+      end: "2026-08-18T10:00:00.000Z",
+      source: "apple",
+      tone: "amber",
+      kind: "meeting",
+      calendarName: "Calendar",
+    }]) };
+  };
   const events = await readMacAppleCalendar(runner, new Date("2026-08-13T12:00:00.000Z"));
+  assert.equal(invocation[0], "/usr/bin/osascript");
+  assert.match(invocation[1][3], /EventKit/);
+  assert.doesNotMatch(invocation[1][3], /Application\(['"]Calendar['"]\)/);
+  assert.deepEqual(invocation[1].slice(-2), ["1785412800", "1807358400"]);
+  assert.equal(invocation[2].timeout, 10_000);
   assert.equal(events.length, 1);
   assert.deepEqual(
     { id: events[0].id, title: events[0].title, source: events[0].source },

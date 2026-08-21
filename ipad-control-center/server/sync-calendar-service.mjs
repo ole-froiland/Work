@@ -97,7 +97,8 @@ export async function getSyncCalendar() {
   } catch (error) {
     if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
   }
-  refreshMacAppleCalendar();
+  if (appleCache.ready) refreshMacAppleCalendar();
+  else await refreshMacAppleCalendar();
   if (appleCache.ready) {
     return {
       updatedAt: new Date(appleCache.updatedAt).toISOString(),
@@ -110,7 +111,8 @@ export async function getSyncCalendar() {
 }
 
 function refreshMacAppleCalendar() {
-  if (appleRefresh || Date.now() - appleCache.updatedAt < APPLE_CACHE_MS) return;
+  if (appleRefresh) return appleRefresh;
+  if (Date.now() - appleCache.updatedAt < APPLE_CACHE_MS) return Promise.resolve();
   appleRefresh = readMacAppleCalendar()
     .then((events) => {
       appleCache = { events, updatedAt: Date.now(), ready: true };
@@ -119,6 +121,7 @@ function refreshMacAppleCalendar() {
     .finally(() => {
       appleRefresh = null;
     });
+  return appleRefresh;
 }
 
 export function mergeCalendarEvents(cachedEvents = [], appleEvents = []) {
@@ -131,37 +134,42 @@ export async function readMacAppleCalendar(runner = execFileAsync, now = new Dat
   const rangeStart = new Date(+now - 14 * 24 * 60 * 60 * 1000);
   const rangeEnd = new Date(+now + 240 * 24 * 60 * 60 * 1000);
   const script = `
-    ObjC.import('Foundation');
-    const calendarApp = Application('Calendar');
-    const rangeStart = new Date('${rangeStart.toISOString()}');
-    const rangeEnd = new Date('${rangeEnd.toISOString()}');
-    const output = [];
-    for (const calendar of calendarApp.calendars()) {
-      const calendarName = calendar.name();
-      const events = calendar.events.whose({ _and: [
-        { startDate: { _lessThan: rangeEnd } },
-        { endDate: { _greaterThan: rangeStart } }
-      ] })();
-      for (const event of events) {
-        const start = event.startDate();
-        const end = event.endDate();
+    function run(argv) {
+      ObjC.import('EventKit');
+      const authorization = Number($.EKEventStore.authorizationStatusForEntityType($.EKEntityTypeEvent));
+      if (authorization !== 3) {
+        throw new Error('Panelet mangler tilgang til Apple Kalender');
+      }
+      const store = $.EKEventStore.alloc.init;
+      const rangeStart = $.NSDate.dateWithTimeIntervalSince1970(Number(argv[0]));
+      const rangeEnd = $.NSDate.dateWithTimeIntervalSince1970(Number(argv[1]));
+      const calendars = store.calendarsForEntityType($.EKEntityTypeEvent);
+      const predicate = store.predicateForEventsWithStartDateEndDateCalendars(rangeStart, rangeEnd, calendars);
+      const events = store.eventsMatchingPredicate(predicate);
+      const output = [];
+      for (let index = 0; index < events.count; index += 1) {
+        const event = events.objectAtIndex(index);
         output.push({
-          id: 'apple-local:' + event.uid(),
-          title: event.summary(),
-          start: start.toISOString(),
-          end: end.toISOString(),
-          allDay: Boolean(event.alldayEvent()),
-          calendarName,
+          id: 'apple-local:' + ObjC.unwrap(event.eventIdentifier),
+          title: ObjC.unwrap(event.title) || 'Uten navn',
+          start: new Date(Number(event.startDate.timeIntervalSince1970) * 1000).toISOString(),
+          end: new Date(Number(event.endDate.timeIntervalSince1970) * 1000).toISOString(),
+          allDay: Boolean(event.allDay),
+          calendarName: ObjC.unwrap(event.calendar.title),
           source: 'apple',
           tone: 'amber',
           kind: 'meeting'
         });
       }
+      return JSON.stringify(output);
     }
-    JSON.stringify(output);
   `;
-  const { stdout } = await runner('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script], {
-    timeout: 120_000,
+  const { stdout } = await runner('/usr/bin/osascript', [
+    '-l', 'JavaScript', '-e', script,
+    String(Math.floor(+rangeStart / 1000)),
+    String(Math.floor(+rangeEnd / 1000)),
+  ], {
+    timeout: 10_000,
     maxBuffer: 4 * 1024 * 1024,
   });
   return normalizeSyncCalendar({ events: JSON.parse(stdout) }).events;

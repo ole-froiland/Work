@@ -76,7 +76,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .agent-card { height: 100%; min-height: 0; display: flex; flex-direction: column; background: #151a21; }
 /* Flere økter enn det er plass til rulles i kortet, slik notatlista gjør, i
    stedet for å dytte dashbordet ut av skjermen. */
-.agent-card .agent-list { min-height: 0; align-content: start; overflow-y: auto; overscroll-behavior: contain; }
+.agent-card .agent-list { min-height: 0; align-content: start; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 /* Fire ikonknapper i samme mål og stil som hurtigknappene øverst til venstre. */
 .right-shortcuts { min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); justify-items: center; gap: 8px; }
 .right-shortcut { width: min(100%, var(--tile)); height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 0; border-radius: 18px; background: transparent; cursor: pointer; transition: transform 140ms ease, filter 140ms ease; }
@@ -159,13 +159,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .modal-hint code { padding: 1px 5px; border-radius: 5px; background: #101419; font-size: 11px; }
 
 /* Neste avtale, mellom Mac-snarveiene og fokuskortet. Samme høyde som musikkortet. */
-.next-event-card { min-height: var(--media-card); display: grid; align-content: space-between; gap: 8px; padding: 10px 12px; background: #151b22; }
-.next-event-top { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
+.next-event-card { min-height: var(--media-card); display: grid; grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; gap: 8px; padding: 10px 12px; background: #151b22; }
+.next-event-top { align-self: center; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
 .next-event-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 11px; background: #222b34; color: var(--violet); }
 .next-event-card.tone-lime .next-event-icon { color: var(--lime); }
 .next-event-card.tone-orange .next-event-icon { color: var(--orange); }
 .next-event-card.tone-blue .next-event-icon { color: var(--blue); }
 .next-event-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.next-event-kicker { min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.next-event-kicker em { flex: 0 0 auto; color: var(--orange); font-size: 10px; font-style: normal; font-weight: 750; font-variant-numeric: tabular-nums; }
 .next-event-text strong { overflow: hidden; font-size: 13px; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
 .next-event-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
 .next-event-meta span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
@@ -180,19 +182,25 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 /* Hver økt er en egen flate. Uten den flyter navn, tilstand og tid sammen til
    én grå masse, og kortet blir umulig å lese på et blikk fra andre siden av
    rommet – som er hele grunnen til at det henger der. */
-.agent-list li { gap: 10px; padding: 9px 11px; border-radius: 14px; background: #1b222b; }
+.agent-list li { width: 100%; min-width: 0; gap: 10px; padding: 9px 11px; border-radius: 14px; background: #1b222b; }
 .agent-list li.is-working { background: #1e2a1c; }
+.agent-list li.is-ended { background: #211d1d; }
 .agent-summary { margin: -9px 0 11px; color: var(--muted); font-size: 13px; }
 .agent-list .app-logo { width: 32px; height: 32px; border-radius: 11px; background: #262e38; }
 .agent-list li.is-working .app-logo { background: #2a3626; }
-.agent-row { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 4px; }
+.agent-row { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 3px; }
 .agent-row strong { overflow: hidden; font-size: 14px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.agent-folder { max-width: 72px; display: flex; flex: 0 0 auto; align-items: center; gap: 4px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.agent-folder svg { flex: 0 0 auto; color: var(--violet); }
 .agent-row-meta { min-width: 0; display: flex; align-items: center; gap: 6px; }
 .agent-row-meta small { min-width: 0; font-size: 13px; }
+.agent-row-meta > small:last-child { flex: 1 1 auto; }
 /* Merkelappen er det øyet finner først, så tilstanden skal ligge i fargen. */
 .agent-chip { flex: 0 0 auto; padding: 2px 7px; border-radius: 7px; background: #2b3540; color: var(--muted); font-size: 11px; font-style: normal; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .agent-chip.is-working { background: rgba(216,255,98,.16); color: var(--lime); animation: agent-pulse 1.9s ease-in-out infinite; }
-.agent-chip.is-stalled { background: rgba(255,174,112,.16); color: var(--orange); }
+.agent-chip.is-input { background: rgba(142,202,255,.14); color: var(--blue); }
+.agent-chip.is-done { background: #2b3540; color: var(--muted); }
+.agent-chip.is-ended { background: rgba(255,125,134,.14); color: #ff9aa1; }
 @keyframes agent-pulse { 50% { opacity: .55; } }
 
 .calendar-panel { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; border: 2px solid #536171; background: #10151b; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035), 0 12px 30px rgba(0, 0, 0, .24); }
@@ -395,8 +403,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .metric-notice { margin: 13px 0 0; padding: 11px 13px; border-radius: 12px; background: #232a33; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .metric-apps { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
 .metric-apps .eyebrow { font-size: 12px; }
-.metric-apps > div { min-height: 32px; display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 9px; }
+.metric-apps > div { min-height: 32px; display: grid; grid-template-columns: 22px 25px 1fr auto; align-items: center; gap: 9px; }
 .metric-apps i { width: 21px; height: 21px; display: grid; place-items: center; border-radius: 6px; background: #282f38; color: var(--muted); font-size: 12px; font-style: normal; }
+.metric-app-icon { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 8px; background: #282f38; color: var(--text); }
 .metric-apps strong, .metric-apps span { font-size: 15px; }
 .metric-apps span { color: var(--muted); }
 .metric-apps p { margin: 9px 0 1px; color: var(--muted); font-size: 14px; }
