@@ -32,7 +32,7 @@
 	<key>NSHealthShareUsageDescription</key>
 	<string>Panelkobling leser bare skritt for å vise dagens skritt i ditt lokale dashboard.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Panelkobling sender skjermtid, skritt og posisjon direkte til dashboardet på din Mac.</string>
+	<string>Panelkobling sender tid i sosiale medier, skritt og posisjon direkte til dashboardet på din Mac.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Panelkobling bruker posisjonen til å hente riktig lokalt vær i dashboardet.</string>
 	<key>UIBackgroundModes</key>

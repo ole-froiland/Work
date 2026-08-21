@@ -39,8 +39,8 @@ export function normalizeDeviceUpdate(input = {}, previous = {}) {
   const screenTimeSource = normalizeSource(input.sources?.screenTime, "DeviceActivity");
   const stepsSource = normalizeSource(input.sources?.steps, "HealthKit");
   const locationSource = normalizeSource(input.sources?.location, "CoreLocation");
-  const yesterdayMinutes = finiteInRange(input.screenTime?.yesterdayMinutes, 0, 2_880);
-  const weeklyAverageMinutes = finiteInRange(input.screenTime?.weeklyAverageMinutes, 0, 2_880);
+  const socialMinutes = finiteInRange(input.screenTime?.socialMinutes, 0, 2_880);
+  const socialWeeklyAverageMinutes = finiteInRange(input.screenTime?.socialWeeklyAverageMinutes, 0, 2_880);
   const topApps = normalizeTopApps(input.screenTime?.topApps);
   const todaySteps = finiteInRange(input.steps?.today, 0, 250_000);
   const weeklyAverageSteps = finiteInRange(input.steps?.weeklyAverage, 0, 250_000);
@@ -53,8 +53,8 @@ export function normalizeDeviceUpdate(input = {}, previous = {}) {
   return {
     updatedAt: new Date().toISOString(),
     screenTime: {
-      yesterdayMinutes: screenTimeSource && yesterdayMinutes !== null ? yesterdayMinutes : previous.screenTime?.yesterdayMinutes ?? null,
-      weeklyAverageMinutes: screenTimeSource && weeklyAverageMinutes !== null ? weeklyAverageMinutes : previous.screenTime?.weeklyAverageMinutes ?? null,
+      socialMinutes: screenTimeSource && socialMinutes !== null ? socialMinutes : previous.screenTime?.socialMinutes ?? null,
+      socialWeeklyAverageMinutes: screenTimeSource && socialWeeklyAverageMinutes !== null ? socialWeeklyAverageMinutes : previous.screenTime?.socialWeeklyAverageMinutes ?? null,
       topApps: screenTimeSource && topApps !== null ? topApps : previous.screenTime?.topApps ?? [],
     },
     steps: {
@@ -151,7 +151,7 @@ export async function getDeviceMetrics() {
   }
   return {
     updatedAt: stored.updatedAt ?? null,
-    screenTime: screenTimeFresh ? stored.screenTime : { yesterdayMinutes: null, weeklyAverageMinutes: null, topApps: [] },
+    screenTime: screenTimeFresh ? stored.screenTime : { socialMinutes: null, socialWeeklyAverageMinutes: null, topApps: [] },
     steps: stepsFresh ? stored.steps : { today: null, weeklyAverage: null },
     weather,
     sources: stored.sources ?? {},

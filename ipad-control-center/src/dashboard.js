@@ -44,7 +44,30 @@ const APP_DISPLAY_NAMES = new Map([
   ["com.facebook.messenger", "Messenger"],
   ["com.spotify.client", "Spotify"],
   ["com.openai.chat", "ChatGPT"],
+  ["com.atebits.tweetie2", "X"],
+  ["com.burbn.barcelona", "Threads"],
+  ["com.reddit.reddit", "Reddit"],
+  ["pinterest", "Pinterest"],
+  ["com.tumblr.tumblr", "Tumblr"],
+  ["alexisbarreyat.bereal", "BeReal"],
+  ["com.hammerandchisel.discord", "Discord"],
+  ["tv.twitch", "Twitch"],
 ]);
+
+// Kortet måler bare det Ole vil bruke mindre tid på, så listen er bevisst
+// kort og navngitt. iPhonen sender appens visningsnavn når den har ett, og
+// bunt-ID-en ellers — begge veier ender i det samme kanoniske navnet her.
+// Samme liste finnes i ios-companion/Sources/SocialApps.swift, som avgjør
+// hva iPhonen i det hele tatt henter. Endrer du én, endre begge.
+const SOCIAL_APP_NAMES = new Set([
+  "instagram", "snapchat", "tiktok", "facebook", "messenger", "x", "twitter",
+  "threads", "reddit", "linkedin", "pinterest", "tumblr", "bereal", "discord",
+  "twitch", "youtube",
+]);
+
+export function isSocialApp(value) {
+  return SOCIAL_APP_NAMES.has(formatAppName(value).toLowerCase());
+}
 
 export function formatAppName(value) {
   const name = typeof value === "string" ? value.trim() : "";
@@ -126,6 +149,17 @@ export function describeSyncAge(source, now = new Date(), fallback = "Venter på
   return `Sist synket for ${days} ${days === 1 ? "døgn" : "døgn"} siden`;
 }
 
+// Telefonen kan synke helt fint og likevel mangle sosial-tallene: da kjører den
+// en companion-versjon som bare kjente total skjermtid. «Ikke synket» sender én
+// til å lete etter nettverksfeil, når det i virkeligheten er appen på telefonen
+// som må byttes ut — og det skjer ikke av seg selv ved å bruke telefonen.
+export function needsCompanionUpdate(metrics, now = new Date()) {
+  if (Number.isFinite(metrics?.screenTime?.socialMinutes)) return false;
+  const observed = new Date(metrics?.sources?.screenTime?.observedAt ?? "");
+  if (!metrics?.sources?.screenTime?.provider || Number.isNaN(observed.getTime())) return false;
+  return now.getTime() - observed.getTime() < 24 * 60 * 60 * 1000;
+}
+
 // Samler alle tilkoblingene på ett sted. Hver sjekk sier hva som er galt og hva
 // man gjør med det, slik at statusstripa kan være taus når alt virker.
 export function buildStatusChecks({ syncCalendar, syncNotes, deviceMetrics, usage } = {}, now = new Date()) {
@@ -155,12 +189,88 @@ export function buildStatusChecks({ syncCalendar, syncNotes, deviceMetrics, usag
       label: "iPhone-verdier",
       ok: Boolean(deviceMetrics?.syncConnected),
       detail: deviceMetrics?.syncConnected
-        ? "Skjermtid, skritt og posisjon er ferske"
+        ? "Sosial tid, skritt og posisjon er ferske"
         : `${describeSyncAge(deviceMetrics?.sources?.steps, now, "Har aldri sendt")}. Åpne Panelkobling på iPhonen.`,
     },
     { id: "codex", label: "Codex-bruk", ok: Boolean(usage?.codex?.ok), detail: providerDetail(usage?.codex) },
     { id: "claude", label: "Claude-bruk", ok: Boolean(usage?.claude?.ok), detail: providerDetail(usage?.claude) },
   ];
+}
+
+// Agentkortet skal kunne leses på et blikk fra andre siden av rommet: jobber
+// den, står den fast, eller er den ferdig? Alderen på siste hendelse er det som
+// skiller «tenker» fra «har stoppet opp», så den står alltid i teksten.
+export function formatAgentAge(value, now = new Date()) {
+  const stamp = new Date(value ?? "");
+  if (!Number.isFinite(+stamp)) return "ukjent tid";
+  const seconds = Math.max(0, Math.round((now.getTime() - stamp.getTime()) / 1000));
+  if (seconds < 10) return "nå";
+  if (seconds < 60) return `${seconds} s siden`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min siden`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} ${hours === 1 ? "time" : "timer"} siden`;
+}
+
+const AGENT_STATES = {
+  working: { label: "Jobber", tone: "working" },
+  stalled: { label: "Står stille", tone: "stalled" },
+  done: { label: "Venter", tone: "done" },
+};
+
+// Merkelappen sier tilstanden, teksten ved siden av sier hva som skjer. De to
+// skal aldri gjenta hverandre: en økt som venter viser mappa si i stedet.
+export function describeAgentSession(session, now = new Date()) {
+  const state = AGENT_STATES[session?.state] ?? { label: "Ukjent", tone: "done" };
+  const age = formatAgentAge(session?.lastActivityAt, now);
+  const detail = session?.state === "working"
+    ? `${session.subagent ? "Underagent jobber" : session.activity ?? "Tenker"} · ${age}`
+    : session?.state === "stalled"
+      ? `Stoppet for ${age.replace(" siden", "")}`
+      : [session?.project, age].filter(Boolean).join(" · ");
+  return {
+    id: session?.id,
+    provider: session?.provider,
+    title: session?.title || "Uten navn",
+    project: session?.project || "",
+    label: state.label,
+    tone: state.tone,
+    detail,
+  };
+}
+
+function taskWord(count) {
+  return count === 1 ? "oppgave" : "oppgaver";
+}
+
+// Overskriften er hele poenget med kortet: den skal svare på «kjører det noe
+// nå?» uten at man leser lista. Derfor navngir den leverandøren når bare én av
+// dem jobber, og teller opp når begge gjør det.
+export function summarizeAgentSessions(snapshot, now = new Date()) {
+  if (!snapshot) return { headline: "Henter økter …", activeCount: 0, count: 0, sessions: [], empty: false };
+  if (snapshot.ok === false) {
+    // Feilmeldingen står alene: «ingen økter» ved siden av den ville lest som om
+    // vi visste at ingenting kjørte, og det er nettopp det vi ikke vet.
+    return { headline: snapshot.error || "Kunne ikke lese øktene", activeCount: 0, count: 0, sessions: [], empty: false };
+  }
+  const sessions = (Array.isArray(snapshot.sessions) ? snapshot.sessions : [])
+    .map((session) => describeAgentSession(session, now));
+  const busy = sessions.filter((session) => session.tone === "working");
+  const stalled = sessions.filter((session) => session.tone === "stalled");
+  const done = sessions.filter((session) => session.tone === "done");
+
+  const names = [...new Set(busy.map((session) => (session.provider === "codex" ? "Codex" : "Claude")))];
+  const headline = busy.length
+    ? names.length === 1
+      ? `${names[0]} jobber med ${busy.length} ${taskWord(busy.length)}`
+      : `${busy.length} ${taskWord(busy.length)} kjører`
+    : stalled.length
+      ? `${stalled.length} ${taskWord(stalled.length)} står stille`
+      : done.length
+        ? "Ingenting kjører nå"
+        : "Ingen økter de siste åtte timene";
+
+  return { headline, activeCount: busy.length + stalled.length, count: sessions.length, sessions, empty: sessions.length === 0 };
 }
 
 function startOfDay(date) {
@@ -268,14 +378,27 @@ function comparison(value, average) {
 
 export function buildMetricDetails(type, metrics = {}) {
   if (type === "screenTime") {
-    const yesterday = metrics.screenTime?.yesterdayMinutes;
-    const average = metrics.screenTime?.weeklyAverageMinutes;
+    const yesterday = metrics.screenTime?.socialMinutes;
+    const average = metrics.screenTime?.socialWeeklyAverageMinutes;
+    // En utdatert companion gir et blandet bilde: applista fra forrige synk står
+    // der, men summene mangler. Uten en forklaring ser «Ikke synket» ut som en
+    // feil ved siden av tall som åpenbart finnes.
+    const outdated = needsCompanionUpdate(metrics);
     return {
       eyebrow: "iPhone og iPad",
-      title: "Skjermtid",
-      summary: formatMinutes(yesterday),
+      title: "Sosiale medier",
+      summary: outdated ? "Utdatert app" : formatMinutes(yesterday),
+      notice: outdated
+        ? "Telefonen synker fint, men appen på den sender fortsatt bare total skjermtid. Installer Panelkobling på nytt fra Mac-en, så fylles tallene inn. Applista under er fra siste synk."
+        : null,
+      appsEmpty: "Appfordelingen kommer ved neste iPhone-synk.",
+      // iPhonen filtrerer allerede, men en eldre companion-versjon kan ligge
+      // i mellomlageret med hele applista. Da skal ikke Safari snike seg inn.
       apps: Array.isArray(metrics.screenTime?.topApps)
-        ? metrics.screenTime.topApps.slice(0, 5).map((app) => ({ name: formatAppName(app.name), value: formatMinutes(app.minutes) }))
+        ? metrics.screenTime.topApps
+          .filter((app) => isSocialApp(app?.name))
+          .slice(0, 5)
+          .map((app) => ({ name: formatAppName(app.name), value: formatMinutes(app.minutes) }))
         : [],
       rows: [
         ["I går", formatMinutes(yesterday)],

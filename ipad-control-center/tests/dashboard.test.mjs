@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeNextEvent, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, readUsageResponse, resolvePanelRedirect } from "../src/dashboard.js";
+import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeNextEvent, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isSocialApp, needsCompanionUpdate, readUsageResponse, resolvePanelRedirect, summarizeAgentSessions } from "../src/dashboard.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
@@ -48,6 +48,54 @@ test("shows friendly app names instead of iOS bundle identifiers", () => {
   assert.equal(formatAppName("Allerede lesbart"), "Allerede lesbart");
 });
 
+test("counts social apps as social, whether iPhone sends a name or a bundle id", () => {
+  assert.equal(isSocialApp("com.burbn.instagram"), true);
+  assert.equal(isSocialApp("TikTok"), true);
+  assert.equal(isSocialApp("com.atebits.Tweetie2"), true);
+  assert.equal(isSocialApp("X"), true);
+  assert.equal(isSocialApp("Safari"), false);
+  assert.equal(isSocialApp("com.openai.chat"), false);
+  assert.equal(isSocialApp(undefined), false);
+});
+
+test("separates an outdated companion from a phone that stopped syncing", () => {
+  const now = new Date("2026-08-15T15:00:00+02:00");
+  const source = { provider: "DeviceActivity", observedAt: "2026-08-15T13:38:00+02:00" };
+
+  // Synker fint, men sender gammelt format: appen må byttes ut, ikke nettet.
+  assert.equal(needsCompanionUpdate({ screenTime: {}, sources: { screenTime: source } }, now), true);
+  // Har sendt sosialtid: alt er som det skal.
+  assert.equal(needsCompanionUpdate({ screenTime: { socialMinutes: 12 }, sources: { screenTime: source } }, now), false);
+  // Har ikke sendt på to døgn: da er det synken som er problemet.
+  assert.equal(needsCompanionUpdate({
+    screenTime: {},
+    sources: { screenTime: { provider: "DeviceActivity", observedAt: "2026-08-13T13:38:00+02:00" } },
+  }, now), false);
+  // Har aldri sendt noe: heller ikke en utdatert app.
+  assert.equal(needsCompanionUpdate({ screenTime: {}, sources: {} }, now), false);
+});
+
+test("keeps non-social apps out of the list even if an old sync sent them", () => {
+  const metrics = {
+    screenTime: {
+      socialMinutes: 150,
+      socialWeeklyAverageMinutes: 180,
+      topApps: [
+        { name: "Safari", minutes: 90 },
+        { name: "Instagram", minutes: 80 },
+        { name: "com.openai.chat", minutes: 40 },
+        { name: "Snapchat", minutes: 20 },
+      ],
+    },
+    sources: { screenTime: { observedAt: "2026-08-14T12:00:00+02:00" } },
+  };
+
+  assert.deepEqual(buildMetricDetails("screenTime", metrics).apps, [
+    { name: "Instagram", value: "1 t 20 min" },
+    { name: "Snapchat", value: "20 min" },
+  ]);
+});
+
 test("builds a six-week month grid starting on Monday", () => {
   const august2026 = buildMonthDays(2026, 7);
   assert.equal(august2026.length, 42);
@@ -65,7 +113,7 @@ test("shows an all-day trip on every included calendar day", () => {
 
 test("builds honest metric details from synced device values", () => {
   const metrics = {
-    screenTime: { yesterdayMinutes: 304, weeklyAverageMinutes: 300, topApps: [{ name: "Safari", minutes: 91 }] },
+    screenTime: { socialMinutes: 304, socialWeeklyAverageMinutes: 300, topApps: [{ name: "Instagram", minutes: 91 }] },
     steps: { today: 158, weeklyAverage: 797 },
     weather: { ok: true, label: "Mosterøy", temperature: 19, apparentTemperature: 18, condition: "Overskyet" },
     sources: {
@@ -74,8 +122,9 @@ test("builds honest metric details from synced device values", () => {
       location: { provider: "CoreLocation" },
     },
   };
+  assert.equal(buildMetricDetails("screenTime", metrics).title, "Sosiale medier");
   assert.equal(buildMetricDetails("screenTime", metrics).summary, "5 t 04 min");
-  assert.deepEqual(buildMetricDetails("screenTime", metrics).apps, [{ name: "Safari", value: "1 t 31 min" }]);
+  assert.deepEqual(buildMetricDetails("screenTime", metrics).apps, [{ name: "Instagram", value: "1 t 31 min" }]);
   assert.deepEqual(buildMetricDetails("steps", metrics).rows[2], ["Mot snittet", "80 % under snittet"]);
   assert.deepEqual(buildMetricDetails("weather", metrics).rows[3], ["Posisjonskilde", "iPhone"]);
 });
@@ -242,4 +291,92 @@ test("does not claim a fault before the data has loaded", () => {
   const byId = Object.fromEntries(checks.map((check) => [check.id, check]));
   assert.equal(byId.codex.detail, "Henter kvotedata …");
   assert.equal(byId.mobile.detail, "Har aldri sendt. Åpne Panelkobling på iPhonen.");
+});
+
+test("answers whether Claude is working, and on how many tasks", () => {
+  const now = new Date("2026-08-21T12:00:00.000Z");
+  const summary = summarizeAgentSessions({
+    ok: true,
+    updatedAt: now.toISOString(),
+    sessions: [
+      { id: "a", provider: "claude", title: "NHH-notater", project: "nhh", state: "working", activity: "Endrer filer", lastActivityAt: "2026-08-21T11:59:55.000Z" },
+      { id: "b", provider: "claude", title: "Panelkortet", project: "Work", state: "working", activity: "Kjører kommandoer", lastActivityAt: "2026-08-21T11:58:00.000Z" },
+      { id: "c", provider: "claude", title: "Mac performance", project: "test12", state: "done", lastActivityAt: "2026-08-21T10:35:00.000Z" },
+    ],
+  }, now);
+
+  assert.equal(summary.headline, "Claude jobber med 2 oppgaver");
+  assert.equal(summary.activeCount, 2);
+  assert.equal(summary.sessions[0].detail, "Endrer filer · nå");
+  assert.equal(summary.sessions[1].detail, "Kjører kommandoer · 2 min siden");
+  assert.equal(summary.sessions[2].detail, "test12 · 1 time siden");
+});
+
+test("counts both assistants together when Codex is running too", () => {
+  const now = new Date("2026-08-21T12:00:00.000Z");
+  const summary = summarizeAgentSessions({
+    ok: true,
+    sessions: [
+      { id: "a", provider: "claude", state: "working", title: "Panelkortet", activity: "Leser filer", lastActivityAt: "2026-08-21T11:59:50.000Z" },
+      { id: "b", provider: "codex", state: "working", title: "Push til main", activity: "Kjører kommandoer", lastActivityAt: "2026-08-21T11:59:40.000Z" },
+    ],
+  }, now);
+
+  assert.equal(summary.headline, "2 oppgaver kjører");
+});
+
+test("says plainly when nothing is running", () => {
+  const now = new Date("2026-08-21T12:00:00.000Z");
+
+  assert.equal(summarizeAgentSessions({ ok: true, sessions: [] }, now).headline, "Ingen økter de siste åtte timene");
+  assert.equal(summarizeAgentSessions({ ok: true, sessions: [] }, now).empty, true);
+  assert.equal(
+    summarizeAgentSessions({ ok: true, sessions: [{ id: "c", provider: "claude", state: "done", title: "Ferdig sak", lastActivityAt: "2026-08-21T11:30:00.000Z" }] }, now).headline,
+    "Ingenting kjører nå",
+  );
+  assert.equal(summarizeAgentSessions(null, now).headline, "Henter økter …");
+});
+
+test("marks a session that stopped mid-task instead of showing it as active", () => {
+  const now = new Date("2026-08-21T12:00:00.000Z");
+  const summary = summarizeAgentSessions({
+    ok: true,
+    sessions: [{ id: "a", provider: "claude", state: "stalled", title: "Venter", activity: "Kjører kommandoer", lastActivityAt: "2026-08-21T11:40:00.000Z" }],
+  }, now);
+
+  assert.equal(summary.headline, "1 oppgave står stille");
+  assert.equal(summary.sessions[0].detail, "Stoppet for 20 min");
+  assert.equal(summary.sessions[0].tone, "stalled");
+});
+
+test("shows the panel error instead of pretending nothing runs", () => {
+  const summary = summarizeAgentSessions({ ok: false, error: "Åpne panelet på Mac-en", sessions: [] }, new Date());
+
+  assert.equal(summary.headline, "Åpne panelet på Mac-en");
+});
+
+test("names the underagent when Claude delegates a task", () => {
+  const now = new Date("2026-08-21T12:00:00.000Z");
+  const summary = summarizeAgentSessions({
+    ok: true,
+    sessions: [{ id: "a", provider: "claude", state: "working", title: "Stor jobb", activity: "Kjører en underagent", subagent: true, lastActivityAt: "2026-08-21T11:59:00.000Z" }],
+  }, now);
+
+  assert.equal(summary.sessions[0].detail, "Underagent jobber · 1 min siden");
+});
+
+test("labels each session with the state word the card shows", () => {
+  const now = new Date("2026-08-21T12:00:00.000Z");
+  const summary = summarizeAgentSessions({
+    ok: true,
+    sessions: [
+      { id: "a", provider: "claude", state: "working", title: "Kjører", activity: "Leser filer", lastActivityAt: "2026-08-21T11:59:50.000Z" },
+      { id: "b", provider: "claude", state: "stalled", title: "Fast", activity: "Kjører kommandoer", lastActivityAt: "2026-08-21T11:30:00.000Z" },
+      { id: "c", provider: "codex", state: "done", title: "Ferdig", project: "Work", lastActivityAt: "2026-08-21T11:45:00.000Z" },
+    ],
+  }, now);
+
+  assert.deepEqual(summary.sessions.map((session) => session.label), ["Jobber", "Står stille", "Venter"]);
+  assert.equal(summary.count, 3);
+  assert.equal(summary.activeCount, 2);
 });

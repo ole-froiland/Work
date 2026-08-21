@@ -4,6 +4,8 @@ Et touchvennlig iPad-dashbord for kalender, fokus, oppgaver og handlinger på en
 
 AI-brukskortet henter leverandørrapporterte kvotetall fra de lokale, innloggede Codex- og Claude-klientene. Det viser brukt og gjenstående prosent, eksakt nullstillingstid og en løpende nedtelling. Codex-dagsbruk kommer fra kontoens dagsdata. Claude-dagsbruk er eksakte, dedupliserte tokens registrert av Claude Code lokalt og merkes derfor «lokalt». Kortet oppdateres automatisk hvert minutt og kan oppdateres manuelt. Tilgangstokener leses fra macOS Nøkkelring på Mac-en og sendes aldri til nettleseren.
 
+Oppgavekortet rett under viser hva Claude og Codex faktisk holder på med akkurat nå: hvilke økter som kjører, hva de gjør (kjører kommandoer, endrer filer, leter på nettet), hva som har stoppet opp, og hva som er ferdig og venter på svar. Kilden er samtaleloggene klientene selv skriver på Mac-en (`~/.claude/projects` og `~/.codex/sessions`); ingenting spørres fra en leverandør, og ingen del av samtalene sendes til nettleseren utover navnet på økta og hvilket verktøy som er i bruk. Kortet leser bare slutten av hver logg og oppdateres hvert tiende sekund. En økt regnes som aktiv i fem minutter etter siste hendelse — går det lengre tid midt i en oppgave, står den merket «står stille» i stedet for å se ut som at den jobber.
+
 ## Kjør lokalt
 
 ```bash
@@ -22,11 +24,13 @@ broen starter ved innlogging og startes på nytt automatisk hvis prosessen stopp
 
 Codex og Claude må være installert og innlogget på Mac-en som kjører serveren. Hvis én klient ikke er tilgjengelig, viser panelet en eksplisitt feil for den leverandøren i stedet for et estimat.
 
-## Vær, skjermtid og skritt
+## Vær, sosiale medier og skritt
 
 Været hentes automatisk fra Open-Meteo. Panelet bruker bare en fersk Core Location-posisjon fra iPhone/iPad-koblingen og faller ellers tilbake til Mosterøy. Mac- eller nettleserposisjon brukes ikke. Værdata oppdateres hvert minutt i grensesnittet og mellomlagres i ti minutter på serveren.
 
 En vanlig nettside får ikke lese Apples Skjermtid- eller Helsedata direkte. Derfor viser panelet `Ikke synket` fremfor å finne på verdier. Den lokale iOS-appen i `ios-companion/` henter skritt fra HealthKit, posisjon fra Core Location og skjermtid fra Device Activity. Alle kildene krever eksplisitt tillatelse på mobilen.
+
+Av skjermtiden måler panelet bare sosiale medier — det er den tiden som skal ned. Telefonen summerer og sender kun appene i lista i `ios-companion/Sources/SocialApps.swift`; alt annet forlater aldri enheten. `src/dashboard.js` har den samme lista og filtrerer en gang til, i tilfelle et eldre oppsett ligger i mellomlageret. Skal en app legges til eller fjernes, må begge listene endres.
 
 Skjermtidseksport er Apples nye EU-funksjon for iOS 26.4+. Prosjektet aktiverer koden automatisk når det bygges med iPhoneOS 26.4 SDK eller nyere. Skritt og lokasjon bygger allerede med SDK 26.2. Mac-en må ha et Apple-utviklersertifikat før appen kan signeres og installeres på en fysisk iPhone.
 

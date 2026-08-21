@@ -7,7 +7,7 @@ struct SyncView: View {
         NavigationStack {
             Form {
                 Section("Datakilder") {
-                    sourceRow("Skjermtid", status: model.screenTimeStatus, icon: "hourglass")
+                    sourceRow("Sosiale medier", status: model.screenTimeStatus, icon: "hourglass")
                     sourceRow("Skritt", status: model.stepsStatus, icon: "figure.walk")
                     sourceRow("Posisjon", status: model.locationStatus, icon: "location.fill")
                 }

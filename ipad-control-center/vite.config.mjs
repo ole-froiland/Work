@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { getDeviceMetrics, updateDeviceMetrics } from "./server/device-metrics-service.mjs";
 import { runMacAction } from "./server/mac-action-service.mjs";
 import { getUsageSnapshot } from "./server/usage-service.mjs";
+import { getAgentSessions } from "./server/agent-session-service.mjs";
 import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
 import { completeSpotifyAuth, getSpotifyState, listSpotifyDevices, runSpotifyCommand } from "./server/spotify-service.mjs";
 import {
@@ -80,6 +81,25 @@ function usageApi() {
           const url = new URL(request.url ?? "/", "http://localhost");
           const snapshot = await getUsageSnapshot({ force: url.searchParams.get("refresh") === "1" });
           sendJson(response, 200, snapshot);
+        } catch (error) {
+          sendJson(response, 500, { error: error instanceof Error ? error.message : "Ukjent feil" });
+        }
+      });
+    },
+  };
+}
+
+function agentSessionsApi() {
+  return {
+    name: "local-agent-sessions-api",
+    configureServer(server) {
+      server.middlewares.use("/api/agent-sessions", async (request, response) => {
+        if (request.method !== "GET") {
+          sendJson(response, 405, { error: "Method not allowed" });
+          return;
+        }
+        try {
+          sendJson(response, 200, await getAgentSessions());
         } catch (error) {
           sendJson(response, 500, { error: error instanceof Error ? error.message : "Ukjent feil" });
         }
@@ -303,5 +323,5 @@ export default defineConfig({
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [usageApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), spotifyApi(), macActionApi(), react()],
+  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), spotifyApi(), macActionApi(), react()],
 });

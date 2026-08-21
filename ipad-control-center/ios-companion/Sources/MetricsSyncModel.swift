@@ -11,8 +11,8 @@ import UIKit
 struct MetricsPayload: Encodable {
     struct AppUsage: Encodable { let name: String; let minutes: Double }
     struct ScreenTime: Encodable {
-        let yesterdayMinutes: Double
-        let weeklyAverageMinutes: Double
+        let socialMinutes: Double
+        let socialWeeklyAverageMinutes: Double
         let topApps: [AppUsage]
     }
     struct Steps: Encodable { let today: Double; let weeklyAverage: Double }
@@ -75,7 +75,7 @@ final class MetricsSyncModel: ObservableObject {
             let screenTime = try await fetchScreenTime()
             screenTimeStatus = "Klar"
             #else
-            let screenTime: (yesterday: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage])? = nil
+            let screenTime: (social: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage])? = nil
             screenTimeStatus = "Krever Xcode 26.4+"
             #endif
             try await upload(screenTime: screenTime, steps: values.0, location: values.1)
@@ -136,7 +136,7 @@ final class MetricsSyncModel: ObservableObject {
     }
 
     #if PANEL_USAGE_EXPORT
-    private func fetchScreenTime() async throws -> (yesterday: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage]) {
+    private func fetchScreenTime() async throws -> (social: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage]) {
         guard AuthorizationCenter.shared.authorizationStatus == .approvedWithDataAccess else {
             throw SyncError.screenTimeDataAccessRequired
         }
@@ -152,34 +152,41 @@ final class MetricsSyncModel: ObservableObject {
             webDomains: []
         )
 
-        var totalsByDay: [Date: TimeInterval] = [:]
+        // Dagens totale skjermtid inneholder alt telefonen har vært brukt til.
+        // Panelet skal bare måle de sosiale appene, så tiden summeres app for
+        // app gjennom filteret i stedet for å lese segmentets totalsum.
+        var socialByDay: [Date: TimeInterval] = [:]
         var yesterdayByApp: [String: TimeInterval] = [:]
         for try await deviceData in DeviceActivityData.activityData(filteredBy: filter, using: .live) {
             for try await segment in deviceData.activitySegments {
                 let day = calendar.startOfDay(for: segment.dateInterval.start)
-                totalsByDay[day, default: 0] += segment.totalActivityDuration
-                guard day == yesterday else { continue }
                 for try await category in segment.categories {
                     for try await application in category.applications {
                         let app = application.application
+                        guard SocialApps.isSocial(
+                            bundleIdentifier: app.bundleIdentifier,
+                            displayName: app.localizedDisplayName
+                        ) else { continue }
+                        socialByDay[day, default: 0] += application.totalActivityDuration
+                        guard day == yesterday else { continue }
                         let name = app.localizedDisplayName ?? app.bundleIdentifier ?? "Ukjent app"
                         yesterdayByApp[name, default: 0] += application.totalActivityDuration
                     }
                 }
             }
         }
-        let yesterdayMinutes = totalsByDay[yesterday, default: 0] / 60
-        let weeklyMinutes = totalsByDay.values.reduce(0, +) / 60 / 7
+        let socialMinutes = socialByDay[yesterday, default: 0] / 60
+        let weeklyMinutes = socialByDay.values.reduce(0, +) / 60 / 7
         let topApps = yesterdayByApp
             .sorted { $0.value > $1.value }
             .prefix(5)
             .map { MetricsPayload.AppUsage(name: $0.key, minutes: $0.value / 60) }
-        return (yesterdayMinutes, weeklyMinutes, topApps)
+        return (socialMinutes, weeklyMinutes, topApps)
     }
     #endif
 
     private func upload(
-        screenTime: (yesterday: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage])?,
+        screenTime: (social: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage])?,
         steps: (today: Double, weeklyAverage: Double),
         location: LocationProvider.Value
     ) async throws {
@@ -194,7 +201,7 @@ final class MetricsSyncModel: ObservableObject {
         ]
         if screenTime != nil { sources["screenTime"] = .init(provider: "DeviceActivity", observedAt: now) }
         let payload = MetricsPayload(
-            screenTime: screenTime.map { .init(yesterdayMinutes: $0.yesterday, weeklyAverageMinutes: $0.weeklyAverage, topApps: $0.topApps) },
+            screenTime: screenTime.map { .init(socialMinutes: $0.social, socialWeeklyAverageMinutes: $0.weeklyAverage, topApps: $0.topApps) },
             steps: .init(today: steps.today, weeklyAverage: steps.weeklyAverage),
             location: .init(label: location.label, latitude: location.coordinate.latitude, longitude: location.coordinate.longitude),
             sources: sources,

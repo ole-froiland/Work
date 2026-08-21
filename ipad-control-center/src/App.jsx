@@ -33,7 +33,7 @@ import {
   WifiHigh,
   X,
 } from "@phosphor-icons/react";
-import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeNextEvent, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, readUsageResponse } from "./dashboard.js";
+import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeNextEvent, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, needsCompanionUpdate, readUsageResponse, summarizeAgentSessions } from "./dashboard.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -150,6 +150,46 @@ function MacLinkAction({ action, onTrigger }) {
     <button className={`right-shortcut tone-${action.tone}`} type="button" onClick={() => onTrigger(action)} title={`${action.label} · ${action.detail}`} aria-label={`${action.label} · ${action.detail}`}>
       <span className="action-icon"><Icon size={28} weight="fill" /></span>
     </button>
+  );
+}
+
+// Kortet leser bare det Claude og Codex selv har skrevet i samtaleloggene sine:
+// hvilke økter som er i gang, hva de holder på med, og hva som er ferdig. Uten
+// logger står det eksplisitt at ingenting kjører – vi gjetter aldri.
+function AgentActivityCard({ snapshot, now }) {
+  // Panelklokka tikker hvert halvminutt, mens kortet hentes hvert tiende sekund.
+  // Alderen måles derfor mot det ferskeste av de to, ellers ville en økt som
+  // nettopp skrev en linje kunne se eldre ut enn den er.
+  const summary = useMemo(() => {
+    const read = Date.parse(snapshot?.updatedAt ?? "");
+    const clock = Number.isFinite(read) && read > now.getTime() ? new Date(read) : now;
+    return summarizeAgentSessions(snapshot, clock);
+  }, [snapshot, now]);
+  return (
+    <section className="panel-card agent-card">
+      <div className="section-heading">
+        <div><span className="eyebrow">Kjører nå</span><h2>Oppgaver</h2></div>
+        <span className="count-badge">{summary.count}</span>
+      </div>
+      <p className="agent-summary">{summary.headline}</p>
+      <ul className="agent-list">
+        {summary.sessions.map((session) => (
+          <li className={`is-${session.tone}`} key={session.id}>
+            <span className={`app-logo ${session.provider === "codex" ? "code" : "claude"}`}>
+              {session.provider === "codex" ? <CodexLogo size={17} /> : <ClaudeLogo size={17} />}
+            </span>
+            <span className="agent-row">
+              <strong title={`${session.title} · ${session.project}`}>{session.title}</strong>
+              <span className="agent-row-meta">
+                <i className={`agent-chip is-${session.tone}`}>{session.label}</i>
+                <small>{session.detail}</small>
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {summary.empty && <p className="notes-empty">Ingen Claude- eller Codex-økter å vise</p>}
+    </section>
   );
 }
 
@@ -467,9 +507,10 @@ function MetricDetail({ metric, metrics }) {
           <span><small>{detail.eyebrow}</small><h2 id="metricTitle">{detail.title}</h2></span>
           <strong>{detail.summary}</strong>
         </div>
+        {detail.notice && <p className="metric-notice">{detail.notice}</p>}
         {detail.apps && <div className="metric-apps">
           <span className="eyebrow">Mest brukt i går</span>
-          {detail.apps.length > 0 ? detail.apps.map((app, index) => <div key={app.name}><i>{index + 1}</i><strong>{app.name}</strong><span>{app.value}</span></div>) : <p>Appfordelingen kommer ved neste iPhone-synk.</p>}
+          {detail.apps.length > 0 ? detail.apps.map((app, index) => <div key={app.name}><i>{index + 1}</i><strong>{app.name}</strong><span>{app.value}</span></div>) : <p>{detail.appsEmpty}</p>}
         </div>}
         <dl className="metric-details">
           {detail.rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
@@ -599,6 +640,7 @@ function App() {
   const [focusModeActive, setFocusModeActive] = useState(false);
   const [usage, setUsage] = useState(null);
   const [usageLoading, setUsageLoading] = useState(true);
+  const [agentSessions, setAgentSessions] = useState(null);
   const [deviceMetrics, setDeviceMetrics] = useState(null);
   const [activeMetric, setActiveMetric] = useState(null);
   const [syncCalendar, setSyncCalendar] = useState({ events: [], connected: false, stale: false });
@@ -679,6 +721,23 @@ function App() {
 
   useEffect(() => {
     let active = true;
+    async function loadAgentSessions() {
+      try {
+        const response = await fetch("/api/agent-sessions", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const snapshot = await response.json();
+        if (active) setAgentSessions(snapshot);
+      } catch (error) {
+        if (active) setAgentSessions({ ok: false, error: `Åpne panelet på Mac-en for å se øktene (${error.message})`, sessions: [] });
+      }
+    }
+    loadAgentSessions();
+    const interval = window.setInterval(loadAgentSessions, 10_000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     async function load() {
       try {
         const response = await fetch("/api/usage", { cache: "no-store" });
@@ -745,13 +804,16 @@ function App() {
   const timeLabel = new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(now);
   // Kilden kan være kjent selv om verdiene er for gamle til å vises. Da skal
   // kortet si når mobilen sist sendte, ikke bare «Ikke synket».
-  const hasScreenTimeSource = Number.isFinite(deviceMetrics?.screenTime?.yesterdayMinutes);
+  const hasScreenTimeSource = Number.isFinite(deviceMetrics?.screenTime?.socialMinutes);
   const hasStepsSource = Number.isFinite(deviceMetrics?.steps?.today);
   const statusChecks = useMemo(
     () => buildStatusChecks({ syncCalendar, syncNotes, deviceMetrics, usage }, now),
     [syncCalendar, syncNotes, deviceMetrics, usage, now],
   );
-  const screenTimeAge = describeSyncAge(deviceMetrics?.sources?.screenTime, now, "Device Activity · iPhone + iPad");
+  const companionOutdated = needsCompanionUpdate(deviceMetrics, now);
+  const screenTimeAge = companionOutdated
+    ? "Installer på nytt"
+    : describeSyncAge(deviceMetrics?.sources?.screenTime, now, "Device Activity · iPhone + iPad");
   const stepsAge = describeSyncAge(deviceMetrics?.sources?.steps, now, "HealthKit · Apple Helse");
   const hasLocationSource = deviceMetrics?.sources?.location?.provider === "CoreLocation";
   const calendarEvents = Array.isArray(syncCalendar.events) ? syncCalendar.events : [];
@@ -1065,14 +1127,7 @@ function App() {
             <UsageProvider name="Claude" icon={ClaudeLogo} tone="claude" data={usage?.claude} now={now} />
           </section>
 
-          <section className="panel-card agent-card">
-            <div className="section-heading"><div><span className="eyebrow">Agenter</span><h2>Aktivitet</h2></div><span className="count-badge">3</span></div>
-            <ul className="agent-list">
-              <li><span className="avatar tone-lime">A</span><span><strong>Analyse</strong><small>Leser datakilder</small></span><i className="pulse" /></li>
-              <li><span className="avatar tone-violet">K</span><span><strong>Kode</strong><small>Bygger komponenter</small></span><i className="pulse" /></li>
-              <li><span className="avatar tone-blue">Q</span><span><strong>QA</strong><small>Venter i kø</small></span><i className="idle" /></li>
-            </ul>
-          </section>
+          <AgentActivityCard snapshot={agentSessions} now={now} />
         </aside>
 
         <section className="calendar-panel panel-card">
@@ -1098,7 +1153,7 @@ function App() {
             {view === "month" && <MonthCalendar date={date} events={calendarEvents} onSelectDay={(day) => { setDate(day); openCalendarComposer(day); }} onDropNote={dropNoteInCalendar} />}
           </div>
           <footer className="system-strip">
-            <MiniStatus icon={Laptop} label="Skjermtid · i går" value={hasScreenTimeSource ? formatMinutes(deviceMetrics?.screenTime?.yesterdayMinutes) : "Ikke synket"} detail={hasScreenTimeSource ? `Snitt uke: ${formatMinutes(deviceMetrics?.screenTime?.weeklyAverageMinutes)}` : screenTimeAge} tone="violet" onClick={() => setActiveMetric((current) => current?.id === "screenTime" ? null : { id: "screenTime", icon: Laptop, tone: "violet", anchor: 0 })} />
+            <MiniStatus icon={Laptop} label="Sosiale medier" value={hasScreenTimeSource ? formatMinutes(deviceMetrics?.screenTime?.socialMinutes) : companionOutdated ? "Utdatert app" : "Ikke synket"} detail={hasScreenTimeSource ? `I går · uke ${formatMinutes(deviceMetrics?.screenTime?.socialWeeklyAverageMinutes)}` : screenTimeAge} tone="violet" onClick={() => setActiveMetric((current) => current?.id === "screenTime" ? null : { id: "screenTime", icon: Laptop, tone: "violet", anchor: 0 })} />
             <MiniStatus icon={Footprints} label="Skritt · i dag" value={hasStepsSource ? new Intl.NumberFormat("nb-NO").format(deviceMetrics.steps.today) : "Ikke synket"} detail={hasStepsSource ? formatStepComparison(deviceMetrics?.steps?.today, deviceMetrics?.steps?.weeklyAverage) : stepsAge} tone="lime" onClick={() => setActiveMetric((current) => current?.id === "steps" ? null : { id: "steps", icon: Footprints, tone: "lime", anchor: 1 })} />
             <MiniStatus icon={CloudSun} label={`${deviceMetrics?.weather?.label || "Mosterøy"}${hasLocationSource ? "" : " · reserve"}`} value={deviceMetrics?.weather?.ok ? `${Math.round(deviceMetrics.weather.temperature)}° · ${deviceMetrics.weather.condition}` : "Vær utilgjengelig"} detail={hasLocationSource && deviceMetrics?.weather?.ok && Number.isFinite(deviceMetrics.weather.apparentTemperature) ? `Føles som ${Math.round(deviceMetrics.weather.apparentTemperature)}°` : "Koble iPhone for posisjon"} tone="orange" onClick={() => setActiveMetric((current) => current?.id === "weather" ? null : { id: "weather", icon: CloudSun, tone: "orange", anchor: 2 })} />
             {activeMetric && <MetricDetail metric={activeMetric} metrics={deviceMetrics} />}

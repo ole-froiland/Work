@@ -22,7 +22,7 @@ targets:
         CFBundleDisplayName: Panelkobling
         NSHealthShareUsageDescription: Panelkobling leser bare skritt for å vise dagens skritt i ditt lokale dashboard.
         NSLocationWhenInUseUsageDescription: Panelkobling bruker posisjonen til å hente riktig lokalt vær i dashboardet.
-        NSLocalNetworkUsageDescription: Panelkobling sender skjermtid, skritt og posisjon direkte til dashboardet på din Mac.
+        NSLocalNetworkUsageDescription: Panelkobling sender tid i sosiale medier, skritt og posisjon direkte til dashboardet på din Mac.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIBackgroundModes:
