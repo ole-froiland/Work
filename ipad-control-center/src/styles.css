@@ -227,13 +227,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .calendar-date-strip strong { color: var(--text); font-size: 12px; text-transform: capitalize; }
 .calendar-date-strip span { margin-left: auto; font-size: 11px; }
 .calendar-add { min-height: 30px; display: flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: #1c2229; color: var(--text); cursor: pointer; font-size: 11px; font-weight: 700; }
-/* Rulles loddrett, blas vannrett. `pan-y` lar iPad-en beholde den loddrette
-   rullingen mens sveipen på tvers går til kalenderen. `overscroll-behavior: none`
-   fjerner sprettet i kanten — sprettet er halve grunnen til at iPadOS tror
-   nedoversveipet var ment for fullskjermen og ikke for kalenderen. Rullefeltet
-   skjules, ellers ville en Mac med alltid synlige rullefelt smalne flaten i
-   forhold til iPad-en. */
-.calendar-stage { min-height: 0; padding: 10px 18px 6px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; touch-action: pan-y; scrollbar-width: none; }
+/* `touch-action: none` er det som holder panelet i fullskjerm: sier flaten at den
+   kan panoreres loddrett, tolker iPadOS det samme draget som «sveip ned for å
+   avslutte». Nå ser Safari ingen panorering i det hele tatt — App.jsx flytter
+   `scrollTop` for hånd fra touch-hendelsene. Mus og styreflate ruller som før;
+   `touch-action` rører ikke hjulet. Rullefeltet skjules, ellers ville en Mac med
+   alltid synlige rullefelt smalne flaten i forhold til iPad-en. */
+.calendar-stage { min-height: 0; padding: 10px 18px 6px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; touch-action: none; scrollbar-width: none; }
 .calendar-stage::-webkit-scrollbar { width: 0; height: 0; }
 
 .day-calendar { --hour-row: 58px; position: relative; min-height: calc(var(--hour-row) * 24); }
