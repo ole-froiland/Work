@@ -128,6 +128,17 @@ async function fetchWeather(location) {
   return value;
 }
 
+// Hvilke kilder telefonen faktisk fikk med seg. Sendinger som mangler en kilde
+// ser like vellykkede ut som fullstendige, og da er det umulig å se forskjell på
+// «HealthKit sa nei» og «telefonen har ikke ringt» når panelet står tomt.
+export function describeSyncPayload(input) {
+  const sent = ["screenTime", "steps", "location"].filter((name) => {
+    const source = input?.sources?.[name];
+    return Boolean(source?.provider && source?.observedAt);
+  });
+  return sent.length ? sent.join(", ") : "ingen kilder";
+}
+
 export async function updateDeviceMetrics(input) {
   const previous = await readStoredMetrics();
   const next = normalizeDeviceUpdate(input, previous);

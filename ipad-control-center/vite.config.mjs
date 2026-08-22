@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { isRepairableConnection, repairConnection } from "./server/connection-repair-service.mjs";
-import { getDeviceMetrics, updateDeviceMetrics } from "./server/device-metrics-service.mjs";
+import { describeSyncPayload, getDeviceMetrics, updateDeviceMetrics } from "./server/device-metrics-service.mjs";
 import { runMacAction } from "./server/mac-action-service.mjs";
 import { getUsageSnapshot } from "./server/usage-service.mjs";
 import { getAgentSessions } from "./server/agent-session-service.mjs";
@@ -120,12 +120,19 @@ function deviceMetricsApi() {
             return;
           }
           if (request.method === "POST") {
-            sendJson(response, 200, await updateDeviceMetrics(await readJsonBody(request)));
+            const body = await readJsonBody(request);
+            // Uten denne linja er det ingen forskjell å se på «telefonen ringte
+            // aldri» og «telefonen ringte og ble avvist». Verdiene logges ikke,
+            // bare hvilke kilder som kom og hvor de kom fra.
+            console.log(`[panel] synk fra ${request.socket.remoteAddress ?? "ukjent"}: ${describeSyncPayload(body)}`);
+            sendJson(response, 200, await updateDeviceMetrics(body));
             return;
           }
           sendJson(response, 405, { error: "Method not allowed" });
         } catch (error) {
-          sendJson(response, 400, { error: error instanceof Error ? error.message : "Ukjent feil" });
+          const reason = error instanceof Error ? error.message : "Ukjent feil";
+          if (request.method === "POST") console.log(`[panel] synk avvist fra ${request.socket.remoteAddress ?? "ukjent"}: ${reason}`);
+          sendJson(response, 400, { error: reason });
         }
       });
     },

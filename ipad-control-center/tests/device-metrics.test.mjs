@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { normalizeDeviceUpdate, weatherDescription } from "../server/device-metrics-service.mjs";
+import { describeSyncPayload, normalizeDeviceUpdate, weatherDescription } from "../server/device-metrics-service.mjs";
 
 test("normalizes trusted mobile metrics and preserves missing values", () => {
   const result = normalizeDeviceUpdate({
@@ -46,4 +46,22 @@ test("maps weather codes to short Norwegian labels", () => {
   assert.equal(weatherDescription(0), "Klart");
   assert.equal(weatherDescription(63), "Regn");
   assert.equal(weatherDescription(75), "Snø");
+});
+
+test("names the sources a sync actually carried", () => {
+  const full = {
+    sources: {
+      screenTime: { provider: "DeviceActivity", observedAt: "2026-08-23T08:00:00.000Z" },
+      steps: { provider: "HealthKit", observedAt: "2026-08-23T08:00:00.000Z" },
+      location: { provider: "CoreLocation", observedAt: "2026-08-23T08:00:00.000Z" },
+    },
+  };
+  assert.equal(describeSyncPayload(full), "screenTime, steps, location");
+
+  // Nektet HealthKit tilgang, kommer sendingen uten skritt — og da er det den
+  // linja som skiller «appen fikk ikke lov» fra «telefonen ringte aldri».
+  const withoutSteps = { sources: { ...full.sources, steps: undefined } };
+  assert.equal(describeSyncPayload(withoutSteps), "screenTime, location");
+  assert.equal(describeSyncPayload({}), "ingen kilder");
+  assert.equal(describeSyncPayload({ sources: { steps: { provider: "HealthKit" } } }), "ingen kilder");
 });
