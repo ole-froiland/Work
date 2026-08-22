@@ -110,3 +110,15 @@ test("kjenner igjen manglende kalendertilgang, som krever noe annet enn en omsta
   assert.equal(appleCalendarAccessMissing("Kalender kjører ikke"), false);
   assert.equal(appleCalendarAccessMissing(null), false);
 });
+
+test("rydder osascript-støyen bort fra kalenderfeilen", async () => {
+  const failing = async () => {
+    const error = new Error("Command failed");
+    error.stderr = "execution error: Error: Error: Panelet mangler tilgang til Apple Kalender (-2700)";
+    throw error;
+  };
+  await assert.rejects(
+    () => readAppleCalendarNow(failing),
+    (error) => error.message === "Panelet mangler tilgang til Apple Kalender (-2700)",
+  );
+});

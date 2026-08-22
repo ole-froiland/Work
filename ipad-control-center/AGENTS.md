@@ -16,6 +16,8 @@ Oppgavekortet under AI-bruk viser bare de tre nyeste øktene Claude og Codex sel
 
 Musikkortet under hurtigknappene styrer Spotify Connect, ikke Spotify-appen på Mac-en, slik at det treffer enheten som faktisk spiller. Vis bare spor, enhet og framdrift Spotify selv rapporterer, og si eksplisitt fra ved manglende oppsett, manglende enhet eller Premium-krav. Client ID og tokener lagres bare på Mac-en og sendes aldri til nettleseren.
 
+Hver rad i Tilkobling-modalen er en knapp som reparerer seg selv på ett trykk: panelet gjør alt det kan gjøre alene, og stopper først ved det ene steget et menneske må ta. En rad skal aldri tilby en knapp som ikke virker — iPhonen pusher via `BGTaskScheduler` og kan ikke nås fra Mac-en, og Claude-innlogging krever en OAuth-runde i nettleser — da sier raden det rett ut i stedet. Sekvensene ligger i `server/connection-repair-service.mjs` og må aldri sende tokener, nøkler eller innhold fra Nøkkelringen til nettleseren; fra token-endepunktet slippes bare `error` og `error_description` gjennom. Feilårsaker skal bevares hele veien fram til raden: en tilkobling som feiler uten å si hvorfor gjør reparasjonen til gjetting.
+
 Keep the dashboard free of a global top bar; date, time, connection, and view controls belong in the calendar toolbar. Quick actions should stay compact while preserving practical iPad tap targets, and the landscape dashboard must fit the viewport without page scrolling.
 
 Never fabricate mobile Screen Time, Health, step, or location data. Show an explicit unsynced state until a permissioned device source has supplied values; weather uses a verified CoreLocation source or the explicit Mosterøy fallback.

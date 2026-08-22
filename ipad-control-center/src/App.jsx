@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -48,7 +48,7 @@ import {
   XLogo,
   YoutubeLogo,
 } from "@phosphor-icons/react";
-import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeCalendarActivity, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, needsCompanionUpdate, readUsageResponse, summarizeAgentSessions } from "./dashboard.js";
+import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, needsCompanionUpdate, readUsageResponse, summarizeAgentSessions } from "./dashboard.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -487,14 +487,44 @@ function NextEventCard({ events, connected, now }) {
   );
 }
 
+const followUpMessages = {
+  "claude-login": "Terminal er åpnet på Mac-en. Skriv /login der for å fornye påloggingen.",
+  "codex-login": "Terminal er åpnet med codex login på Mac-en.",
+  "calendar-privacy": "Personvern er åpnet på Mac-en. Skru på Kalender for Panel.",
+};
+
 // Taus når alt virker, tydelig når noe ikke gjør det. Detaljene ligger bak et
 // trykk, slik at kortet ikke bruker plass på å fortelle at det går bra.
-function StatusStrip({ checks }) {
+function StatusStrip({ checks, onRepair, onFollowUp }) {
   const [open, setOpen] = useState(false);
+  // Resultatet av et trykk lever bare så lenge modalen er åpen. Neste gang den
+  // åpnes skal den vise den ekte statusen, ikke et minutt gammelt utfall.
+  const [repairs, setRepairs] = useState({});
   const broken = checks.filter((check) => !check.ok);
   const summary = broken.length === 0
     ? "Alt er tilkoblet"
     : `${broken.length} ${broken.length === 1 ? "ting virker ikke" : "ting virker ikke"}`;
+
+  function close() {
+    setOpen(false);
+    setRepairs({});
+  }
+
+  async function repair(id) {
+    if (repairs[id]?.state === "working") return;
+    setRepairs((current) => ({ ...current, [id]: { state: "working" } }));
+    const outcome = await onRepair(id);
+    setRepairs((current) => ({
+      ...current,
+      [id]: { state: outcome.ok ? "fixed" : "stuck", detail: outcome.detail, next: outcome.next },
+    }));
+  }
+
+  async function followUp(id, action) {
+    setRepairs((current) => ({ ...current, [id]: { ...current[id], state: "working" } }));
+    const message = await onFollowUp(action);
+    setRepairs((current) => ({ ...current, [id]: { ...current[id], state: "stuck", detail: message } }));
+  }
 
   return (
     <>
@@ -510,20 +540,43 @@ function StatusStrip({ checks }) {
       </button>
 
       {open && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
           <section className="bridge-modal status-modal" role="dialog" aria-modal="true" aria-labelledby="statusTitle">
             <div className="modal-title">
               <div><span className="eyebrow">Tilkobling</span><h2 id="statusTitle">{summary}</h2></div>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Lukk"><X /></button>
+              <button type="button" onClick={close} aria-label="Lukk"><X /></button>
             </div>
             <ul className="status-list">
-              {checks.map((check) => (
-                <li className={check.ok ? "is-ok" : "is-broken"} key={check.id}>
-                  <i />
-                  <span><strong>{check.label}</strong><small>{check.detail}</small></span>
-                </li>
-              ))}
+              {checks.map((check) => {
+                const repaired = repairs[check.id];
+                const working = repaired?.state === "working";
+                const ok = repaired ? repaired.state === "fixed" : check.ok;
+                return (
+                  <li className={`${ok ? "is-ok" : "is-broken"}${working ? " is-working" : ""}`} key={check.id}>
+                    <button
+                      className="status-row"
+                      type="button"
+                      onClick={() => repair(check.id)}
+                      disabled={working}
+                      aria-label={ok ? `Sjekk ${check.label} på nytt` : `Fiks ${check.label}`}
+                    >
+                      <i />
+                      <span>
+                        <strong>{check.label}</strong>
+                        <small>{working ? "Prøver …" : repaired?.detail ?? check.detail}</small>
+                      </span>
+                      <ArrowClockwise className={working ? "is-spinning" : ""} size={15} weight="bold" />
+                    </button>
+                    {repaired?.next && !working && (
+                      <button className="status-next" type="button" onClick={() => followUp(check.id, repaired.next.action)}>
+                        {repaired.next.label}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
+            <p className="modal-hint">Trykk på en rad for å fikse den. Panelet gjør alt det kan selv, og sier fra hvis noe gjenstår på Mac-en.</p>
           </section>
         </div>
       )}
@@ -665,6 +718,42 @@ function MonthCalendar({ date, events, onSelectDay, onDropNote }) {
   );
 }
 
+// Fire kilder hentet på hver sin takt, med hver sin kopi av den samme løkka.
+// Reparasjonen trenger å hente én av dem med én gang den er ferdig — ellers står
+// raden rød i opptil et minutt etter at den er i orden — og det gikk ikke så
+// lenge løkka var låst inne i en useEffect.
+function usePolledResource(url, { interval, initial = null, parse, onError }) {
+  const [value, setValue] = useState(initial);
+  const settings = useRef({ parse, onError });
+  settings.current = { parse, onError };
+
+  const load = useCallback(async (alive = () => true) => {
+    const { parse: read, onError: fail } = settings.current;
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      const snapshot = read ? await read(response) : await readJsonResponse(response);
+      if (alive()) setValue(snapshot);
+    } catch (error) {
+      if (alive() && fail) setValue((current) => fail(current, error));
+    }
+  }, [url]);
+
+  useEffect(() => {
+    let active = true;
+    const alive = () => active;
+    load(alive);
+    const timer = window.setInterval(() => load(alive), interval);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [load, interval]);
+
+  return [value, useCallback(() => load(), [load]), setValue];
+}
+
+async function readJsonResponse(response) {
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
 function App() {
   const [view, setView] = useState("day");
   const [date, setDate] = useState(() => new Date());
@@ -684,13 +773,33 @@ function App() {
   const [focusSets, setFocusSets] = useState(() => Number(localStorage.getItem("panel-focus-sets")) || 2);
   const [focusModeWanted, setFocusModeWanted] = useState(() => localStorage.getItem("panel-focus-mode") === "on");
   const [focusModeActive, setFocusModeActive] = useState(false);
-  const [usage, setUsage] = useState(null);
-  const [usageLoading, setUsageLoading] = useState(true);
+  const [usage, refreshUsageData, setUsage] = usePolledResource("/api/usage", {
+    interval: 60_000,
+    parse: readUsageResponse,
+    onError: (current, error) => ({
+      updatedAt: new Date().toISOString(),
+      codex: { ok: false, error: `Kunne ikke hente bruk (${error.message})` },
+      claude: { ok: false, error: `Kunne ikke hente bruk (${error.message})` },
+    }),
+  });
+  const [usageRefreshing, setUsageRefreshing] = useState(false);
+  const usageLoading = usage === null || usageRefreshing;
   const [agentSessions, setAgentSessions] = useState(null);
-  const [deviceMetrics, setDeviceMetrics] = useState(null);
+  const [deviceMetrics, refreshDeviceMetrics] = usePolledResource("/api/device-metrics", {
+    interval: 60_000,
+    onError: (current) => current ?? { screenTime: {}, steps: {}, weather: { ok: false, label: "Mosterøy" }, syncConnected: false },
+  });
   const [activeMetric, setActiveMetric] = useState(null);
-  const [syncCalendar, setSyncCalendar] = useState({ events: [], connected: false, stale: false });
-  const [syncNotes, setSyncNotes] = useState({ notes: [], connected: false, stale: false, pending: 0 });
+  const [syncCalendar, refreshSyncCalendar, setSyncCalendar] = usePolledResource("/api/sync-calendar", {
+    interval: 30_000,
+    initial: { events: [], connected: false, stale: false },
+    onError: (current) => ({ ...current, connected: false }),
+  });
+  const [syncNotes, refreshSyncNotes, setSyncNotes] = usePolledResource("/api/sync-notes", {
+    interval: 3_000,
+    initial: { notes: [], connected: false, stale: false, pending: 0 },
+    onError: (current) => ({ ...current, connected: false }),
+  });
   const [newNote, setNewNote] = useState("");
   const [calendarComposer, setCalendarComposer] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(() => Boolean(fullscreenElement()));
@@ -716,57 +825,6 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    async function loadSyncCalendar() {
-      try {
-        const response = await fetch("/api/sync-calendar", { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const snapshot = await response.json();
-        if (active) setSyncCalendar(snapshot);
-      } catch {
-        if (active) setSyncCalendar((current) => ({ ...current, connected: false }));
-      }
-    }
-    loadSyncCalendar();
-    const interval = window.setInterval(loadSyncCalendar, 30_000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    async function loadSyncNotes() {
-      try {
-        const response = await fetch("/api/sync-notes", { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const snapshot = await response.json();
-        if (active) setSyncNotes(snapshot);
-      } catch {
-        if (active) setSyncNotes((current) => ({ ...current, connected: false }));
-      }
-    }
-    loadSyncNotes();
-    const interval = window.setInterval(loadSyncNotes, 3_000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    async function loadDeviceMetrics() {
-      try {
-        const response = await fetch("/api/device-metrics", { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const snapshot = await response.json();
-        if (active) setDeviceMetrics(snapshot);
-      } catch {
-        if (active) setDeviceMetrics((current) => current ?? { screenTime: {}, steps: {}, weather: { ok: false, label: "Mosterøy" }, syncConnected: false });
-      }
-    }
-    loadDeviceMetrics();
-    const interval = window.setInterval(() => loadDeviceMetrics(), 60_000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
     async function loadAgentSessions() {
       try {
         const response = await fetch("/api/agent-sessions", { cache: "no-store" });
@@ -782,27 +840,6 @@ function App() {
     return () => { active = false; window.clearInterval(interval); };
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      try {
-        const response = await fetch("/api/usage", { cache: "no-store" });
-        const snapshot = await readUsageResponse(response);
-        if (active) setUsage(snapshot);
-      } catch (error) {
-        if (active) setUsage({
-          updatedAt: new Date().toISOString(),
-          codex: { ok: false, error: `Kunne ikke hente bruk (${error.message})` },
-          claude: { ok: false, error: `Kunne ikke hente bruk (${error.message})` },
-        });
-      } finally {
-        if (active) setUsageLoading(false);
-      }
-    }
-    load();
-    const interval = window.setInterval(load, 60_000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, []);
 
   useEffect(() => {
     if (!focusRunning) return undefined;
@@ -953,6 +990,48 @@ function App() {
       setToast(error.message === "unsupported" ? "Fullskjerm støttes ikke i denne nettleseren" : "Nettleseren blokkerte fullskjerm");
     }
     setIsFullscreen(Boolean(fullscreenElement()));
+  }
+
+  // Én reparasjon per rad. Kilden hentes på nytt med én gang sekvensen er ferdig,
+  // slik at raden viser den ekte statusen og ikke venter på neste polling.
+  async function repairConnection(id) {
+    try {
+      const response = await fetch("/api/connections/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      await refreshConnection(id);
+      return describeRepair(result, new Date());
+    } catch (error) {
+      return { ok: false, detail: `Nådde ikke Mac-en (${error.message})`, next: null };
+    }
+  }
+
+  function refreshConnection(id) {
+    if (id === "calendar") return refreshSyncCalendar();
+    if (id === "notes") return refreshSyncNotes();
+    if (id === "mobile") return refreshDeviceMetrics();
+    return refreshUsageData();
+  }
+
+  // Siste steget, det panelet ikke kan gjøre ferdig alene. Svaret havner i raden
+  // i stedet for i en toast, siden det er raden Ole ser på.
+  async function runRepairFollowUp(action) {
+    try {
+      const response = await fetch("/api/mac-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      return followUpMessages[action] ?? "Åpnet på Mac-en";
+    } catch (error) {
+      return `Fikk det ikke åpnet på Mac-en (${error.message})`;
+    }
   }
 
   async function runOnMac(body, { done, failed }) {
@@ -1142,7 +1221,7 @@ function App() {
   }
 
   async function refreshUsage() {
-    setUsageLoading(true);
+    setUsageRefreshing(true);
     try {
       const response = await fetch("/api/usage?refresh=1", { cache: "no-store" });
       setUsage(await readUsageResponse(response));
@@ -1150,7 +1229,7 @@ function App() {
     } catch {
       setToast("Kunne ikke oppdatere bruksdata");
     } finally {
-      setUsageLoading(false);
+      setUsageRefreshing(false);
     }
   }
 
@@ -1277,7 +1356,7 @@ function App() {
             <form className="add-task" onSubmit={addSyncNote}><Plus size={17} /><input value={newNote} onChange={(event) => setNewNote(event.target.value)} placeholder="Skriv et notat" aria-label="Nytt Sync-notat" /><button type="submit">Legg til</button></form>
           </section>
 
-          <StatusStrip checks={statusChecks} />
+          <StatusStrip checks={statusChecks} onRepair={repairConnection} onFollowUp={runRepairFollowUp} />
         </aside>
       </section>
 

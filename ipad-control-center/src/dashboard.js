@@ -219,6 +219,23 @@ export function buildStatusChecks({ syncCalendar, syncNotes, deviceMetrics, usag
   ];
 }
 
+// Hva raden skal si etter et reparasjonsforsøk. Serveren vet hva den prøvde og
+// hva som gjenstår; klienten vet om companion-appen på telefonen er for gammel.
+// Regelen bor ett sted hver, og settes sammen her — å kopiere den ene inn i den
+// andre er hvordan de to kommer ut av takt.
+export function describeRepair(result, now = new Date()) {
+  if (!result) return null;
+  if (result.ok) return { ok: true, detail: result.detail, next: null };
+  if (result.id === "mobile" && needsCompanionUpdate(result.metrics, now)) {
+    return {
+      ok: false,
+      detail: "Panelkobling på iPhonen er for gammel og sender ikke sosial tid. Installer den på nytt.",
+      next: null,
+    };
+  }
+  return { ok: false, detail: result.detail, next: result.next ?? null };
+}
+
 // Agentkortet skal kunne leses på et blikk fra andre siden av rommet: jobber
 // den, står den fast, eller er den ferdig? Alderen på siste hendelse er det som
 // skiller «tenker» fra «har stoppet opp», så den står alltid i teksten.

@@ -136,7 +136,7 @@ function appleReadErrorMessage(error) {
   const raw = String(error?.stderr || error?.message || "");
   const line = raw
     .split("\n")
-    .map((value) => value.trim().replace(/^execution error:\s*/i, ""))
+    .map((value) => value.trim().replace(/^execution error:\s*/i, "").replace(/^(Error:\s*)+/i, ""))
     .find((value) => value && !value.startsWith("/usr/bin/osascript"));
   return (line || "Kalenderlesingen svarte ikke").slice(0, 300);
 }

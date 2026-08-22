@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeCalendarActivity, describeNextEvent, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isSocialApp, needsCompanionUpdate, readUsageResponse, resolvePanelRedirect, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
+import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeCalendarActivity, describeNextEvent, describeRepair, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isSocialApp, needsCompanionUpdate, readUsageResponse, resolvePanelRedirect, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
@@ -409,4 +409,46 @@ test("labels each session with the state word the card shows", () => {
   assert.deepEqual(summary.sessions.map((session) => session.label), ["Jobber", "Avsluttet", "Trenger svar"]);
   assert.equal(summary.count, 3);
   assert.equal(summary.activeCount, 1);
+});
+
+test("en reparert rad viser hva som faktisk ble gjort", () => {
+  const result = describeRepair({ id: "calendar", ok: true, detail: "76 hendelser hentet" });
+  assert.deepEqual(result, { ok: true, detail: "76 hendelser hentet", next: null });
+});
+
+test("en rad som står fast beholder det ene steget som gjenstår", () => {
+  const result = describeRepair({
+    id: "claude",
+    ok: false,
+    detail: "Påloggingen må fornyes på Mac-en",
+    next: { action: "claude-login", label: "Åpne Terminal med claude" },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.next.action, "claude-login");
+});
+
+test("en utdatert companion-app får sin egen forklaring, ikke «for gamle verdier»", () => {
+  const now = new Date("2026-08-15T13:38:00+02:00");
+  const result = describeRepair({
+    id: "mobile",
+    ok: false,
+    detail: "Siste verdier er for gamle. Åpne Panelkobling på iPhonen.",
+    metrics: {
+      screenTime: {},
+      sources: { screenTime: { provider: "DeviceActivity", observedAt: "2026-08-15T09:00:00+02:00" } },
+    },
+  }, now);
+  assert.match(result.detail, /for gammel/);
+  assert.equal(result.next, null);
+});
+
+test("en iPhone som bare ikke har sendt beholder serverens forklaring", () => {
+  const now = new Date("2026-08-15T13:38:00+02:00");
+  const result = describeRepair({
+    id: "mobile",
+    ok: false,
+    detail: "iPhonen har aldri sendt verdier. Åpne Panelkobling på iPhonen.",
+    metrics: { screenTime: {}, sources: {} },
+  }, now);
+  assert.match(result.detail, /aldri sendt/);
 });
