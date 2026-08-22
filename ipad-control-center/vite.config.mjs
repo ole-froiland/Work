@@ -340,10 +340,18 @@ export default defineConfig({
     include: ["react", "react-dom/client"],
   },
   server: {
-    host: "0.0.0.0",
+    // «::» tar både IPv6 og IPv4. Med «0.0.0.0» lyttet serveren bare på IPv4,
+    // mens Mac-en annonserer Ole-sin-MacBook-Air.local med IPv6-adresser i
+    // tillegg — og iPad-en velger IPv6 først. Da traff den en port ingen satt på,
+    // og en app lagt til på Hjem-skjermen viser blank hvit skjerm i stedet for
+    // en feilside. Derav fristelsen til å hardkode IPv4-adressen i stedet.
+    host: "::",
     port: 4173,
     strictPort: true,
-    allowedHosts: ["terminal.local", "ole-sin-macbook-air.local"],
+    // Nettlesere sender verten med små bokstaver, men Vite sammenligner tegn for
+    // tegn — og resten av prosjektet skriver navnet med stor forbokstav. Begge
+    // skrivemåtene står her, så en klient som ikke normaliserer ikke blir avvist.
+    allowedHosts: ["terminal.local", "ole-sin-macbook-air.local", "Ole-sin-MacBook-Air.local"],
     warmup: {
       clientFiles: ["./src/main.jsx"],
     },

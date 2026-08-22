@@ -4,16 +4,16 @@
 <dict>
   <key>Label</key>
   <string>com.ole.panel</string>
+  <!-- Ingen --host/--port her. Kommandolinja overstyrer vite.config.mjs, og da
+       fantes verten to steder med hvert sitt svar: konfigurasjonen sa «::», mens
+       denne sa «0.0.0.0» og vant. Serveren tok dermed bare IPv4, mens Mac-en
+       annonserer .local-navnet med IPv6 i tillegg — som iPad-en velger først.
+       Konfigurasjonen eier verten og porten nå, og testen vokter den. -->
   <key>ProgramArguments</key>
   <array>
     <string>/usr/local/bin/npm</string>
     <string>run</string>
     <string>dev</string>
-    <string>--</string>
-    <string>--host</string>
-    <string>0.0.0.0</string>
-    <string>--port</string>
-    <string>4173</string>
   </array>
   <key>WorkingDirectory</key>
   <string>/Users/ole-froiland/Desktop/Prosjekter/Work/ipad-control-center</string>

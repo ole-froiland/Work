@@ -21,6 +21,22 @@ Legg til `?public=1` på Netlify-adressen for å åpne det offentlige skallet ve
 
 Mac-en bruker LaunchAgent-filen i `macos/com.ole.panel.plist`, slik at den lokale
 broen starter ved innlogging og startes på nytt automatisk hvis prosessen stopper.
+Plist-en sender ingen `--host` eller `--port`: kommandolinja overstyrer
+`vite.config.mjs`, og da fantes verten to steder med hvert sitt svar. Endrer du
+adresse eller port, gjør det i konfigurasjonen — testene vokter begge deler.
+
+Serveren lytter på `::`, altså både IPv6 og IPv4. Med `0.0.0.0` tok den bare IPv4,
+mens Mac-en annonserer `.local`-navnet med IPv6-adresser i tillegg — og iPad-en
+velger IPv6 først. Den traff da en port ingen satt på. I Safari ser det ut som en
+vanlig feilside, men et panel lagt til på Hjem-skjermen blir bare helt hvitt, uten
+noe som forklarer hvorfor. Er skjermen blank, sjekk dette først:
+
+```bash
+lsof -nP -iTCP:4173 -sTCP:LISTEN
+```
+
+Står det `IPv4` der og ikke `IPv6`, kjører serveren med gammelt oppsett — last
+LaunchAgent-en på nytt.
 
 Codex og Claude må være installert og innlogget på Mac-en som kjører serveren. Hvis én klient ikke er tilgjengelig, viser panelet en eksplisitt feil for den leverandøren i stedet for et estimat.
 
