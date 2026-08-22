@@ -170,6 +170,24 @@ Ukesvisningen viser alle arrangementene i uka. De sju kolonnene deler bredden li
 uten `min-width: 0` på `.week-day` vokser en kolonne til den lengste tittelen, og da
 falt søndagen utenfor panelet.
 
+### Rulling avslutter fullskjerm i Safari
+
+Ruller du i kalenderen mens panelet står i Safaris fullskjerm, hopper det ut. Det er
+ikke noe panelet gjør: siden iOS 15 henter et nedoversveip frem adresselinja, og den
+systemgesten går foran alt en nettside gjør. Verken `touch-action`, `preventDefault`
+eller egen rulling i JavaScript kommer rundt den — begge deler er prøvd og forkastet,
+se `git log` rundt denne endringen.
+
+Skal panelet stå urokkelig, er det to grep utenfor koden:
+
+- **Legg det på Hjem-skjermen** (Del → «Legg til på Hjem-skjerm»). Da kjører det i
+  standalone-modus: ingen Safari-kontroller, ingen fullskjerm å avslutte, og ingen
+  sveipegest. `isStandaloneApp()` skjuler Utvid-knappen automatisk der.
+- **Slå på Veiledet tilgang** (Innstillinger → Tilgjengelighet → Veiledet tilgang).
+  Da låses iPad-en til appen, og det kreves trippelklikk og kode for å komme ut.
+
+Sammen gir de et panel som blir stående til noen bevisst tar det ut.
+
 ## Neste aktivitet
 
 Kortet mellom Mac-snarveiene og fokusøkten henter neste avtale fra Apple Kalender og

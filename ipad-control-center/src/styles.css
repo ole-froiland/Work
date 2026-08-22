@@ -230,7 +230,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 /* Rulles loddrett, blas vannrett. `pan-y` lar iPad-en beholde den loddrette
    rullingen mens sveipen på tvers går til kalenderen. Rullefeltet skjules, ellers
    ville en Mac med alltid synlige rullefelt smalne flaten i forhold til iPad-en. */
-.calendar-stage { min-height: 0; padding: 10px 18px 6px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+/* `pan-y` gir iPad-en den loddrette rullingen og lar sveipen på tvers gå til
+   kalenderen. `none` på overscroll fjerner sprettet i kanten — et veggpanel skal
+   stå stille. Rullefeltet skjules, ellers ville en Mac med alltid synlige
+   rullefelt smalne flaten i forhold til iPad-en. */
+.calendar-stage { min-height: 0; padding: 10px 18px 6px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; touch-action: pan-y; scrollbar-width: none; }
 .calendar-stage::-webkit-scrollbar { width: 0; height: 0; }
 
 .day-calendar { --hour-row: 58px; position: relative; min-height: calc(var(--hour-row) * 24); }
