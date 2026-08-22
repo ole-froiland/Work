@@ -177,10 +177,13 @@ const sequences = {
       };
     }
     const message = snapshot.claude?.error ?? "Claude svarte ikke";
-    const expired = snapshot.claude?.code === "invalid_grant";
+    // Et utløpt token og en avbrutt innlogging ser ulike ut i loggen, men krever
+    // nøyaktig det samme av Ole.
+    const code = snapshot.claude?.code;
+    const expired = code === "invalid_grant" || code === "logged_out";
     return {
       ok: false,
-      detail: expired ? "Påloggingen må fornyes på Mac-en" : message,
+      detail: code === "logged_out" ? message : expired ? "Påloggingen må fornyes på Mac-en" : message,
       steps: [step("Leste Nøkkelringen og fornyet påloggingen", false, message)],
       next: expired ? { action: "claude-login", label: "Logg inn i Claude på Mac-en" } : null,
     };

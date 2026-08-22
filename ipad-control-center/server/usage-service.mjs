@@ -263,9 +263,24 @@ const codexClient = new CodexRpcClient();
 async function readClaudeCredentials() {
   const args = ["find-generic-password", "-s", CLAUDE_KEYCHAIN_SERVICE, "-w"];
   const { stdout } = await execFileAsync("security", args, { maxBuffer: 1024 * 1024 });
-  const root = JSON.parse(stdout.trim());
+  const raw = stdout.trim();
+  let root;
+  try {
+    root = JSON.parse(raw);
+  } catch {
+    // `security -w` skriver hex når verdien ikke er ren tekst. Da er det ikke
+    // påloggingen som mangler, det er formatet vi ikke leser.
+    throw new Error(`Nøkkelringen ga ${raw.length} tegn som ikke er JSON`);
+  }
+  // En avbrutt innlogging etterlater feltene på plass med tom verdi. Det ser ut
+  // som en ødelagt Nøkkelring, men betyr bare at ingen er logget inn — og det er
+  // den beskjeden som fører Ole til riktig handling.
   if (!root?.claudeAiOauth?.accessToken || !root?.claudeAiOauth?.refreshToken) {
-    throw new Error("Fant ikke Claude-pålogging i Nøkkelring");
+    const error = new Error(root?.claudeAiOauth
+      ? "Ingen er logget inn i Claude på Mac-en"
+      : "Fant ikke Claude-pålogging i Nøkkelring");
+    error.code = "logged_out";
+    throw error;
   }
   return root;
 }

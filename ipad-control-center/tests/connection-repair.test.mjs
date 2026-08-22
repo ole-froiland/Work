@@ -235,3 +235,15 @@ test("en sekvens som kaster blir til en lesbar rad, ikke en 500", async () => {
   assert.equal(result.detail, "Kvotetjenesten falt ned");
   assert.equal(result.id, "codex");
 });
+
+test("en avbrutt innlogging får samme knapp som et utløpt token", async () => {
+  const result = await repairConnection("claude", tools({
+    resetClaudeThrottle: () => {},
+    getUsageSnapshot: async () => ({
+      claude: { ok: false, code: "logged_out", error: "Ingen er logget inn i Claude på Mac-en" },
+    }),
+  }));
+  assert.equal(result.ok, false);
+  assert.equal(result.detail, "Ingen er logget inn i Claude på Mac-en");
+  assert.equal(result.next.action, "claude-login");
+});
