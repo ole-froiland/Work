@@ -1,6 +1,6 @@
 # Panel
 
-Et touchvennlig iPad-dashbord for kalender, fokus, oppgaver og handlinger på en Mac. Prototypen fyller skjermen uten vertikal rulling og kan sende hurtighandlinger til en valgfri lokal Mac-bro.
+Et touchvennlig iPad-dashbord for kalender, fokus, oppgaver og handlinger på en Mac. Prototypen fyller skjermen — bare kalenderflaten rulles — og kan sende hurtighandlinger til en valgfri lokal Mac-bro.
 
 AI-brukskortet henter leverandørrapporterte kvotetall fra de lokale, innloggede Codex- og Claude-klientene. Det viser brukt og gjenstående prosent, eksakt nullstillingstid og en løpende nedtelling. Codex-dagsbruk kommer fra kontoens dagsdata. Claude-dagsbruk er eksakte, dedupliserte tokens registrert av Claude Code lokalt og merkes derfor «lokalt». Kortet oppdateres automatisk hvert minutt og kan oppdateres manuelt. Tilgangstokener leses fra macOS Nøkkelring på Mac-en og sendes aldri til nettleseren.
 
@@ -151,6 +151,24 @@ Spotify strammet inn Development Mode i februar 2026, og det gjelder denne appen
 
 Alle avspillingsendepunktene panelet bruker står fortsatt på Spotifys liste over
 tilgjengelige endepunkter etter innstrammingen.
+
+## Kalendernavigering
+
+Kalenderflaten rulles loddrett og blas vannrett. Sveip til siden for å gå ett steg
+frem eller tilbake i den enheten du ser på: én dag, én uke eller én måned. Pilene i
+verktøylinja gjør det samme. Et sveip som ender oppå en dato åpner ikke datoen — bare
+et rent trykk gjør det.
+
+Dagsvisningen dekker hele døgnet, ikke bare 08–18. Den åpner der noe skjer: klokka nå
+på dagens dato, ellers dagens første avtale, og ellers rundt sju om morgenen. Sveiper
+du videre til neste dag, blir du stående på samme klokkeslett.
+
+Et trykk på en dato i månedsvisningen åpner den dagen. Nye arrangementer lages med
+«Ny» i datolinja, eller ved å dra et Sync-notat inn i kalenderen.
+
+Ukesvisningen viser alle arrangementene i uka. De sju kolonnene deler bredden likt —
+uten `min-width: 0` på `.week-day` vokser en kolonne til den lengste tittelen, og da
+falt søndagen utenfor panelet.
 
 ## Neste aktivitet
 

@@ -48,7 +48,7 @@ import {
   XLogo,
   YoutubeLogo,
 } from "@phosphor-icons/react";
-import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, needsCompanionUpdate, readUsageResponse, summarizeAgentSessions } from "./dashboard.js";
+import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, needsCompanionUpdate, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -638,23 +638,26 @@ function eventsOnDay(events, date) {
   return events.filter((event) => eventOccursOnDay(event, date));
 }
 
+// Døgnet er 24 timer høyt og rulles loddrett. Før dekket rutenettet bare
+// 08–18, og alt utenfor ble klemt inn i kanten i stedet for å vises der det er.
+const DAY_HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
+
 function eventStyle(event) {
-  if (event.allDay) return { top: "0%", height: "7%" };
+  if (event.allDay) return { top: 0, height: "44px" };
   const start = new Date(event.start);
   const end = new Date(event.end);
-  const startMinutes = Math.max(0, Math.min(600, (start.getHours() - 8) * 60 + start.getMinutes()));
-  const duration = Math.max(30, Math.min(600 - startMinutes, (+end - +start) / 60_000));
-  return { top: `${(startMinutes / 600) * 100}%`, height: `${(duration / 600) * 100}%` };
+  const startMinutes = Math.max(0, Math.min(DAY_MINUTES, start.getHours() * 60 + start.getMinutes()));
+  const duration = Math.max(30, Math.min(DAY_MINUTES - startMinutes, (+end - +start) / 60_000));
+  return { top: `${(startMinutes / DAY_MINUTES) * 100}%`, height: `${(duration / DAY_MINUTES) * 100}%` };
 }
 
 function DayCalendar({ date, events, now }) {
-  const rows = ["08", "09", "10", "11", "12", "13", "14", "15", "16", "17"];
   const dayEvents = eventsOnDay(events, date);
-  const showNow = isSameCalendarDay(now, date) && now.getHours() >= 8 && now.getHours() < 18;
-  const nowTop = (((now.getHours() - 8) * 60 + now.getMinutes()) / 600) * 100;
+  const showNow = isSameCalendarDay(now, date);
+  const nowTop = ((now.getHours() * 60 + now.getMinutes()) / DAY_MINUTES) * 100;
   return (
     <div className="day-calendar" aria-label="Dagens kalender">
-      {rows.map((hour) => (
+      {DAY_HOURS.map((hour) => (
         <div className="time-row" key={hour}>
           <time>{hour}:00</time><span />
         </div>
@@ -684,7 +687,7 @@ function WeekCalendar({ date, events }) {
       {days.map((day) => (
         <div className={`week-day ${isSameCalendarDay(new Date(), day) ? "is-today" : ""}`} key={day.toISOString()}>
           <span>{new Intl.DateTimeFormat("nb-NO", { weekday: "short" }).format(day)}</span><strong>{day.getDate()}</strong>
-          {eventsOnDay(events, day).slice(0, 4).map((event) => <div className={`week-event sync-event tone-${calendarTone[event.tone] || "violet"}`} key={event.id}><time>{event.allDay ? "Hele dagen" : formatEventTime(event.start)}</time><br /><b>{event.title}</b></div>)}
+          {eventsOnDay(events, day).map((event) => <div className={`week-event sync-event tone-${calendarTone[event.tone] || "violet"}`} key={event.id}><time>{event.allDay ? "Hele dagen" : formatEventTime(event.start)}</time><br /><b>{event.title}</b></div>)}
         </div>
       ))}
     </div>
@@ -716,6 +719,41 @@ function MonthCalendar({ date, events, onSelectDay, onDropNote }) {
       })}
     </div>
   );
+}
+
+// Sveip vannrett for å bla i kalenderen. CSS-en gir flaten `touch-action: pan-y`,
+// så nettleseren beholder den loddrette rullingen mens vi tolker draget på tvers.
+const SWIPE_DISTANCE = 55;
+
+function useCalendarSwipe(onSwipe) {
+  const origin = useRef(null);
+  const swiped = useRef(false);
+
+  return {
+    onPointerDown(event) {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      swiped.current = false;
+      origin.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    },
+    onPointerUp(event) {
+      const start = origin.current;
+      origin.current = null;
+      if (!start || start.id !== event.pointerId) return;
+      const across = event.clientX - start.x;
+      if (Math.abs(across) < SWIPE_DISTANCE || Math.abs(across) <= Math.abs(event.clientY - start.y)) return;
+      swiped.current = true;
+      onSwipe(across < 0 ? 1 : -1);
+    },
+    onPointerCancel() { origin.current = null; },
+    // Et sveip over månedsrutenettet ender med et klikk på ruten fingeren slapp
+    // over. Uten denne ville man både bytte måned og åpne en tilfeldig dag.
+    onClickCapture(event) {
+      if (!swiped.current) return;
+      swiped.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+  };
 }
 
 // Fire kilder hentet på hver sin takt, med hver sin kopi av den samme løkka.
@@ -902,6 +940,27 @@ function App() {
   const calendarEvents = Array.isArray(syncCalendar.events) ? syncCalendar.events : [];
   const selectedDayEvents = eventsOnDay(calendarEvents, date);
   const plannedMinutes = selectedDayEvents.reduce((total, event) => total + Math.max(0, (+new Date(event.end) - +new Date(event.start)) / 60_000), 0);
+  const calendarStage = useRef(null);
+  const calendarSwipe = useCalendarSwipe(moveDate);
+  // Kalenderen henter nye arrangementer hvert halve minutt. Rullingen leser dem
+  // fra en ref, ellers ville hvert svar fra Mac-en rykke flaten tilbake mens
+  // Ole leser i den.
+  const dayContext = useRef(null);
+  dayContext.current = { date, events: calendarEvents };
+
+  // Bare når visningen byttes. Sveiper man videre til neste dag, blir man
+  // stående på samme klokkeslett — slik Kalender på iPad gjør det.
+  useEffect(() => {
+    const stage = calendarStage.current;
+    if (!stage) return;
+    const grid = view === "day" ? stage.querySelector(".day-calendar") : null;
+    if (!grid) {
+      stage.scrollTop = 0;
+      return;
+    }
+    const { date: day, events } = dayContext.current;
+    stage.scrollTop = Math.round((calendarDayScrollMinute(day, events, new Date()) / DAY_MINUTES) * grid.offsetHeight);
+  }, [view]);
   // Slår Fokus på Mac-en av/på. Med delt fokus følger iPhone og iPad etter.
   async function setFocusMode(enabled, { quiet = false } = {}) {
     if (enabled === focusModeActive) return true;
@@ -1136,9 +1195,12 @@ function App() {
   }
 
   function moveDate(direction) {
-    const next = new Date(date);
-    next.setDate(date.getDate() + direction * (view === "week" ? 7 : view === "month" ? 30 : 1));
-    setDate(next);
+    setDate(shiftCalendarDate(date, view, direction));
+  }
+
+  function openDay(day) {
+    setDate(day);
+    setView("day");
   }
 
   async function queueNoteCommand(command) {
@@ -1272,10 +1334,10 @@ function App() {
             </div>
           </div>
           <div className="calendar-date-strip"><CalendarBlank size={19} weight="duotone" /><strong>{syncCalendar.connected ? `${selectedDayEvents.length} arrangement${selectedDayEvents.length === 1 ? "" : "er"}` : "Apple Kalender kobles til"}</strong><span>{syncCalendar.connected ? `${formatMinutes(plannedMinutes)} planlagt${syncCalendar.stale ? " · sist synket" : ""}` : "Venter på Kalender på Mac-en"}</span><button className="calendar-add" type="button" onClick={() => openCalendarComposer()} aria-label="Nytt arrangement"><Plus size={16} weight="bold" /> Ny</button></div>
-          <div className="calendar-stage" onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropNoteInCalendar(event)}>
+          <div className="calendar-stage" ref={calendarStage} {...calendarSwipe} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropNoteInCalendar(event)}>
             {view === "day" && <DayCalendar date={date} events={calendarEvents} now={now} />}
             {view === "week" && <WeekCalendar date={date} events={calendarEvents} />}
-            {view === "month" && <MonthCalendar date={date} events={calendarEvents} onSelectDay={(day) => { setDate(day); openCalendarComposer(day); }} onDropNote={dropNoteInCalendar} />}
+            {view === "month" && <MonthCalendar date={date} events={calendarEvents} onSelectDay={openDay} onDropNote={dropNoteInCalendar} />}
           </div>
           <footer className="system-strip">
             <MiniStatus icon={Laptop} label="Sosiale medier" value={hasScreenTimeSource ? formatMinutes(deviceMetrics?.screenTime?.socialMinutes) : companionOutdated ? "Utdatert app" : "Ikke synket"} detail={hasScreenTimeSource ? `I går · uke ${formatMinutes(deviceMetrics?.screenTime?.socialWeeklyAverageMinutes)}` : screenTimeAge} tone="violet" onClick={() => setActiveMetric((current) => current?.id === "screenTime" ? null : { id: "screenTime", icon: Laptop, tone: "violet", anchor: 0 })} />

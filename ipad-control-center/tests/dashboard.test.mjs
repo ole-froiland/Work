@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMetricDetails, buildMonthDays, buildStatusChecks, describeCalendarActivity, describeNextEvent, describeRepair, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isSocialApp, needsCompanionUpdate, readUsageResponse, resolvePanelRedirect, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
+import { buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeNextEvent, describeRepair, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isSocialApp, needsCompanionUpdate, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
@@ -115,6 +115,48 @@ test("shows an all-day trip on every included calendar day", () => {
   assert.equal(eventOccursOnDay(trip, new Date(2027, 0, 10)), true);
   assert.equal(eventOccursOnDay(trip, new Date(2027, 0, 19)), true);
   assert.equal(eventOccursOnDay(trip, new Date(2027, 0, 20)), false);
+});
+
+test("steps one day, one week or one whole month at a time", () => {
+  const saturday = new Date(2026, 7, 22);
+  assert.equal(+shiftCalendarDate(saturday, "day", 1), +new Date(2026, 7, 23));
+  assert.equal(+shiftCalendarDate(saturday, "week", -1), +new Date(2026, 7, 15));
+  assert.equal(+shiftCalendarDate(saturday, "month", 1), +new Date(2026, 8, 22));
+});
+
+test("lands in the next month, not thirty days ahead", () => {
+  // 31. mars + 30 dager er 30. april, og et sveip til hoppet forbi hele april.
+  assert.equal(+shiftCalendarDate(new Date(2027, 2, 31), "month", 1), +new Date(2027, 3, 30));
+  assert.equal(+shiftCalendarDate(new Date(2027, 4, 31), "month", -1), +new Date(2027, 3, 30));
+});
+
+test("opens the day at the current hour instead of at midnight", () => {
+  const today = new Date(2026, 7, 22, 14, 30);
+  assert.equal(calendarDayScrollMinute(today, [], today), 13 * 60 + 30);
+});
+
+test("opens another day at its first activity", () => {
+  const events = [
+    { id: "b", start: "2026-08-24T12:15:00", end: "2026-08-24T13:00:00" },
+    { id: "a", start: "2026-08-24T09:45:00", end: "2026-08-24T10:30:00" },
+    { id: "c", start: "2026-08-25T06:00:00", end: "2026-08-25T07:00:00" },
+  ];
+  assert.equal(calendarDayScrollMinute(new Date(2026, 7, 24), events, new Date(2026, 7, 22, 20, 0)), 8 * 60 + 45);
+});
+
+test("falls back to a normal morning on an empty day, and never scrolls above midnight", () => {
+  const empty = new Date(2026, 7, 24);
+  const now = new Date(2026, 7, 22, 20, 0);
+  assert.equal(calendarDayScrollMinute(empty, [], now), 7 * 60);
+  assert.equal(calendarDayScrollMinute(now, [], new Date(2026, 7, 22, 0, 20)), 0);
+});
+
+test("ignores all-day entries when deciding where the day opens", () => {
+  const events = [
+    { id: "trip", start: "2026-08-24T00:00:00", end: "2026-08-26T00:00:00", allDay: true },
+    { id: "gym", start: "2026-08-24T10:00:00", end: "2026-08-24T11:00:00" },
+  ];
+  assert.equal(calendarDayScrollMinute(new Date(2026, 7, 24), events, new Date(2026, 7, 22, 20, 0)), 9 * 60);
 });
 
 test("builds honest metric details from synced device values", () => {

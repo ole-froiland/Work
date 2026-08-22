@@ -227,10 +227,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .calendar-date-strip strong { color: var(--text); font-size: 12px; text-transform: capitalize; }
 .calendar-date-strip span { margin-left: auto; font-size: 11px; }
 .calendar-add { min-height: 30px; display: flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: #1c2229; color: var(--text); cursor: pointer; font-size: 11px; font-weight: 700; }
-.calendar-stage { min-height: 0; padding: 10px 18px 6px; overflow: hidden; overscroll-behavior: none; }
+/* Rulles loddrett, blas vannrett. `pan-y` lar iPad-en beholde den loddrette
+   rullingen mens sveipen på tvers går til kalenderen. Rullefeltet skjules, ellers
+   ville en Mac med alltid synlige rullefelt smalne flaten i forhold til iPad-en. */
+.calendar-stage { min-height: 0; padding: 10px 18px 6px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.calendar-stage::-webkit-scrollbar { width: 0; height: 0; }
 
-.day-calendar { position: relative; min-height: 585px; }
-.time-row { height: 58px; display: grid; grid-template-columns: 42px 1fr; align-items: start; }
+.day-calendar { --hour-row: 58px; position: relative; min-height: calc(var(--hour-row) * 24); }
+.time-row { height: var(--hour-row); display: grid; grid-template-columns: 42px 1fr; align-items: start; }
 .time-row time { position: relative; top: -6px; color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
 .time-row span { border-top: 1px solid var(--line-soft); }
 .calendar-events { position: absolute; inset: 0 0 0 43px; }
@@ -253,12 +257,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .now-line span { width: 7px; height: 7px; border-radius: 50%; background: #ff6874; }
 
 .week-calendar { min-height: 560px; display: grid; grid-template-columns: repeat(7, 1fr); border: 1px solid var(--line-soft); border-radius: 13px; overflow: hidden; }
-.week-day { position: relative; padding: 13px 8px; border-right: 1px solid var(--line-soft); color: var(--muted); text-align: center; }
+/* `min-width: 0` er det som holder uken innenfor panelet: uten den vokser en
+   1fr-kolonne til den lengste tittelen, og de sju dagene ble bredere enn flaten. */
+.week-day { position: relative; min-width: 0; padding: 13px 5px; border-right: 1px solid var(--line-soft); color: var(--muted); text-align: center; }
 .week-day:last-child { border-right: 0; }
 .week-day > span { display: block; font-size: 11px; text-transform: uppercase; }
 .week-day > strong { width: 28px; height: 28px; display: grid; place-items: center; margin: 4px auto 0; border-radius: 9px; color: var(--text); font-size: 13px; }
 .week-day.is-today > strong { background: var(--lime); color: var(--lime-ink); }
-.week-event { margin-top: 58px; padding: 9px 7px; border-left: 2px solid currentColor; border-radius: 0 8px 8px 0; background: #20262d; color: var(--muted); font-size: 11px; text-align: left; }
+/* Sju kolonner på iPad-bredden gir rundt 60 piksler til teksten. Orddeling gjør
+   at «Profitability» får bindestrek i stedet for å bli kappet midt i. */
+.week-event { margin-top: 58px; padding: 9px 6px; border-left: 2px solid currentColor; border-radius: 0 8px 8px 0; background: #20262d; color: var(--muted); font-size: 11px; text-align: left; -webkit-hyphens: auto; hyphens: auto; overflow-wrap: break-word; }
 .week-event.tone-lime { margin-top: 112px; color: var(--lime); background: #20281b; }
 .week-event.tone-violet { color: var(--violet); background: #211d32; }
 .week-event.tone-blue { margin-top: 220px; color: var(--blue); background: #182734; }
@@ -472,8 +480,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   .calendar-settings { width: 38px; height: 38px; }
   .calendar-date-strip { height: 38px; padding-inline: 16px; }
   .calendar-stage { padding: 8px 14px 4px; }
-  .day-calendar { min-height: 480px; }
-  .time-row { height: 48px; }
+  .day-calendar { --hour-row: 48px; }
   .event-0 { top: 48px; height: 40px; }
   .event-1 { top: 108px; height: 67px; }
   .event-2 { top: 204px; height: 40px; }

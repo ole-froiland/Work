@@ -133,6 +133,43 @@ export function eventOccursOnDay(event, day) {
   return +dayStart >= +eventStart && +dayStart < +end;
 }
 
+export const DAY_MINUTES = 24 * 60;
+
+// Ett steg frem eller tilbake, målt i den enheten man faktisk ser på. Måned var
+// tidligere «30 dager», og da hoppet 31. mars rett forbi april og landet i mai.
+export function shiftCalendarDate(date, view, direction) {
+  const step = Math.sign(direction);
+  if (!step) return new Date(date);
+  if (view === "month") {
+    const target = new Date(date.getFullYear(), date.getMonth() + step, 1);
+    const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(date.getDate(), lastDay));
+    return target;
+  }
+  const next = new Date(date);
+  next.setDate(date.getDate() + step * (view === "week" ? 7 : 1));
+  return next;
+}
+
+// Dagsvisningen dekker hele døgnet, så den kan ikke åpne på midnatt — da ser
+// dagen tom ut. Den starter der noe skjer: klokka nå på dagens dato, ellers
+// første avtale, og ellers en vanlig morgen.
+export function calendarDayScrollMinute(date, events, now, lead = 60) {
+  const today = now.getFullYear() === date.getFullYear() && now.getMonth() === date.getMonth() && now.getDate() === date.getDate();
+  const anchor = today ? now.getHours() * 60 + now.getMinutes() : firstEventMinute(events, date);
+  return Math.max(0, Math.min(anchor, DAY_MINUTES) - lead);
+}
+
+function firstEventMinute(events, date) {
+  const minutes = (Array.isArray(events) ? events : [])
+    .filter((event) => !event?.allDay && eventOccursOnDay(event, date))
+    .map((event) => {
+      const start = new Date(event.start);
+      return start.getHours() * 60 + start.getMinutes();
+    });
+  return minutes.length ? Math.min(...minutes) : 8 * 60;
+}
+
 // Nullstillingstidspunktet kommer fra leverandøren. Claude sender «is_active: false»
 // for ukesvinduet selv når det både har forbruk og et oppgitt tidspunkt, så
 // nedtellingen skal vises så lenge tidspunktet finnes — flagget avgjør bare
