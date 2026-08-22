@@ -149,7 +149,7 @@ const macActions = {
     return { action: "calendar-privacy", target: "settings", label: "Personvern → Kalendere" };
   },
   async "claude-login"(exec) {
-    return openInTerminal(exec, "claude-login", "claude", "Claude");
+    return openInTerminal(exec, "claude-login", "claude auth login", "Claude");
   },
   async "codex-login"(exec) {
     return openInTerminal(exec, "codex-login", "codex login", "Codex");

@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 
 import { getDeviceMetrics } from "./device-metrics-service.mjs";
 import { runMacAction } from "./mac-action-service.mjs";
-import { appleCalendarAccessMissing, readAppleCalendarNow } from "./sync-calendar-service.mjs";
+import { appleCalendarAccessMissing, describeCalendarAccess, readAppleCalendarNow } from "./sync-calendar-service.mjs";
 import { getSyncNotes } from "./sync-notes-service.mjs";
 import { getUsageSnapshot, resetClaudeThrottle, restartCodexClient } from "./usage-service.mjs";
 
@@ -46,7 +46,7 @@ const sequences = {
       if (appleCalendarAccessMissing(error.message)) {
         return {
           ok: false,
-          detail: "Panelet mangler tilgang til Apple Kalender",
+          detail: describeCalendarAccess(error.message),
           steps,
           next: { action: "calendar-privacy", label: "Åpne Personvern → Kalendere" },
         };
@@ -74,7 +74,7 @@ const sequences = {
     steps.push(step("Leste Apple Kalender på nytt", false, lastMessage));
     return {
       ok: false,
-      detail: lastMessage,
+      detail: appleCalendarAccessMissing(lastMessage) ? describeCalendarAccess(lastMessage) : lastMessage,
       steps,
       next: appleCalendarAccessMissing(lastMessage)
         ? { action: "calendar-privacy", label: "Åpne Personvern → Kalendere" }
@@ -182,7 +182,7 @@ const sequences = {
       ok: false,
       detail: expired ? "Påloggingen må fornyes på Mac-en" : message,
       steps: [step("Leste Nøkkelringen og fornyet påloggingen", false, message)],
-      next: expired ? { action: "claude-login", label: "Åpne Terminal med claude" } : null,
+      next: expired ? { action: "claude-login", label: "Logg inn i Claude på Mac-en" } : null,
     };
   },
 };

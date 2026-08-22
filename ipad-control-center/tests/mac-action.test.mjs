@@ -179,7 +179,7 @@ test("åpner Terminal med kommandoen som argument, aldri limt inn i skriptet", a
   });
   const [command, args] = calls.at(-1);
   assert.equal(command, "osascript");
-  assert.equal(args.at(-1), "claude");
+  assert.equal(args.at(-1), "claude auth login");
   assert.equal(args.includes("do script command"), true);
   assert.equal(args.some((value) => value.includes('do script "')), false);
   assert.equal(result.target, "terminal");

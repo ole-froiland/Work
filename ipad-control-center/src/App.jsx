@@ -488,7 +488,7 @@ function NextEventCard({ events, connected, now }) {
 }
 
 const followUpMessages = {
-  "claude-login": "Terminal er åpnet på Mac-en. Skriv /login der for å fornye påloggingen.",
+  "claude-login": "Terminal kjører claude auth login på Mac-en. Fullfør i nettleseren som åpner seg.",
   "codex-login": "Terminal er åpnet med codex login på Mac-en.",
   "calendar-privacy": "Personvern er åpnet på Mac-en. Skru på Kalender for Panel.",
 };

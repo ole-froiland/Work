@@ -159,6 +159,17 @@ export function appleCalendarAccessMissing(message) {
   return /mangler tilgang|not authorized|denied/i.test(String(message ?? ""));
 }
 
+// macOS 14 delte kalendertilgang i to: «Skriv kun» lar panelet legge inn
+// hendelser, men ikke lese én eneste. Det er en helt annen beskjed enn å ha
+// blitt avslått, og en helt annen enn aldri å ha blitt spurt.
+export function describeCalendarAccess(message) {
+  const text = String(message ?? "");
+  if (/status 4/.test(text)) return "Panelet har bare skrivetilgang til Kalender og kan ikke lese hendelser. Sett den til «Full tilgang».";
+  if (/status 2/.test(text)) return "Kalendertilgang er avslått for panelet.";
+  if (/status 0/.test(text)) return "Panelet har aldri fått spørsmålet om kalendertilgang.";
+  return "Panelet mangler tilgang til Apple Kalender";
+}
+
 export function mergeCalendarEvents(cachedEvents = [], appleEvents = []) {
   const appleKeys = new Set(appleEvents.map(eventFingerprint));
   return [...cachedEvents.filter((event) => !["apple", "sync"].includes(event.source) && !appleKeys.has(eventFingerprint(event))), ...appleEvents]
@@ -172,8 +183,11 @@ export async function readMacAppleCalendar(runner = execFileAsync, now = new Dat
     function run(argv) {
       ObjC.import('EventKit');
       const authorization = Number($.EKEventStore.authorizationStatusForEntityType($.EKEntityTypeEvent));
+      // 0 = ikke spurt ennå, 2 = avslått, 3 = full tilgang, 4 = bare skrive.
+      // Forskjellen avgjør om en dialog kan fikse det eller om Ole må inn i
+      // Systeminnstillinger, så statusen følger med i feilen.
       if (authorization !== 3) {
-        throw new Error('Panelet mangler tilgang til Apple Kalender');
+        throw new Error('Panelet mangler tilgang til Apple Kalender (status ' + authorization + ')');
       }
       const store = $.EKEventStore.alloc.init;
       const rangeStart = $.NSDate.dateWithTimeIntervalSince1970(Number(argv[0]));

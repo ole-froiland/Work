@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appleCalendarAccessMissing, mergeCalendarEvents, mutateMacAppleCalendar, normalizeSyncCalendar, readAppleCalendarNow, readMacAppleCalendar } from "../server/sync-calendar-service.mjs";
+import { appleCalendarAccessMissing, describeCalendarAccess, mergeCalendarEvents, mutateMacAppleCalendar, normalizeSyncCalendar, readAppleCalendarNow, readMacAppleCalendar } from "../server/sync-calendar-service.mjs";
 import { normalizeSyncNoteCommand, normalizeSyncNotes } from "../server/sync-notes-service.mjs";
 
 test("normalizes and sorts trusted Sync calendar snapshots", () => {
@@ -121,4 +121,11 @@ test("rydder osascript-støyen bort fra kalenderfeilen", async () => {
     () => readAppleCalendarNow(failing),
     (error) => error.message === "Panelet mangler tilgang til Apple Kalender (-2700)",
   );
+});
+
+test("skiller skrivetilgang fra avslag og fra aldri å ha blitt spurt", () => {
+  assert.match(describeCalendarAccess("Panelet mangler tilgang til Apple Kalender (status 4)"), /bare skrivetilgang/);
+  assert.match(describeCalendarAccess("Panelet mangler tilgang til Apple Kalender (status 2)"), /avslått/);
+  assert.match(describeCalendarAccess("Panelet mangler tilgang til Apple Kalender (status 0)"), /aldri fått spørsmålet/);
+  assert.equal(describeCalendarAccess("noe helt annet"), "Panelet mangler tilgang til Apple Kalender");
 });
