@@ -721,76 +721,16 @@ function MonthCalendar({ date, events, onSelectDay, onDropNote }) {
   );
 }
 
+// Sveip vannrett for å bla i kalenderen. CSS-en gir flaten `touch-action: pan-y`,
+// så nettleseren beholder den loddrette rullingen mens vi tolker draget på tvers.
 const SWIPE_DISTANCE = 55;
-// Under dette regnes bevegelsen som et trykk som skalv, ikke et drag.
-const DRAG_SLOP = 5;
 
-// Fingeren styrer kalenderen selv, ikke via nettleserens rulling. `touch-action:
-// none` gjør at Safari aldri ser gesten som «loddrett panorering» — og det er
-// nettopp den iPadOS leser som «sveip ned for å avslutte fullskjerm». Vi flytter
-// `scrollTop` for hånd og spiser hver eneste touchmove, så gesten aldri blir
-// ledig for systemet.
-function useCalendarGestures(stageRef, onSwipe) {
-  const swiped = useRef(false);
-  const handler = useRef(onSwipe);
-  handler.current = onSwipe;
-
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    let drag = null;
-    const room = () => Math.max(0, stage.scrollHeight - stage.clientHeight);
-
-    function begin(event) {
-      if (event.touches.length !== 1) { drag = null; return; }
-      const touch = event.touches[0];
-      swiped.current = false;
-      drag = { x: touch.clientX, y: touch.clientY, top: stage.scrollTop, axis: null };
-    }
-
-    // Flaten følger fingeren én til én og kaster ikke videre når man slipper.
-    // Et veggpanel skal stå der man forlot det, ikke gli forbi.
-    function move(event) {
-      if (!drag || event.touches.length !== 1) return;
-      const touch = event.touches[0];
-      const across = touch.clientX - drag.x;
-      const down = touch.clientY - drag.y;
-      if (!drag.axis && Math.max(Math.abs(across), Math.abs(down)) < DRAG_SLOP) return;
-      // Fra her er dette et drag, og da er gesten kalenderens. Sier vi ikke fra,
-      // plukker fullskjermvisningen den opp som et avsluttsveip.
-      if (event.cancelable) event.preventDefault();
-      if (!drag.axis) drag.axis = Math.abs(across) > Math.abs(down) ? "x" : "y";
-
-      if (drag.axis === "y") {
-        stage.scrollTop = Math.min(room(), Math.max(0, drag.top - down));
-        return;
-      }
-      if (!swiped.current && Math.abs(across) >= SWIPE_DISTANCE) {
-        swiped.current = true;
-        handler.current(across < 0 ? 1 : -1);
-      }
-    }
-
-    function end() { drag = null; }
-
-    stage.addEventListener("touchstart", begin, { passive: true });
-    stage.addEventListener("touchmove", move, { passive: false });
-    stage.addEventListener("touchend", end, { passive: true });
-    stage.addEventListener("touchcancel", end, { passive: true });
-    return () => {
-      stage.removeEventListener("touchstart", begin);
-      stage.removeEventListener("touchmove", move);
-      stage.removeEventListener("touchend", end);
-      stage.removeEventListener("touchcancel", end);
-    };
-  }, [stageRef]);
-
-  // Mus og styreflate går utenom touch-håndteringen over. Rullingen tar
-  // nettleseren seg av som før; her trengs bare sveipen.
+function useCalendarSwipe(onSwipe) {
   const origin = useRef(null);
+  const swiped = useRef(false);
+
   return {
     onPointerDown(event) {
-      if (event.pointerType === "touch") return;
       if (event.pointerType === "mouse" && event.button !== 0) return;
       swiped.current = false;
       origin.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
@@ -1001,7 +941,7 @@ function App() {
   const selectedDayEvents = eventsOnDay(calendarEvents, date);
   const plannedMinutes = selectedDayEvents.reduce((total, event) => total + Math.max(0, (+new Date(event.end) - +new Date(event.start)) / 60_000), 0);
   const calendarStage = useRef(null);
-  const calendarSwipe = useCalendarGestures(calendarStage, moveDate);
+  const calendarSwipe = useCalendarSwipe(moveDate);
   // Kalenderen henter nye arrangementer hvert halve minutt. Rullingen leser dem
   // fra en ref, ellers ville hvert svar fra Mac-en rykke flaten tilbake mens
   // Ole leser i den.
@@ -1022,6 +962,45 @@ function App() {
     stage.scrollTop = Math.round((calendarDayScrollMinute(day, events, new Date()) / DAY_MINUTES) * grid.offsetHeight);
   }, [view]);
 
+  // iPadOS avslutter fullskjerm når et nedoversveip ikke blir spist av siden.
+  // Så lenge kalenderen ikke kunne rulles, oppsto gesten aldri — nå ruller den,
+  // og hvert drag som traff toppen gikk rett videre til «sveip ned for å avslutte».
+  useEffect(() => {
+    const stage = calendarStage.current;
+    if (!stage) return;
+    let from = null;
+    const roomToScroll = () => stage.scrollHeight - stage.clientHeight;
+
+    function beginTouch(event) {
+      const touch = event.touches[0];
+      from = touch ? { x: touch.clientX, y: touch.clientY } : null;
+      // Står flaten helt i kanten, har rullingen ingenting å ta av og fingeren
+      // treffer systemet i stedet. Én piksel inn fra kanten har den det.
+      const room = roomToScroll();
+      if (room <= 0) return;
+      if (stage.scrollTop <= 0) stage.scrollTop = 1;
+      else if (stage.scrollTop >= room) stage.scrollTop = room - 1;
+    }
+
+    function holdTouch(event) {
+      const touch = event.touches[0];
+      if (!from || !touch || !event.cancelable) return;
+      // Vannrette drag er sveip mellom dager, og de skal fortsatt slippe frem.
+      if (Math.abs(touch.clientY - from.y) <= Math.abs(touch.clientX - from.x)) return;
+      const room = roomToScroll();
+      if (room > 0 && stage.scrollTop > 0 && stage.scrollTop < room) return;
+      // Ingenting igjen å rulle — måneden får plass på en høy skjerm — så her må
+      // vi selv si fra at gesten er brukt opp.
+      event.preventDefault();
+    }
+
+    stage.addEventListener("touchstart", beginTouch, { passive: true });
+    stage.addEventListener("touchmove", holdTouch, { passive: false });
+    return () => {
+      stage.removeEventListener("touchstart", beginTouch);
+      stage.removeEventListener("touchmove", holdTouch);
+    };
+  }, []);
   // Slår Fokus på Mac-en av/på. Med delt fokus følger iPhone og iPad etter.
   async function setFocusMode(enabled, { quiet = false } = {}) {
     if (enabled === focusModeActive) return true;
