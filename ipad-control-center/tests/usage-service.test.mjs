@@ -2,11 +2,37 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  claudeTokenError,
   normalizeClaudeUsage,
   normalizeCodexUsage,
   resolveCodexExecutable,
   summarizeClaudeRecords,
 } from "../server/usage-service.mjs";
+
+test("tar vare på hvorfor Claude avviste påloggingen, ikke bare statuskoden", async () => {
+  const error = await claudeTokenError({
+    status: 400,
+    json: async () => ({ error: "invalid_grant", error_description: "Refresh token has expired" }),
+  });
+  assert.equal(error.code, "invalid_grant");
+  assert.equal(error.status, 400);
+  assert.match(error.message, /Refresh token has expired/);
+});
+
+test("klarer seg med statuskoden når token-endepunktet ikke svarer med JSON", async () => {
+  const error = await claudeTokenError({ status: 503, json: async () => { throw new Error("ikke JSON"); } });
+  assert.equal(error.code, null);
+  assert.equal(error.message, "Claude-pålogging kunne ikke fornyes (503)");
+});
+
+test("slipper aldri hele svarkroppen videre, som kan bære tokenverdier", async () => {
+  const error = await claudeTokenError({
+    status: 400,
+    json: async () => ({ error: "invalid_grant", access_token: "sk-ant-hemmelig", refresh_token: "sk-ant-ogsa-hemmelig" }),
+  });
+  assert.equal(error.message.includes("sk-ant"), false);
+  assert.equal(JSON.stringify(error.code).includes("sk-ant"), false);
+});
 
 test("finds Codex outside the limited LaunchAgent PATH", () => {
   const executable = resolveCodexExecutable({

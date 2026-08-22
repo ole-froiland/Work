@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { isRepairableConnection, repairConnection } from "./server/connection-repair-service.mjs";
 import { getDeviceMetrics, updateDeviceMetrics } from "./server/device-metrics-service.mjs";
 import { runMacAction } from "./server/mac-action-service.mjs";
 import { getUsageSnapshot } from "./server/usage-service.mjs";
@@ -307,6 +308,30 @@ function macActionApi() {
   };
 }
 
+function connectionRepairApi() {
+  return {
+    name: "local-connection-repair-api",
+    configureServer(server) {
+      server.middlewares.use("/api/connections/repair", async (request, response) => {
+        if (request.method !== "POST") {
+          sendJson(response, 405, { error: "Method not allowed" });
+          return;
+        }
+        try {
+          const body = await readJsonBody(request);
+          if (!isRepairableConnection(body.id)) {
+            sendJson(response, 400, { ok: false, error: "Ukjent tilkobling" });
+            return;
+          }
+          sendJson(response, 200, await repairConnection(body.id));
+        } catch (error) {
+          sendJson(response, 400, { ok: false, error: error instanceof Error ? error.message : "Ukjent feil" });
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
   build: {
     outDir: "dist/client",
@@ -323,5 +348,5 @@ export default defineConfig({
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), spotifyApi(), macActionApi(), react()],
+  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), spotifyApi(), macActionApi(), connectionRepairApi(), react()],
 });

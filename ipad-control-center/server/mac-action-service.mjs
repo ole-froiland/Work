@@ -41,6 +41,27 @@ async function openInChrome(exec, action, url, label) {
   return { action, target: "chrome", label };
 }
 
+// Siste steget i en reparasjon som panelet ikke kan fullføre alene: Terminal
+// åpnes med kommandoen kjørende, slik at Ole bare må fullføre innloggingen i
+// nettleseren som spretter opp. Kommandoen er en fast tekst herfra og sendes
+// som argument til skriptet, aldri limt inn i det.
+async function openInTerminal(exec, action, command, label) {
+  try {
+    await exec("osascript", [
+      "-e", "on run {command}",
+      "-e", 'tell application "Terminal"',
+      "-e", "activate",
+      "-e", "do script command",
+      "-e", "end tell",
+      "-e", "end run",
+      command,
+    ]);
+  } catch (error) {
+    throw new Error(`Fikk ikke åpnet Terminal for ${label} (${firstErrorLine(error, "Terminal svarte ikke")})`);
+  }
+  return { action, target: "terminal", label, command };
+}
+
 function normalizeDeviceName(value) {
   const name = typeof value === "string" && value.trim() ? value.trim() : defaultMirrorDevice;
   if (name.length > 64 || !/^[\p{L}\p{N} ()'’·._-]+$/u.test(name)) throw new Error("Ugyldig enhetsnavn");
@@ -122,6 +143,16 @@ const macActions = {
   },
   async "private-accounts"(exec) {
     return openInChrome(exec, "private-accounts", chromeTargets["private-accounts"], "Privat regnskap");
+  },
+  async "calendar-privacy"(exec) {
+    await exec("open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"]);
+    return { action: "calendar-privacy", target: "settings", label: "Personvern → Kalendere" };
+  },
+  async "claude-login"(exec) {
+    return openInTerminal(exec, "claude-login", "claude", "Claude");
+  },
+  async "codex-login"(exec) {
+    return openInTerminal(exec, "codex-login", "codex login", "Codex");
   },
   async "screen-mirror"(exec, payload) {
     const device = normalizeDeviceName(payload?.device);

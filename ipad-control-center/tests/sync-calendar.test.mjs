@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeCalendarEvents, mutateMacAppleCalendar, normalizeSyncCalendar, readMacAppleCalendar } from "../server/sync-calendar-service.mjs";
+import { appleCalendarAccessMissing, mergeCalendarEvents, mutateMacAppleCalendar, normalizeSyncCalendar, readAppleCalendarNow, readMacAppleCalendar } from "../server/sync-calendar-service.mjs";
 import { normalizeSyncNoteCommand, normalizeSyncNotes } from "../server/sync-notes-service.mjs";
 
 test("normalizes and sorts trusted Sync calendar snapshots", () => {
@@ -93,4 +93,20 @@ test("normalizes active Sync notes and safe panel commands", () => {
   assert.deepEqual(normalizeSyncNoteCommand({ type: "create", title: " Ring Ola " }), { type: "create", title: "Ring Ola" });
   assert.deepEqual(normalizeSyncNoteCommand({ type: "complete", noteId: "note-1" }), { type: "complete", noteId: "note-1" });
   assert.equal(normalizeSyncNoteCommand({ type: "delete", noteId: "note-1" }), null);
+});
+
+test("en feilet kalenderlesing etterlater en lesbar årsak i stedet for stillhet", async () => {
+  const failing = async () => {
+    const error = new Error("Command failed");
+    error.stderr = "/usr/bin/osascript: line 4\nexecution error: Panelet mangler tilgang til Apple Kalender (-1743)";
+    throw error;
+  };
+  await assert.rejects(() => readAppleCalendarNow(failing), /mangler tilgang til Apple Kalender/);
+});
+
+test("kjenner igjen manglende kalendertilgang, som krever noe annet enn en omstart", () => {
+  assert.equal(appleCalendarAccessMissing("Panelet mangler tilgang til Apple Kalender"), true);
+  assert.equal(appleCalendarAccessMissing("Not authorized to send Apple events"), true);
+  assert.equal(appleCalendarAccessMissing("Kalender kjører ikke"), false);
+  assert.equal(appleCalendarAccessMissing(null), false);
 });

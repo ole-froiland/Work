@@ -248,6 +248,14 @@ class CodexRpcClient {
     }
     this.pending.clear();
   }
+
+  stop() {
+    const running = this.process;
+    this.process = null;
+    this.ready = null;
+    this.rejectAll(new Error("Codex app-server ble startet på nytt"));
+    running?.kill();
+  }
 }
 
 const codexClient = new CodexRpcClient();
@@ -269,6 +277,28 @@ async function saveClaudeCredentials(root) {
   ], { maxBuffer: 1024 * 1024 });
 }
 
+// «400» alene sender en til å lete etter feil sted. Token-endepunktet sier selv
+// hva det avviste, og forskjellen betyr alt: `invalid_grant` er en pålogging som
+// må fornyes for hånd, mens resten er panelets egen forespørsel som er gal.
+// Bare de to feltene slippes gjennom — aldri hele svarkroppen, som kan bære
+// tokenverdier.
+export async function claudeTokenError(response) {
+  let code = null;
+  let description = null;
+  try {
+    const body = await response.json();
+    if (typeof body?.error === "string") code = body.error.slice(0, 80);
+    if (typeof body?.error_description === "string") description = body.error_description.slice(0, 200);
+  } catch {
+    // Et svar uten JSON er like gyldig; da er statuskoden alt vi har.
+  }
+  const reason = description || code;
+  const error = new Error(`Claude-pålogging kunne ikke fornyes (${response.status}${reason ? `: ${reason}` : ""})`);
+  error.status = response.status;
+  error.code = code;
+  return error;
+}
+
 async function refreshClaudeCredentials(root) {
   const oauth = root.claudeAiOauth;
   const response = await fetch(CLAUDE_TOKEN_URL, {
@@ -280,7 +310,7 @@ async function refreshClaudeCredentials(root) {
       client_id: CLAUDE_CLIENT_ID,
     }),
   });
-  if (!response.ok) throw new Error(`Claude-pålogging kunne ikke fornyes (${response.status})`);
+  if (!response.ok) throw await claudeTokenError(response);
   const refreshed = await response.json();
   if (!refreshed.access_token) throw new Error("Claude returnerte ikke et nytt tilgangstoken");
   root.claudeAiOauth = {
@@ -365,7 +395,19 @@ function requestClaudeUsage(accessToken) {
 
 async function captureProvider(load) {
   try { return await load(); }
-  catch (error) { return { ok: false, error: errorMessage(error) }; }
+  catch (error) { return { ok: false, error: errorMessage(error), code: error?.code ?? null }; }
+}
+
+// Reparasjonen må få lov til å gå forbi minuttsperren; den kjører bare når Ole
+// selv har bedt om det, ikke på polling.
+export function resetClaudeThrottle() {
+  nextClaudeFetchAt = 0;
+}
+
+// En RPC-forbindelse som har stoppet opp blir stående død helt til noe river den
+// ned: `ensureStarted()` ser bare på om prosessen lever, ikke om den svarer.
+export function restartCodexClient() {
+  codexClient.stop();
 }
 
 async function loadSnapshot() {

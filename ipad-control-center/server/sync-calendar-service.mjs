@@ -11,7 +11,7 @@ const TONES = new Set(["violet", "emerald", "amber", "sky"]);
 const KINDS = new Set(["focus", "meeting", "launch", "deadline"]);
 const execFileAsync = promisify(execFile);
 const APPLE_CACHE_MS = 2 * 60 * 1000;
-let appleCache = { events: [], updatedAt: 0, ready: false };
+let appleCache = { events: [], updatedAt: 0, ready: false, error: null };
 let appleRefresh = null;
 
 function shortText(value, maximum) {
@@ -105,9 +105,10 @@ export async function getSyncCalendar() {
       events: mergeCalendarEvents(snapshot.events, appleCache.events),
       connected: true,
       stale: false,
+      appleError: null,
     };
   }
-  return snapshot;
+  return { ...snapshot, appleError: appleCache.error };
 }
 
 function refreshMacAppleCalendar() {
@@ -115,13 +116,47 @@ function refreshMacAppleCalendar() {
   if (Date.now() - appleCache.updatedAt < APPLE_CACHE_MS) return Promise.resolve();
   appleRefresh = readMacAppleCalendar()
     .then((events) => {
-      appleCache = { events, updatedAt: Date.now(), ready: true };
+      appleCache = { events, updatedAt: Date.now(), ready: true, error: null };
     })
-    .catch(() => {})
+    // Å svelge årsaken her gjorde enhver kalenderfeil til den samme tause
+    // «ikke tilkoblet». Lesingen får fortsatt lov til å feile stille, men den
+    // legger igjen hvorfor, slik at panelet kan si det og reparere riktig.
+    .catch((error) => {
+      appleCache = { ...appleCache, error: appleReadErrorMessage(error) };
+    })
     .finally(() => {
       appleRefresh = null;
     });
   return appleRefresh;
+}
+
+// osascript skriver hele skriptet til stderr når det feiler. Første linje med
+// tekst er den som sier hva som faktisk gikk galt.
+function appleReadErrorMessage(error) {
+  const raw = String(error?.stderr || error?.message || "");
+  const line = raw
+    .split("\n")
+    .map((value) => value.trim().replace(/^execution error:\s*/i, ""))
+    .find((value) => value && !value.startsWith("/usr/bin/osascript"));
+  return (line || "Kalenderlesingen svarte ikke").slice(0, 300);
+}
+
+// Brukes av reparasjonen: leser Apple Kalender nå, forbi cachevinduet, og lar
+// feilen boble opp i stedet for å gjemme den.
+export async function readAppleCalendarNow(runner) {
+  try {
+    const events = runner ? await readMacAppleCalendar(runner) : await readMacAppleCalendar();
+    appleCache = { events, updatedAt: Date.now(), ready: true, error: null };
+    return events;
+  } catch (error) {
+    const message = appleReadErrorMessage(error);
+    appleCache = { ...appleCache, error: message };
+    throw new Error(message);
+  }
+}
+
+export function appleCalendarAccessMissing(message) {
+  return /mangler tilgang|not authorized|denied/i.test(String(message ?? ""));
 }
 
 export function mergeCalendarEvents(cachedEvents = [], appleEvents = []) {

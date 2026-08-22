@@ -164,3 +164,32 @@ test("faller tilbake til Spotify Web når appen mangler", async () => {
   assert.deepEqual(calls[1], ["open", ["https://open.spotify.com"]]);
   assert.equal(result.target, "web");
 });
+
+test("kjenner de nye reparasjonshandlingene", () => {
+  assert.equal(isMacAction("calendar-privacy"), true);
+  assert.equal(isMacAction("claude-login"), true);
+  assert.equal(isMacAction("codex-login"), true);
+});
+
+test("åpner Terminal med kommandoen som argument, aldri limt inn i skriptet", async () => {
+  const calls = [];
+  const result = await runMacAction("claude-login", {
+    platform: "darwin",
+    exec: async (...args) => { calls.push(args); return { stdout: "", stderr: "" }; },
+  });
+  const [command, args] = calls.at(-1);
+  assert.equal(command, "osascript");
+  assert.equal(args.at(-1), "claude");
+  assert.equal(args.includes("do script command"), true);
+  assert.equal(args.some((value) => value.includes('do script "')), false);
+  assert.equal(result.target, "terminal");
+});
+
+test("åpner Personvern-ruta for kalendertilgang", async () => {
+  const calls = [];
+  await runMacAction("calendar-privacy", {
+    platform: "darwin",
+    exec: async (...args) => { calls.push(args); return { stdout: "", stderr: "" }; },
+  });
+  assert.deepEqual(calls.at(-1), ["open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"]]);
+});
