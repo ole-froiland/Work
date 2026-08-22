@@ -222,7 +222,7 @@ function AgentActivityCard({ snapshot, now }) {
               <strong title={`${session.title} · ${session.project}`}>{session.title}</strong>
               <span className="agent-row-meta">
                 <small className="agent-folder"><FolderOpen size={13} weight="fill" />{session.project || "Ukjent mappe"}</small>
-                <i className={`agent-chip is-${session.tone}`}>{session.label}</i>
+                {session.tone !== "done" && <i className={`agent-chip is-${session.tone}`}>{session.label}</i>}
                 <small>{session.detail}</small>
               </span>
             </span>

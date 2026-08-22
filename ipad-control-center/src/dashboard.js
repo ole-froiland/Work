@@ -301,13 +301,12 @@ const AGENT_STATES = {
 export function describeAgentSession(session, now = new Date()) {
   const state = AGENT_STATES[session?.state] ?? { label: "Ukjent", tone: "done" };
   const age = formatAgentAge(session?.lastActivityAt, now);
+  // Merkelappen sier allerede tilstanden. Detaljen skal si det merkelappen ikke
+  // sier — hva økta driver med, og hvor lenge siden. «FERDIG» ved siden av
+  // «Fullført» er det samme ordet to ganger, og det stjal plassen fra tittelen.
   const detail = session?.state === "working"
     ? `${session.subagent ? "Underagent jobber" : session.activity ?? "Tenker"} · ${age}`
-    : session?.state === "stalled"
-      ? `Stoppet uten svar · ${age}`
-      : session?.state === "needs_input"
-        ? `Venter på svar · ${age}`
-        : `Fullført · ${age}`;
+    : age;
   return {
     id: session?.id,
     provider: session?.provider,

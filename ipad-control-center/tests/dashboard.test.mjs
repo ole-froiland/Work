@@ -381,7 +381,9 @@ test("answers whether Claude is working, and on how many tasks", () => {
   assert.equal(summary.sessions[0].detail, "Endrer filer · nå");
   assert.equal(summary.sessions[1].detail, "Kjører kommandoer · 2 min siden");
   assert.equal(summary.sessions[2].project, "test12");
-  assert.equal(summary.sessions[2].detail, "Fullført · 1 time siden");
+  // Raden har allerede merkelappen «Ferdig». Detaljen sier bare når.
+  assert.equal(summary.sessions[2].detail, "1 time siden");
+  assert.equal(summary.sessions[2].label, "Ferdig");
 });
 
 test("counts both assistants together when Codex is running too", () => {
@@ -417,8 +419,26 @@ test("marks a session that stopped mid-task instead of showing it as active", ()
   }, now);
 
   assert.equal(summary.headline, "1 oppgave er avsluttet");
-  assert.equal(summary.sessions[0].detail, "Stoppet uten svar · 20 min siden");
+  assert.equal(summary.sessions[0].detail, "20 min siden");
+  assert.equal(summary.sessions[0].label, "Avsluttet");
   assert.equal(summary.sessions[0].tone, "ended");
+});
+
+test("never repeats the state chip in the line under it", () => {
+  const now = new Date("2026-08-21T12:00:00.000Z");
+  const summary = summarizeAgentSessions({
+    ok: true,
+    sessions: [
+      { id: "a", provider: "claude", state: "done", title: "Ferdig", lastActivityAt: "2026-08-21T11:00:00.000Z" },
+      { id: "b", provider: "codex", state: "needs_input", title: "Spør", lastActivityAt: "2026-08-21T11:55:00.000Z" },
+      { id: "c", provider: "claude", state: "stalled", title: "Stoppet", lastActivityAt: "2026-08-21T11:30:00.000Z" },
+    ],
+  }, now);
+
+  for (const session of summary.sessions) {
+    assert.equal(session.detail.includes("·"), false, `${session.title} gjentar tilstanden`);
+    assert.match(session.detail, /siden$/);
+  }
 });
 
 test("shows the panel error instead of pretending nothing runs", () => {
