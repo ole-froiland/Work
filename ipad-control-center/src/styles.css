@@ -21,14 +21,14 @@
   --tile: clamp(58px, 5.6vw, 74px);
   /* Musikkortet og «neste aktivitet» deler høyde på hver sin side av kalenderen. */
   --media-card: 122px;
-  /* Luft rundt hele dashbordet. Lagt til på Hjem-skjermen legger iPad-en
-     statuslinja med klokke, wifi og batteri oppå innholdet, og da delte den plass
-     med den øverste knapperaden. Sikkerhetssonen kommer i tillegg til luften, så
-     statuslinja får sin egen stripe og knappene begynner under den. På Mac er
-     `env()` null, og alt står som før. */
+  /* Luft rundt hele dashbordet. Bare toppen får sikkerhetssonen i tillegg:
+     legger iPad-en statuslinja over innholdet, deler klokka plass med den øverste
+     knapperaden. Bunnen holder seg til den vanlige luften — hjemindikatoren er en
+     tynn strek panelet gjerne går under, og la vi sonen til der, endte dashbordet
+     et godt stykke over skjermkanten. På Mac er `env()` null hele veien rundt. */
   --shell-gap: 14px;
   --shell-top: calc(var(--shell-gap) + env(safe-area-inset-top, 0px));
-  --shell-bottom: calc(var(--shell-gap) + env(safe-area-inset-bottom, 0px));
+  --shell-bottom: var(--shell-gap);
   --shell-left: calc(var(--shell-gap) + env(safe-area-inset-left, 0px));
   --shell-right: calc(var(--shell-gap) + env(safe-area-inset-right, 0px));
   --shell-height: calc(100dvh - var(--shell-top) - var(--shell-bottom));
