@@ -961,46 +961,6 @@ function App() {
     const { date: day, events } = dayContext.current;
     stage.scrollTop = Math.round((calendarDayScrollMinute(day, events, new Date()) / DAY_MINUTES) * grid.offsetHeight);
   }, [view]);
-
-  // iPadOS avslutter fullskjerm når et nedoversveip ikke blir spist av siden.
-  // Så lenge kalenderen ikke kunne rulles, oppsto gesten aldri — nå ruller den,
-  // og hvert drag som traff toppen gikk rett videre til «sveip ned for å avslutte».
-  useEffect(() => {
-    const stage = calendarStage.current;
-    if (!stage) return;
-    let from = null;
-    const roomToScroll = () => stage.scrollHeight - stage.clientHeight;
-
-    function beginTouch(event) {
-      const touch = event.touches[0];
-      from = touch ? { x: touch.clientX, y: touch.clientY } : null;
-      // Står flaten helt i kanten, har rullingen ingenting å ta av og fingeren
-      // treffer systemet i stedet. Én piksel inn fra kanten har den det.
-      const room = roomToScroll();
-      if (room <= 0) return;
-      if (stage.scrollTop <= 0) stage.scrollTop = 1;
-      else if (stage.scrollTop >= room) stage.scrollTop = room - 1;
-    }
-
-    function holdTouch(event) {
-      const touch = event.touches[0];
-      if (!from || !touch || !event.cancelable) return;
-      // Vannrette drag er sveip mellom dager, og de skal fortsatt slippe frem.
-      if (Math.abs(touch.clientY - from.y) <= Math.abs(touch.clientX - from.x)) return;
-      const room = roomToScroll();
-      if (room > 0 && stage.scrollTop > 0 && stage.scrollTop < room) return;
-      // Ingenting igjen å rulle — måneden får plass på en høy skjerm — så her må
-      // vi selv si fra at gesten er brukt opp.
-      event.preventDefault();
-    }
-
-    stage.addEventListener("touchstart", beginTouch, { passive: true });
-    stage.addEventListener("touchmove", holdTouch, { passive: false });
-    return () => {
-      stage.removeEventListener("touchstart", beginTouch);
-      stage.removeEventListener("touchmove", holdTouch);
-    };
-  }, []);
   // Slår Fokus på Mac-en av/på. Med delt fokus følger iPhone og iPad etter.
   async function setFocusMode(enabled, { quiet = false } = {}) {
     if (enabled === focusModeActive) return true;
