@@ -20,8 +20,8 @@ struct MetricsPayload: Encodable {
     struct Source: Encodable { let provider: String; let observedAt: Date }
 
     let screenTime: ScreenTime?
-    let steps: Steps
-    let location: Location
+    let steps: Steps?
+    let location: Location?
     let sources: [String: Source]
     let deviceName: String
 }
@@ -63,23 +63,55 @@ final class MetricsSyncModel: ObservableObject {
             if requestPermissions {
                 try await requestPermissionsForSources()
             }
-            async let steps = fetchStepMetrics()
-            async let location = locationProvider.currentLocation()
-            let values = try await (steps, location)
+            // Kildene hentes samtidig, men de deler ikke lenger skjebne. Før sto
+            // det `try await (steps, location)`, og da rev den første som feilet
+            // med seg de andre: en posisjon som ikke fikk kontakt innendørs
+            // stoppet skrittene og skjermtiden også, og panelet gikk tomt på alt
+            // sammen samtidig uten at noe forklarte hvorfor.
+            async let pendingSteps = fetchStepMetrics()
+            async let pendingLocation = locationProvider.currentLocation()
+
+            var problems: [String] = []
+            var steps: (today: Double, weeklyAverage: Double)?
+            var location: LocationProvider.Value?
+
             // Statusen skal vise om kilden svarte, ikke om opplastingen gikk
             // gjennom. Sto de på «Ikke godkjent» til etter upload, så det ut som
             // manglende tillatelser når feilen i virkeligheten var adressen.
-            stepsStatus = "Klar"
-            locationStatus = "Klar"
+            do {
+                steps = try await pendingSteps
+                stepsStatus = "Klar"
+            } catch {
+                stepsStatus = "Feilet"
+                problems.append("Skritt: \(error.localizedDescription)")
+            }
+            do {
+                location = try await pendingLocation
+                locationStatus = "Klar"
+            } catch {
+                locationStatus = "Feilet"
+                problems.append("Posisjon: \(error.localizedDescription)")
+            }
+
             #if PANEL_USAGE_EXPORT
-            let screenTime = try await fetchScreenTime()
-            screenTimeStatus = "Klar"
+            var screenTime: (social: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage])?
+            do {
+                screenTime = try await fetchScreenTime()
+                screenTimeStatus = "Klar"
+            } catch {
+                screenTimeStatus = "Feilet"
+                problems.append("Skjermtid: \(error.localizedDescription)")
+            }
             #else
             let screenTime: (social: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage])? = nil
             screenTimeStatus = "Krever Xcode 26.4+"
             #endif
-            try await upload(screenTime: screenTime, steps: values.0, location: values.1)
+
+            try await upload(screenTime: screenTime, steps: steps, location: location)
             lastSync = .now
+            // Delvis sendt er ikke det samme som vellykket. Sto feltet tomt her,
+            // ville en kilde som svikter hver gang aldri bli nevnt med et ord.
+            errorMessage = problems.isEmpty ? nil : problems.joined(separator: " · ")
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -187,23 +219,30 @@ final class MetricsSyncModel: ObservableObject {
 
     private func upload(
         screenTime: (social: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage])?,
-        steps: (today: Double, weeklyAverage: Double),
-        location: LocationProvider.Value
+        steps: (today: Double, weeklyAverage: Double)?,
+        location: LocationProvider.Value?
     ) async throws {
+        // Sviktet alle tre, er det ingenting å si. Da skal feilen stå igjen fra
+        // kildene i stedet for å bli overskrevet av et vellykket tomt kall.
+        guard screenTime != nil || steps != nil || location != nil else {
+            throw SyncError.nothingToSend
+        }
         guard let url = URL(string: endpoint), url.host?.hasSuffix(".local") == true || url.host?.isPrivateNetworkAddress == true else {
             throw SyncError.invalidLocalEndpoint
         }
         UserDefaults.standard.set(endpoint, forKey: "panelEndpoint")
         let now = Date.now
-        var sources: [String: MetricsPayload.Source] = [
-            "steps": .init(provider: "HealthKit", observedAt: now),
-            "location": .init(provider: "CoreLocation", observedAt: location.observedAt),
-        ]
+        // Bare kildene som faktisk svarte føres opp. Panelet måler ferskhet per
+        // kilde, så en oppføring uten tall bak ville fått resten til å se friskt
+        // ut mens tallet manglet.
+        var sources: [String: MetricsPayload.Source] = [:]
+        if steps != nil { sources["steps"] = .init(provider: "HealthKit", observedAt: now) }
+        if let location { sources["location"] = .init(provider: "CoreLocation", observedAt: location.observedAt) }
         if screenTime != nil { sources["screenTime"] = .init(provider: "DeviceActivity", observedAt: now) }
         let payload = MetricsPayload(
             screenTime: screenTime.map { .init(socialMinutes: $0.social, socialWeeklyAverageMinutes: $0.weeklyAverage, topApps: $0.topApps) },
-            steps: .init(today: steps.today, weeklyAverage: steps.weeklyAverage),
-            location: .init(label: location.label, latitude: location.coordinate.latitude, longitude: location.coordinate.longitude),
+            steps: steps.map { .init(today: $0.today, weeklyAverage: $0.weeklyAverage) },
+            location: location.map { .init(label: $0.label, latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude) },
             sources: sources,
             deviceName: UIDevice.current.name
         )
@@ -243,6 +282,7 @@ enum SyncError: LocalizedError {
     case screenTimeDataAccessRequired
     case invalidLocalEndpoint
     case dashboardRejected
+    case nothingToSend
 
     var errorDescription: String? {
         switch self {
@@ -250,6 +290,7 @@ enum SyncError: LocalizedError {
         case .screenTimeDataAccessRequired: "Gi full tilgang til app- og nettstedbruk for å hente nøyaktig skjermtid."
         case .invalidLocalEndpoint: "Dashboard-adressen må være en lokal .local- eller privat nettverksadresse."
         case .dashboardRejected: "Dashboardet avviste synkroniseringen. Kontroller at Mac-en og mobilen er på samme nettverk."
+        case .nothingToSend: "Ingen av kildene svarte, så det var ingenting å sende."
         }
     }
 }
