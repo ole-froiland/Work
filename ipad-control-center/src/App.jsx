@@ -69,6 +69,13 @@ function isStandaloneApp() {
   return Boolean(window.navigator.standalone) || window.matchMedia("(display-mode: standalone)").matches;
 }
 
+// Safaris fullskjerm kan sveipes bort med et drag nedover, og den gesten er
+// systemets — `touch-action` og `preventDefault` kommer ikke rundt den. Fra
+// Hjem-skjermen finnes det ingen fullskjerm å avslutte, så der er den borte.
+function canSwipeOutOfFullscreen() {
+  return !isStandaloneApp() && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+}
+
 function fullscreenElement() {
   return document.fullscreenElement || document.webkitFullscreenElement || null;
 }
@@ -1043,12 +1050,19 @@ function App() {
   }
 
   async function toggleFullscreen() {
+    const entering = !fullscreenElement();
     try {
-      await setFullscreen(!fullscreenElement());
+      await setFullscreen(entering);
     } catch (error) {
       setToast(error.message === "unsupported" ? "Fullskjerm støttes ikke i denne nettleseren" : "Nettleseren blokkerte fullskjerm");
     }
-    setIsFullscreen(Boolean(fullscreenElement()));
+    const active = Boolean(fullscreenElement());
+    setIsFullscreen(active);
+    // Panelet hopper ut av fullskjerm ved et sveip nedover, og det ser ut som en
+    // feil i panelet. Si hvor det kommer fra der man møter det.
+    if (entering && active && canSwipeOutOfFullscreen()) {
+      setToast("Safari lukker fullskjerm ved sveip ned. Legg panelet på Hjem-skjermen, så er gesten borte.");
+    }
   }
 
   // Én reparasjon per rad. Kilden hentes på nytt med én gang sekvensen er ferdig,

@@ -188,6 +188,12 @@ Skal panelet stå urokkelig, er det to grep utenfor koden:
 
 Sammen gir de et panel som blir stående til noen bevisst tar det ut.
 
+Panelet sier dette selv: går du i fullskjerm fra Safari på en berøringsskjerm,
+forteller det med én gang at gesten finnes og hvor man blir kvitt den. På Mac og
+i standalone-modus er meldingen borte, siden den ikke gjelder der.
+`public/apple-touch-icon.png` er ikonet Hjem-skjermen bruker — uten det lager iOS
+et utsnitt av siden i stedet.
+
 ## Neste aktivitet
 
 Kortet mellom Mac-snarveiene og fokusøkten henter neste avtale fra Apple Kalender og
