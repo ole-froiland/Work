@@ -943,7 +943,10 @@ function App() {
     ? "Installer på nytt"
     : describeSyncAge(deviceMetrics?.sources?.screenTime, now, "Device Activity · iPhone + iPad");
   const stepsAge = describeSyncAge(deviceMetrics?.sources?.steps, now, "HealthKit · Apple Helse");
-  const hasLocationSource = deviceMetrics?.sources?.location?.provider === "CoreLocation";
+  // Om posisjonen er fersk nok til å brukes, ikke om telefonen en gang sendte
+  // en. Serveren faller tilbake til Mosterøy etter et døgn, og det skal kortet
+  // si fra om i stedet for å påstå at været gjelder der Ole står.
+  const hasLocationSource = deviceMetrics?.weather?.locationSource === "device";
   const calendarEvents = Array.isArray(syncCalendar.events) ? syncCalendar.events : [];
   const selectedDayEvents = eventsOnDay(calendarEvents, date);
   const plannedMinutes = selectedDayEvents.reduce((total, event) => total + Math.max(0, (+new Date(event.end) - +new Date(event.start)) / 60_000), 0);

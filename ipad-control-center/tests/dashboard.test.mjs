@@ -163,7 +163,7 @@ test("builds honest metric details from synced device values", () => {
   const metrics = {
     screenTime: { socialMinutes: 304, socialWeeklyAverageMinutes: 300, topApps: [{ name: "Instagram", minutes: 91 }] },
     steps: { today: 158, weeklyAverage: 797 },
-    weather: { ok: true, label: "Mosterøy", temperature: 19, apparentTemperature: 18, condition: "Overskyet" },
+    weather: { ok: true, label: "Mosterøy", temperature: 19, apparentTemperature: 18, condition: "Overskyet", locationSource: "device" },
     sources: {
       screenTime: { observedAt: "2026-08-12T12:00:00+02:00" },
       steps: { observedAt: "2026-08-12T12:00:00+02:00" },
@@ -175,6 +175,16 @@ test("builds honest metric details from synced device values", () => {
   assert.deepEqual(buildMetricDetails("screenTime", metrics).apps, [{ name: "Instagram", icon: "instagram", value: "1 t 31 min" }]);
   assert.deepEqual(buildMetricDetails("steps", metrics).rows[2], ["Mot snittet", "80 % under snittet"]);
   assert.deepEqual(buildMetricDetails("weather", metrics).rows[3], ["Posisjonskilde", "iPhone"]);
+});
+
+test("admits the weather is the fallback once the phone's position goes stale", () => {
+  // Kilden blir stående i mellomlageret lenge etter at posisjonen er for gammel
+  // til å brukes. Spør man den, sier kortet «iPhone» mens det viser Mosterøy.
+  const metrics = {
+    weather: { ok: true, label: "Mosterøy", temperature: 13, apparentTemperature: 8, condition: "Overskyet", locationSource: "fallback" },
+    sources: { location: { provider: "CoreLocation", observedAt: "2026-08-21T14:22:54.000Z" } },
+  };
+  assert.deepEqual(buildMetricDetails("weather", metrics).rows[3], ["Posisjonskilde", "Mosterøy-reserve"]);
 });
 
 function localEvent(id, startHour, endHour, extra = {}) {

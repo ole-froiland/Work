@@ -554,7 +554,12 @@ export function buildMetricDetails(type, metrics = {}) {
       ["Forhold", weather.ok ? weather.condition : "Vær utilgjengelig"],
       ["Føles som", weather.ok && Number.isFinite(weather.apparentTemperature) ? `${Math.round(weather.apparentTemperature)}°` : "Ikke oppgitt"],
       ["Posisjon", weather.label || "Ikke oppgitt"],
-      ["Posisjonskilde", metrics.sources?.location?.provider === "CoreLocation" ? "iPhone" : "Mosterøy-reserve"],
+      // Serveren har allerede avgjort dette og sier «device» eller «fallback».
+      // Spurte vi i stedet om telefonen noen gang hadde sendt en posisjon, ble
+      // svaret aldri nei igjen: kilden blir stående i mellomlageret lenge etter
+      // at posisjonen er for gammel til å brukes, og da sa kortet «iPhone» mens
+      // det viste været på Mosterøy.
+      ["Posisjonskilde", weather.locationSource === "device" ? "iPhone" : "Mosterøy-reserve"],
     ],
   };
 }
