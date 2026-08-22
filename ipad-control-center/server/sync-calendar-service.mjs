@@ -155,6 +155,40 @@ export async function readAppleCalendarNow(runner) {
   }
 }
 
+// Å be om tilgang er den ene måten å få fram macOS-dialogen på. Å lete etter
+// riktig rad i Personvern er noe helt annet enn å trykke «Tillat» på en dialog
+// som allerede står der, så panelet spør før det sender Ole inn i innstillinger.
+// EventKit svarer via en blokk, og osascript avslutter med en gang skriptet er
+// ferdig, så kjøresløyfa må holdes i live til svaret kommer.
+export async function requestAppleCalendarAccess(runner = execFileAsync) {
+  const script = `
+    function run() {
+      ObjC.import('EventKit');
+      ObjC.import('Foundation');
+      const store = $.EKEventStore.alloc.init;
+      let finished = false;
+      let granted = false;
+      store.requestFullAccessToEventsWithCompletion(function (ok) {
+        granted = ok;
+        finished = true;
+      });
+      const deadline = Date.now() + 45000;
+      while (!finished && Date.now() < deadline) {
+        $.NSRunLoop.currentRunLoop.runModeBeforeDate(
+          $.NSDefaultRunLoopMode,
+          $.NSDate.dateWithTimeIntervalSinceNow(0.2)
+        );
+      }
+      return JSON.stringify({ asked: finished, granted: Boolean(granted) });
+    }
+  `;
+  const { stdout } = await runner("/usr/bin/osascript", ["-l", "JavaScript", "-e", script], {
+    timeout: 60_000,
+    maxBuffer: 64 * 1024,
+  });
+  return JSON.parse(stdout.trim());
+}
+
 export function appleCalendarAccessMissing(message) {
   return /mangler tilgang|not authorized|denied/i.test(String(message ?? ""));
 }

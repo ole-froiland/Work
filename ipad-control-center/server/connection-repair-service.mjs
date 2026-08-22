@@ -3,11 +3,14 @@ import { promisify } from "node:util";
 
 import { getDeviceMetrics } from "./device-metrics-service.mjs";
 import { runMacAction } from "./mac-action-service.mjs";
-import { appleCalendarAccessMissing, describeCalendarAccess, readAppleCalendarNow } from "./sync-calendar-service.mjs";
+import { appleCalendarAccessMissing, describeCalendarAccess, readAppleCalendarNow, requestAppleCalendarAccess } from "./sync-calendar-service.mjs";
 import { getSyncNotes } from "./sync-notes-service.mjs";
 import { getUsageSnapshot, resetClaudeThrottle, restartCodexClient } from "./usage-service.mjs";
 
 const DEADLINE_MS = 20_000;
+// Kalenderen kan bli stående og vente på at Ole svarer på en systemdialog. De
+// sekundene er ikke panelet som henger, så den får sitt eget tak.
+const DEADLINE_OVERRIDES = { calendar: 60_000 };
 const NOTES_ATTEMPTS = 10;
 const CALENDAR_ATTEMPTS = 3;
 const running = new Map();
@@ -15,6 +18,7 @@ const running = new Map();
 const defaults = {
   exec: promisify(execFile),
   readAppleCalendarNow,
+  requestAppleCalendarAccess,
   getSyncNotes,
   getDeviceMetrics,
   getUsageSnapshot,
@@ -43,14 +47,7 @@ const sequences = {
       return { ok: true, detail: eventCount(events), steps: [step("Leste Apple Kalender på nytt", true)] };
     } catch (error) {
       steps.push(step("Leste Apple Kalender på nytt", false, error.message));
-      if (appleCalendarAccessMissing(error.message)) {
-        return {
-          ok: false,
-          detail: describeCalendarAccess(error.message),
-          steps,
-          next: { action: "calendar-privacy", label: "Åpne Personvern → Kalendere" },
-        };
-      }
+      if (appleCalendarAccessMissing(error.message)) return askForCalendarAccess(tools, steps, error.message);
     }
 
     try {
@@ -190,6 +187,37 @@ const sequences = {
   },
 };
 
+// Dialogen kommer bare når macOS mener det er noe å spørre om. Svarer den nei
+// uten å ha spurt, er valget allerede tatt og må endres i Personvern.
+async function askForCalendarAccess(tools, steps, message) {
+  const stuck = {
+    ok: false,
+    detail: describeCalendarAccess(message),
+    steps,
+    next: { action: "calendar-privacy", label: "Åpne Personvern → Kalendere" },
+  };
+  let answer;
+  try {
+    answer = await tools.requestAppleCalendarAccess();
+  } catch (error) {
+    steps.push(step("Ba om kalendertilgang", false, firstLine(error)));
+    return stuck;
+  }
+  if (!answer?.granted) {
+    steps.push(step("Ba om kalendertilgang", false, answer?.asked ? "Tilgang ble ikke gitt" : "macOS spurte ikke"));
+    return stuck;
+  }
+  steps.push(step("Ba om kalendertilgang", true));
+  try {
+    const events = await tools.readAppleCalendarNow();
+    steps.push(step("Leste Apple Kalender på nytt", true));
+    return { ok: true, detail: eventCount(events), steps };
+  } catch (error) {
+    steps.push(step("Leste Apple Kalender på nytt", false, error.message));
+    return { ...stuck, detail: describeCalendarAccess(error.message) };
+  }
+}
+
 function noteCount(notes) {
   const count = Array.isArray(notes) ? notes.length : 0;
   return `${count} ${count === 1 ? "notat" : "notater"} hentet`;
@@ -217,7 +245,7 @@ export async function repairConnection(id, overrides = {}) {
   if (existing) return existing;
 
   const tools = { ...defaults, ...overrides };
-  const deadline = tools.deadlineMs ?? DEADLINE_MS;
+  const deadline = tools.deadlineMs ?? DEADLINE_OVERRIDES[id] ?? DEADLINE_MS;
   let timer;
   const attempt = Promise.race([
     sequences[id](tools),

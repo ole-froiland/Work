@@ -247,3 +247,40 @@ test("en avbrutt innlogging får samme knapp som et utløpt token", async () => 
   assert.equal(result.detail, "Ingen er logget inn i Claude på Mac-en");
   assert.equal(result.next.action, "claude-login");
 });
+
+test("ber om kalendertilgang før den sender deg inn i Personvern", async () => {
+  const order = [];
+  let reads = 0;
+  const result = await repairConnection("calendar", tools({
+    readAppleCalendarNow: async () => {
+      reads += 1;
+      order.push("les");
+      if (reads === 1) throw new Error("Panelet mangler tilgang til Apple Kalender (status 4)");
+      return [{ id: "a" }, { id: "b" }];
+    },
+    requestAppleCalendarAccess: async () => { order.push("spør"); return { asked: true, granted: true }; },
+  }));
+  assert.deepEqual(order, ["les", "spør", "les"]);
+  assert.equal(result.ok, true);
+  assert.equal(result.detail, "2 hendelser hentet");
+});
+
+test("faller tilbake til Personvern når macOS ikke spør", async () => {
+  const result = await repairConnection("calendar", tools({
+    readAppleCalendarNow: async () => { throw new Error("Panelet mangler tilgang til Apple Kalender (status 4)"); },
+    requestAppleCalendarAccess: async () => ({ asked: false, granted: false }),
+  }));
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /bare skrivetilgang/);
+  assert.equal(result.next.action, "calendar-privacy");
+  assert.equal(result.steps.at(-1).detail, "macOS spurte ikke");
+});
+
+test("en dialog som blir avvist ender også i Personvern", async () => {
+  const result = await repairConnection("calendar", tools({
+    readAppleCalendarNow: async () => { throw new Error("Panelet mangler tilgang til Apple Kalender (status 2)"); },
+    requestAppleCalendarAccess: async () => ({ asked: true, granted: false }),
+  }));
+  assert.equal(result.next.action, "calendar-privacy");
+  assert.equal(result.steps.at(-1).detail, "Tilgang ble ikke gitt");
+});
