@@ -198,7 +198,11 @@ Skal panelet stå urokkelig, er det to grep utenfor koden:
 
 - **Legg det på Hjem-skjermen** (Del → «Legg til på Hjem-skjerm»). Da kjører det i
   standalone-modus: ingen Safari-kontroller, ingen fullskjerm å avslutte, og ingen
-  sveipegest. `isStandaloneApp()` skjuler Utvid-knappen automatisk der.
+  sveipegest. `isStandaloneApp()` skjuler Utvid-knappen automatisk der. Statuslinja
+  får sin egen stripe over panelet — `apple-mobile-web-app-status-bar-style` står på
+  `black`, og `--shell-top` i `styles.css` legger sikkerhetssonen til luften rundt.
+  Med `black-translucent` la iPad-en klokke, wifi og batteri rett oppå den øverste
+  knapperaden.
 - **Slå på Veiledet tilgang** (Innstillinger → Tilgjengelighet → Veiledet tilgang).
   Da låses iPad-en til appen, og det kreves trippelklikk og kode for å komme ut.
 
