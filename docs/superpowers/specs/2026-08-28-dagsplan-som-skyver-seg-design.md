@@ -188,8 +188,10 @@ Nye tester i `tests/dashboard.test.mjs` for `planDay`, kjørt av `npm test`:
 - kortere bolk etter en droppet bolk får fortsatt plass
 - heldagsavtale teller ikke som anker
 
-Ny testfil `tests/wake.test.mjs` for endepunktet: avvist tidspunkt fram i tid,
-avvist dato som ikke er i dag, `manual` overskrives ikke av `usage`.
+Ny testfil `tests/day-plan.test.mjs` for tjenesten: avvist tidspunkt fram i tid,
+avvist dato som ikke er i dag, ukjent kilde avvist, mal uten gyldige klokkeslett
+forkastet, og `manual` som ikke overskrives av `usage`. Malen og oppvåkningen
+leses alltid sammen, så de deler tjeneste og testfil.
 
 ## Kjent begrensning
 
