@@ -13,7 +13,7 @@ function hostLabel(url) {
 // halve sekundet den sjekker om panelet kjører på maskinen den åpnes fra;
 // «choose» kommer når forrige adresse ikke svarte, og er hele grunnen til at en
 // Mac som ikke er tilgjengelig ikke lenger er en blank skjerm.
-export function PanelEntry({ state = "connecting", target = null, failedUrl = null, candidates = [], onOpen }) {
+export function PanelEntry({ state = "connecting", target = null, previousUrl = null, failedUrl = null, candidates = [], onOpen }) {
   const [custom, setCustom] = useState("");
   const [error, setError] = useState(null);
   const choosing = state === "choose";
@@ -41,7 +41,9 @@ export function PanelEntry({ state = "connecting", target = null, failedUrl = nu
           </p>
         ) : (
           <p className="panel-entry-lead">
-            {target ? `Åpner ${hostLabel(target)}. Svarer den ikke, får du velge en annen adresse.` : "Ser etter Mac-en …"}
+            {previousUrl ? `${hostLabel(previousUrl)} svarte ikke. Prøver ${hostLabel(target)} …` : null}
+            {!previousUrl && target ? `Åpner ${hostLabel(target)}. Svarer den ikke, prøves de andre adressene.` : null}
+            {!previousUrl && !target ? "Ser etter Mac-en …" : null}
           </p>
         )}
 

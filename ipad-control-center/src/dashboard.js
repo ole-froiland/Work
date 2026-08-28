@@ -186,6 +186,15 @@ export function planPanelEntry({ location = {}, storage = null, session = null, 
   return { mode: "chooser", candidates, failedUrl: null };
 }
 
+// Henger et hopp, lever siden fortsatt, og da er det ingen grunn til å spørre om
+// noe siden kan prøve selv: neste adresse i lista tas automatisk. Det er dette
+// som gjør at en iPad som har husket .local og drar på mobildata finner veien
+// via tailnettet uten at noen rører den.
+export function nextPanelCandidate(candidates = [], tried = []) {
+  const used = new Set(tried);
+  return candidates.find((candidate) => !used.has(candidate.url)) ?? null;
+}
+
 // Selve hoppet til Mac-en, med begge feilene et hopp kan ha: adressen som ikke
 // finnes (nettleseren viser sin egen feilside, og Ole kommer tilbake hit), og
 // adressen som aldri svarer (ingenting skjer i det hele tatt). Den siste er den

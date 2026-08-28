@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.jsx";
 import { PanelEntry } from "./PanelEntry.jsx";
-import { createPanelOpener, isPanelReachable, LOOPBACK_PANEL_URL, planPanelEntry } from "./dashboard.js";
+import { createPanelOpener, isPanelReachable, LOOPBACK_PANEL_URL, nextPanelCandidate, planPanelEntry } from "./dashboard.js";
 import "./styles.css";
 
 const root = createRoot(document.getElementById("root"));
@@ -12,6 +12,8 @@ const plan = planPanelEntry({
   session: window.sessionStorage,
 });
 
+const tried = [];
+
 function showChooser(failedUrl) {
   root.render(<PanelEntry state="choose" failedUrl={failedUrl} candidates={plan.candidates} onOpen={openPanel} />);
 }
@@ -20,11 +22,22 @@ const openPanel = createPanelOpener({
   location: window.location,
   storage: window.localStorage,
   session: window.sessionStorage,
-  // Henger navigeringen, lever denne siden fortsatt. Da avbrytes forsøket i
-  // stedet for å la fanen spinne over en tom side i det uendelige.
+  // Henger navigeringen, lever denne siden fortsatt. Da avbrytes forsøket, og
+  // neste adresse prøves av seg selv — en iPad som har husket .local og drar på
+  // mobildata skal finne veien via tailnettet uten at noen rører den. Først når
+  // ingen adresser står igjen, er det noe å spørre om.
   onStalled: (url) => {
     window.stop();
-    showChooser(url);
+    tried.push(url);
+    const next = nextPanelCandidate(plan.candidates, tried);
+    if (!next) {
+      showChooser(url);
+      return;
+    }
+    root.render(
+      <PanelEntry state="connecting" target={next.url} previousUrl={url} candidates={plan.candidates} onOpen={openPanel} />,
+    );
+    openPanel(next.url);
   },
 });
 

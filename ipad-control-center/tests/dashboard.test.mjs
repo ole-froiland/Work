@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createPanelOpener, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeNextEvent, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, notePanelAttempt, panelHostCandidates, planPanelEntry, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
+import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeNextEvent, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, notePanelAttempt, panelHostCandidates, planPanelEntry, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
 
 function fakeStorage(seed = {}) {
   const values = new Map(Object.entries(seed));
@@ -251,6 +251,20 @@ test("tilbyr en adresse for hvert nett panelet kan åpnes fra", () => {
   ]);
   // Er den lagrede adressen allerede i lista, skal den ikke stå der to ganger.
   assert.equal(panelHostCandidates({ stored: LOCAL_PANEL_URL }).length, 3);
+});
+
+test("går videre til neste adresse selv når en henger", () => {
+  // iPad-en har husket .local og drar på mobildata. Da svarer ikke Bonjour-navnet
+  // lenger, men tailnettet gjør det — og det skal skje uten at noen rører den.
+  const candidates = panelHostCandidates({ stored: LAN_PANEL_URL });
+  const first = candidates[0].url;
+  assert.equal(first, LAN_PANEL_URL.toLowerCase());
+
+  const second = nextPanelCandidate(candidates, [first]);
+  assert.equal(second.url, LOCAL_PANEL_URL);
+  assert.equal(nextPanelCandidate(candidates, [first, LOCAL_PANEL_URL]).url, LOOPBACK_PANEL_URL);
+  // Når ingen står igjen, er det først da det er noe å spørre om.
+  assert.equal(nextPanelCandidate(candidates, candidates.map((c) => c.url)), null);
 });
 
 test("kjenner igjen panelet på maskinen siden åpnes fra", async () => {
