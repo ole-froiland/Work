@@ -32,9 +32,13 @@ krever ingen ny utrulling. Bare verter som kan være Mac-en slippes gjennom —
 ellers ville den offentlige siden vært en åpen videresending. `?host=` uten `?public=1`
 går rett videre; sammen med `?public=1` lagres adressen uten å hoppe.
 
-Standardadressen er derfor Tailscale-navnet, `http://ole-mac-panel.tail161d1e.ts.net:4173`,
-som svarer likt hjemme, på hotspot og på mobildata — så lenge Tailscale er slått på på
-iPad-en. Er den av, settes `.local`-adressen tilbake med `?host=ole-sin-macbook-air.local`.
+Tailscale-navnet, `http://ole-mac-panel.tail161d1e.ts.net:4173`, er det eneste som svarer
+likt hjemme, på hotspot og på mobildata — så lenge Tailscale er slått på i begge ender.
+Det svarer til gjengjeld aldri fra Mac-en selv: `tailscaled` kjører i userspace og ruter
+ikke Mac-ens egen trafikk inn i tailnettet, så navnet slår ikke engang opp der
+(`DNS_PROBE_FINISHED_NXDOMAIN`). `.local`-navnet svarer både på hjemmenettet og på Mac-en
+selv, men ikke på hotspot. Ingen av dem svarer alle steder, og ingen av dem kan sjekkes
+på forhånd.
 
 En adresse som ikke svarer har to helt ulike utfall, og bare det ene ser ut som en feil.
 Finnes ikke navnet, viser nettleseren sin egen feilside. Slår navnet opp uten at noen
@@ -43,18 +47,20 @@ står igjen på Netlify-adressen, og fanen spinner over en tom side. Siden vår 
 fortsatt mens det står på, så etter åtte sekunder (`PANEL_STALL_MS`) avbrytes forsøket
 med `window.stop()` og velgeren vises i stedet.
 
-Ingen enkelt adresse svarer på alle nett, så Netlify-siden gir seg ikke lenger når den
-første ikke gjør det. Den viser en «Kobler til …»-skjerm i stedet for å bli svart, og
-sender først videre etterpå. Svarer ikke adressen, kommer Ole tilbake til siden — og da
-står valget mellom Tailscale-navnet, `.local`, `localhost` og et felt for en hvilken som
-helst annen adresse. Den valgte adressen huskes under `panelHost`, så neste åpning går
-rett videre. Sporet fra forsøket ligger i `sessionStorage` under `panelRedirectAttempt`
-og gjelder i halvannet minutt; det er slik siden vet at den ble forlatt uten å nå fram.
+Derfor gjetter ikke Netlify-siden lenger. Første gang, uten en husket adresse, spør den:
+`.local`, Tailscale-navnet, `localhost` og et felt for hvilken som helst annen adresse.
+Valget lagres under `panelHost`, og fra da av går åpningen rett inn uten å spørre. Det
+sparer det ene som ikke kan repareres: gjetter siden feil, havner Ole på nettleserens
+egen feilside, der siden ikke lenger finnes og ikke kan tilby noe alternativ.
 
-Åpnes panelet i en nettleser på Mac-en selv, svarer tailnett-navnet aldri: `tailscaled`
-kjører i userspace og ruter ikke Mac-ens egen trafikk inn i tailnettet, så navnet slår
-ikke engang opp. Derfor spør siden `http://localhost:4173/api/panel-hello` først og går
-dit hvis panelet svarer. `localhost` er den ene http-adressen en https-side får lov å
+Feiler en husket adresse senere, kommer Ole tilbake til siden og får velge på nytt. Sporet
+fra forsøket ligger i `sessionStorage` under `panelRedirectAttempt` og gjelder i halvannet
+minutt; det er slik siden vet at den ble forlatt uten å nå fram. En adresse gitt med
+`?host=` prøves alltid med én gang, også rett etter at en annen feilet.
+
+Det ene siden kan sjekke selv, er maskinen den åpnes fra: svarer
+`http://localhost:4173/api/panel-hello`, kjører panelet her, og da går den dit uten å
+spørre. `localhost` er den ene http-adressen en https-side får lov å
 hente fra; `.local` og `.ts.net` kan ikke sjekkes på forhånd i det hele tatt. Endepunktet
 svarer bare `{"panel":true}` og inneholder ingen data, men trenger både CORS og
 `Access-Control-Allow-Private-Network` for at Chrome skal slippe spørsmålet gjennom.

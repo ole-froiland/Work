@@ -32,16 +32,16 @@ export function PanelEntry({ state = "connecting", target = null, failedUrl = nu
   return (
     <main className="panel-entry">
       <div className="panel-entry-card">
-        <h1>{choosing ? "Fant ikke Mac-en" : "Kobler til Mac-en …"}</h1>
+        <h1>{choosing ? (failedUrl ? "Fant ikke Mac-en" : "Hvor er Mac-en?") : "Kobler til Mac-en …"}</h1>
         {choosing ? (
           <p className="panel-entry-lead">
-            {failedUrl ? `${hostLabel(failedUrl)} svarte ikke.` : "Adressen svarte ikke."}{" "}
-            Kalender, kvoter og Nøkkelring finnes bare på Mac-en, så panelet må nå den. Velg en adresse som
-            passer nettet du er på nå — den huskes til neste gang.
+            {failedUrl ? `${hostLabel(failedUrl)} svarte ikke. ` : ""}
+            Kalender, kvoter og Nøkkelring finnes bare på Mac-en, så panelet må nå den — og hvilken adresse
+            som svarer avhenger av nettet du er på. Velg én; den huskes, så neste åpning går rett inn.
           </p>
         ) : (
           <p className="panel-entry-lead">
-            Åpner {target ? hostLabel(target) : "panelet"}. Svarer den ikke, får du velge en annen adresse.
+            {target ? `Åpner ${hostLabel(target)}. Svarer den ikke, får du velge en annen adresse.` : "Ser etter Mac-en …"}
           </p>
         )}
 

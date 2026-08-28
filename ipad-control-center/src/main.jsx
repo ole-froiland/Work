@@ -34,14 +34,21 @@ if (plan.mode === "app") {
       <App />
     </React.StrictMode>,
   );
-} else if (plan.mode === "chooser") {
+} else if (plan.mode === "redirect") {
+  // Adressen er valgt før og huskes. Skjermen tegnes så siden ikke står svart
+  // mens nettleseren jobber med hoppet.
+  root.render(<PanelEntry state="connecting" target={plan.url} candidates={plan.candidates} onOpen={openPanel} />);
+  openPanel(plan.url);
+} else if (plan.failedUrl) {
   showChooser(plan.failedUrl);
 } else {
-  // Skjermen tegnes først, så siden aldri står svart mens adressen sjekkes.
-  root.render(<PanelEntry state="connecting" target={plan.url} candidates={plan.candidates} onOpen={openPanel} />);
-  // Åpnes panelet på Mac-en selv, svarer tailnett-navnet aldri — tailscaled
-  // kjører i userspace og ruter ikke Mac-ens egen trafikk. Loopback gjør det.
+  // Første gang, uten noe å gå på. Det ene stedet siden kan sjekke selv er
+  // maskinen den åpnes fra: svarer panelet på loopback, er vi på Mac-en, og da
+  // trengs ingen spørsmål. Ellers spørres det heller enn å gjettes — gjetter
+  // siden feil, havner Ole på nettleserens feilside, der den ikke kan rette seg.
+  root.render(<PanelEntry state="connecting" target={null} candidates={plan.candidates} onOpen={openPanel} />);
   isPanelReachable(LOOPBACK_PANEL_URL).then((reachable) => {
-    openPanel(reachable ? LOOPBACK_PANEL_URL : plan.url);
+    if (reachable) openPanel(LOOPBACK_PANEL_URL, { remember: true });
+    else showChooser(null);
   });
 }

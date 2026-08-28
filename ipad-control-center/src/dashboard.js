@@ -125,8 +125,11 @@ export function panelHostCandidates({ stored = null } = {}) {
     candidates.push({ url, label, note });
   };
   add(stored, "Sist valgte adresse", "Adressen som ble valgt sist på denne enheten.");
-  add(LOCAL_PANEL_URL, "Tailscale", "Svarer hjemme, på hotspot og på mobildata — når Tailscale står på i begge ender.");
-  add(LAN_PANEL_URL, "Samme wifi", "Bonjour-navnet. Svarer bare på samme nett som Mac-en.");
+  // Rekkefølgen er hvor sannsynlig det er at adressen svarer der panelet
+  // faktisk åpnes: .local svarer både på hjemmenettet og på Mac-en selv,
+  // tailnettet bare med Tailscale på, loopback bare på Mac-en.
+  add(LAN_PANEL_URL, "Samme wifi som Mac-en", "Bonjour-navnet. Svarer hjemme og på Mac-en selv, men ikke på hotspot eller mobildata.");
+  add(LOCAL_PANEL_URL, "Tailscale", "Svarer uansett nett — men bare når Tailscale står på i begge ender, og aldri fra Mac-en selv.");
   add(LOOPBACK_PANEL_URL, "På Mac-en selv", "Når panelet åpnes i en nettleser på Mac-en som kjører det.");
   return candidates;
 }
@@ -173,8 +176,14 @@ export function planPanelEntry({ location = {}, storage = null, session = null, 
   if (params.get("public") === "1") return { mode: "app", candidates };
   // En adresse Ole nettopp skrev inn skal alltid prøves, også rett etter at en
   // annen feilet — ellers ville rettelsen havnet i velgeren i stedet for å åpne.
-  if (failedUrl && !requested) return { mode: "chooser", candidates, failedUrl };
-  return { mode: "redirect", url: requested ?? stored ?? LOCAL_PANEL_URL, candidates };
+  if (requested) return { mode: "redirect", url: requested, candidates };
+  if (failedUrl) return { mode: "chooser", candidates, failedUrl };
+  // Uten en husket adresse finnes det ingenting å gå på. En https-side får ikke
+  // spørre en http-adresse om den svarer, så et hopp her ville vært gjetning —
+  // og gjetter den feil, ender Ole på nettleserens feilside, der siden ikke kan
+  // rette seg selv. Da er det bedre å spørre én gang og huske svaret.
+  if (stored) return { mode: "redirect", url: stored, candidates };
+  return { mode: "chooser", candidates, failedUrl: null };
 }
 
 // Selve hoppet til Mac-en, med begge feilene et hopp kan ha: adressen som ikke

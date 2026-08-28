@@ -141,25 +141,37 @@ test("keeps a stored address that no longer passes the check from being used", (
   );
 });
 
-test("viser en velger i stedet for blank skjerm når adressen ikke svarte", () => {
-  // Nettleseren forlater siden før den kan se om Mac-en svarer. Sporet fra
-  // forsøket ligger igjen, så neste last vet at vi kom tilbake uten å ha nådd
-  // fram — og da skal siden si det i stedet for å sende oss samme vei igjen.
+test("spør om adressen første gang i stedet for å gjette på en", () => {
+  // En https-side får ikke spørre en http-adresse om den svarer, så et hopp uten
+  // noe å gå på er ren gjetning. Gjetter den feil, ender Ole på nettleserens
+  // feilside — der siden ikke lenger finnes og ikke kan rette seg selv.
   const storage = fakeStorage();
   const session = fakeStorage();
   const location = { hostname: "ole-work-panel.netlify.app", search: "" };
 
   const first = planPanelEntry({ location, storage, session, now: 1_000 });
-  assert.equal(first.mode, "redirect");
-  assert.equal(first.url, LOCAL_PANEL_URL);
+  assert.equal(first.mode, "chooser");
+  assert.equal(first.failedUrl, null);
 
-  notePanelAttempt(session, first.url, 1_000);
-  const second = planPanelEntry({ location, storage, session, now: 4_000 });
-  assert.equal(second.mode, "chooser");
-  assert.equal(second.failedUrl, LOCAL_PANEL_URL);
+  // Valget huskes, og da går neste åpning rett inn uten å spørre igjen.
+  storage.setItem("panelHost", LAN_PANEL_URL.toLowerCase());
+  const second = planPanelEntry({ location, storage, session, now: 2_000 });
+  assert.equal(second.mode, "redirect");
+  assert.equal(second.url, LAN_PANEL_URL.toLowerCase());
+});
 
-  // Sporet brukes én gang. Neste åpning skal prøve adressen på nytt, ikke bli
-  // stående i velgeren for alltid.
+test("sier fra hvilken adresse som sviktet når vi kommer tilbake", () => {
+  const storage = fakeStorage({ panelHost: LOCAL_PANEL_URL });
+  const session = fakeStorage();
+  const location = { hostname: "ole-work-panel.netlify.app", search: "" };
+
+  notePanelAttempt(session, LOCAL_PANEL_URL, 1_000);
+  const back = planPanelEntry({ location, storage, session, now: 4_000 });
+  assert.equal(back.mode, "chooser");
+  assert.equal(back.failedUrl, LOCAL_PANEL_URL);
+
+  // Sporet brukes én gang: den huskede adressen skal prøves igjen neste gang,
+  // ikke bli stående i velgeren for alltid.
   assert.equal(planPanelEntry({ location, storage, session, now: 5_000 }).mode, "redirect");
 });
 
@@ -168,7 +180,7 @@ test("glemmer et gammelt forsøk, så en ny økt ikke starter i velgeren", () =>
   notePanelAttempt(session, LOCAL_PANEL_URL, 1_000);
   const plan = planPanelEntry({
     location: { hostname: "ole-work-panel.netlify.app", search: "" },
-    storage: fakeStorage(),
+    storage: fakeStorage({ panelHost: LOCAL_PANEL_URL }),
     session,
     now: 1_000 + 120_000,
   });
@@ -233,8 +245,8 @@ test("tilbyr en adresse for hvert nett panelet kan åpnes fra", () => {
   const urls = panelHostCandidates({ stored: "http://192.168.1.40:4173" }).map((candidate) => candidate.url);
   assert.deepEqual(urls, [
     "http://192.168.1.40:4173",
-    LOCAL_PANEL_URL,
     LAN_PANEL_URL.toLowerCase(),
+    LOCAL_PANEL_URL,
     LOOPBACK_PANEL_URL,
   ]);
   // Er den lagrede adressen allerede i lista, skal den ikke stå der to ganger.
