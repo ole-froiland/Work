@@ -1,12 +1,55 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeNextEvent, describeRepair, describeSyncAge, eventOccursOnDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isSocialApp, needsCompanionUpdate, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
+import { createPanelOpener, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeNextEvent, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, notePanelAttempt, panelHostCandidates, planPanelEntry, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
+
+function fakeStorage(seed = {}) {
+  const values = new Map(Object.entries(seed));
+  return {
+    getItem: (key) => (values.has(key) ? values.get(key) : null),
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+}
+import { createScreenWakeLockController } from "../src/wake-lock.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
   assert.equal(formatTimer(61), "01:01");
   assert.equal(formatTimer(-3), "00:00");
+});
+
+test("holder skjermen våken til bryteren slås av, og kobler til igjen etter appbytte", async () => {
+  let visible = true;
+  let active = false;
+  const locks = [];
+  const wakeLock = {
+    async request(type) {
+      assert.equal(type, "screen");
+      const listeners = new Map();
+      const lock = {
+        released: false,
+        addEventListener(name, listener) { listeners.set(name, listener); },
+        async release() { this.released = true; listeners.get("release")?.(); },
+      };
+      locks.push(lock);
+      return lock;
+    },
+  };
+  const controller = createScreenWakeLockController({ wakeLock, isVisible: () => visible, onActiveChange: (next) => { active = next; } });
+
+  assert.equal(await controller.setWanted(true), true);
+  assert.equal(active, true);
+  visible = false;
+  await locks[0].release();
+  assert.equal(active, false);
+  visible = true;
+  assert.equal(await controller.handleVisibilityChange(), true);
+  assert.equal(locks.length, 2);
+  assert.equal(active, true);
+  await controller.setWanted(false);
+  assert.equal(active, false);
+  assert.equal(locks[1].released, true);
 });
 
 test("formats synced screen time", () => {
@@ -18,7 +61,7 @@ test("formats synced screen time", () => {
 test("explains that AI usage requires the local Mac panel when Netlify returns HTML", async () => {
   const response = new Response("<!doctype html>", { headers: { "Content-Type": "text/html; charset=UTF-8" } });
 
-  await assert.rejects(readUsageResponse(response), /Ole-sin-MacBook-Air\.local:4173/);
+  await assert.rejects(readUsageResponse(response), /ole-mac-panel\.tail161d1e\.ts\.net:4173/);
 });
 
 test("reads AI usage JSON from the local Mac panel", async () => {
@@ -31,13 +74,205 @@ test("reads AI usage JSON from the local Mac panel", async () => {
 test("redirects the public panel to the Mac that owns the private data", () => {
   assert.equal(
     resolvePanelRedirect({ hostname: "ole-work-panel.netlify.app" }),
-    "http://Ole-sin-MacBook-Air.local:4173",
+    "http://ole-mac-panel.tail161d1e.ts.net:4173",
   );
   assert.equal(resolvePanelRedirect({ hostname: "Ole-sin-MacBook-Air.local" }), null);
 });
 
 test("allows the public shell to be opened explicitly for diagnostics", () => {
   assert.equal(resolvePanelRedirect({ hostname: "ole-work-panel.netlify.app", search: "?public=1" }), null);
+});
+
+test("remembers an address given once, since .local dies on an iPhone hotspot", () => {
+  // Hotspoten slipper ikke Bonjour mellom klientene, så navneoppslaget stopper
+  // før panelet i det hele tatt lastes. Adressen settes derfor én gang.
+  const storage = fakeStorage();
+  assert.equal(
+    resolvePanelRedirect({ hostname: "ole-work-panel.netlify.app", search: "?host=mac.tail1234.ts.net" }, storage),
+    "http://mac.tail1234.ts.net:4173",
+  );
+  assert.equal(
+    resolvePanelRedirect({ hostname: "ole-work-panel.netlify.app" }, storage),
+    "http://mac.tail1234.ts.net:4173",
+  );
+});
+
+test("stores the address even when the public shell is asked for", () => {
+  const storage = fakeStorage();
+  assert.equal(
+    resolvePanelRedirect(
+      { hostname: "ole-work-panel.netlify.app", search: "?host=172.20.10.5&public=1" },
+      storage,
+    ),
+    null,
+  );
+  assert.equal(
+    resolvePanelRedirect({ hostname: "ole-work-panel.netlify.app" }, storage),
+    "http://172.20.10.5:4173",
+  );
+});
+
+test("refuses an address that cannot be the Mac, so the public page is no open redirect", () => {
+  const storage = fakeStorage();
+  assert.equal(
+    resolvePanelRedirect({ hostname: "ole-work-panel.netlify.app", search: "?host=evil.example.com" }, storage),
+    "http://ole-mac-panel.tail161d1e.ts.net:4173",
+  );
+  assert.equal(storage.getItem("panelHost"), null);
+  assert.equal(normalizePanelHost("https://evil.example.com"), null);
+  assert.equal(normalizePanelHost("8.8.8.8"), null);
+});
+
+test("defaults to the tailnet address, which answers on any network", () => {
+  // .local svarer bare på samme LAN. Tailscale-navnet er det eneste som svarer
+  // likt hjemme, på hotspot og på mobildata, så det er standardadressen.
+  assert.equal(LOCAL_PANEL_URL, "http://ole-mac-panel.tail161d1e.ts.net:4173");
+  // URL-en normaliserer verten til små bokstaver — som er nøyaktig det
+  // nettleserne sender, og skrivemåten allowedHosts allerede godtar.
+  assert.equal(normalizePanelHost(LAN_PANEL_URL), LAN_PANEL_URL.toLowerCase());
+});
+
+test("keeps a stored address that no longer passes the check from being used", () => {
+  const storage = fakeStorage();
+  storage.setItem("panelHost", "http://evil.example.com:4173");
+  assert.equal(
+    resolvePanelRedirect({ hostname: "ole-work-panel.netlify.app" }, storage),
+    "http://ole-mac-panel.tail161d1e.ts.net:4173",
+  );
+});
+
+test("viser en velger i stedet for blank skjerm når adressen ikke svarte", () => {
+  // Nettleseren forlater siden før den kan se om Mac-en svarer. Sporet fra
+  // forsøket ligger igjen, så neste last vet at vi kom tilbake uten å ha nådd
+  // fram — og da skal siden si det i stedet for å sende oss samme vei igjen.
+  const storage = fakeStorage();
+  const session = fakeStorage();
+  const location = { hostname: "ole-work-panel.netlify.app", search: "" };
+
+  const first = planPanelEntry({ location, storage, session, now: 1_000 });
+  assert.equal(first.mode, "redirect");
+  assert.equal(first.url, LOCAL_PANEL_URL);
+
+  notePanelAttempt(session, first.url, 1_000);
+  const second = planPanelEntry({ location, storage, session, now: 4_000 });
+  assert.equal(second.mode, "chooser");
+  assert.equal(second.failedUrl, LOCAL_PANEL_URL);
+
+  // Sporet brukes én gang. Neste åpning skal prøve adressen på nytt, ikke bli
+  // stående i velgeren for alltid.
+  assert.equal(planPanelEntry({ location, storage, session, now: 5_000 }).mode, "redirect");
+});
+
+test("glemmer et gammelt forsøk, så en ny økt ikke starter i velgeren", () => {
+  const session = fakeStorage();
+  notePanelAttempt(session, LOCAL_PANEL_URL, 1_000);
+  const plan = planPanelEntry({
+    location: { hostname: "ole-work-panel.netlify.app", search: "" },
+    storage: fakeStorage(),
+    session,
+    now: 1_000 + 120_000,
+  });
+  assert.equal(plan.mode, "redirect");
+});
+
+test("prøver en nyskrevet adresse selv rett etter at en annen feilet", () => {
+  const session = fakeStorage();
+  notePanelAttempt(session, LOCAL_PANEL_URL, 1_000);
+  const plan = planPanelEntry({
+    location: { hostname: "ole-work-panel.netlify.app", search: "?host=192.168.1.40" },
+    storage: fakeStorage(),
+    session,
+    now: 2_000,
+  });
+  assert.equal(plan.mode, "redirect");
+  assert.equal(plan.url, "http://192.168.1.40:4173");
+});
+
+test("avbryter et hopp som aldri svarer, i stedet for å spinne over en tom side", () => {
+  // Slår navnet opp uten at noen svarer på porten, kommer det ingen feilside:
+  // navigeringen blir hengende, adressefeltet står igjen på Netlify-adressen og
+  // fanen spinner. Det var dette som så ut som en blank skjerm.
+  const replaced = [];
+  const session = fakeStorage();
+  const storage = fakeStorage();
+  const stalled = [];
+  let pending = null;
+  const openPanel = createPanelOpener({
+    location: { replace: (url) => replaced.push(url) },
+    storage,
+    session,
+    onStalled: (url) => stalled.push(url),
+    setTimer: (callback) => { pending = callback; },
+    now: () => 1_000,
+  });
+
+  assert.equal(openPanel("192.168.1.40", { remember: true }), "http://192.168.1.40:4173");
+  assert.deepEqual(replaced, ["http://192.168.1.40:4173"]);
+  assert.equal(storage.getItem("panelHost"), "http://192.168.1.40:4173");
+  assert.deepEqual(stalled, []);
+
+  pending();
+  assert.deepEqual(stalled, ["http://192.168.1.40:4173"]);
+  // Sporet er lagt igjen, så en feilside og et tilbaketrykk gir samme velger.
+  assert.equal(
+    planPanelEntry({ location: { hostname: "ole-work-panel.netlify.app", search: "" }, storage, session, now: 2_000 }).mode,
+    "chooser",
+  );
+});
+
+test("nekter å hoppe til en adresse som ikke kan være Mac-en", () => {
+  const replaced = [];
+  const openPanel = createPanelOpener({ location: { replace: (url) => replaced.push(url) } });
+  assert.equal(openPanel("evil.example.com"), null);
+  assert.deepEqual(replaced, []);
+});
+
+test("tilbyr en adresse for hvert nett panelet kan åpnes fra", () => {
+  // Tailnettet krever Tailscale i begge ender, .local krever samme wifi, og
+  // loopback finnes bare på Mac-en. Ingen av dem svarer overalt alene.
+  const urls = panelHostCandidates({ stored: "http://192.168.1.40:4173" }).map((candidate) => candidate.url);
+  assert.deepEqual(urls, [
+    "http://192.168.1.40:4173",
+    LOCAL_PANEL_URL,
+    LAN_PANEL_URL.toLowerCase(),
+    LOOPBACK_PANEL_URL,
+  ]);
+  // Er den lagrede adressen allerede i lista, skal den ikke stå der to ganger.
+  assert.equal(panelHostCandidates({ stored: LOCAL_PANEL_URL }).length, 3);
+});
+
+test("kjenner igjen panelet på maskinen siden åpnes fra", async () => {
+  const asked = [];
+  const fetchImpl = async (url) => {
+    asked.push(url);
+    return { ok: true, json: async () => ({ panel: true }) };
+  };
+  assert.equal(await isPanelReachable(LOOPBACK_PANEL_URL, { fetchImpl }), true);
+  assert.deepEqual(asked, [`${LOOPBACK_PANEL_URL}/api/panel-hello`]);
+});
+
+test("regner en adresse som ubrukelig når noe annet enn panelet svarer", async () => {
+  assert.equal(
+    await isPanelReachable(LOOPBACK_PANEL_URL, { fetchImpl: async () => ({ ok: true, json: async () => ({}) }) }),
+    false,
+  );
+  assert.equal(
+    await isPanelReachable(LOOPBACK_PANEL_URL, { fetchImpl: async () => ({ ok: false, json: async () => ({ panel: true }) }) }),
+    false,
+  );
+  // En https-side som nektes å hente fra http kaster. Da skal panelet falle
+  // tilbake til den vanlige adressen, ikke stoppe opp.
+  assert.equal(
+    await isPanelReachable(LOOPBACK_PANEL_URL, { fetchImpl: async () => { throw new Error("blocked"); } }),
+    false,
+  );
+});
+
+test("fills in the panel port when the address is given without one", () => {
+  assert.equal(normalizePanelHost("mac.tail1234.ts.net"), "http://mac.tail1234.ts.net:4173");
+  assert.equal(normalizePanelHost("192.168.1.40:8080"), "http://192.168.1.40:8080");
+  assert.equal(normalizePanelHost("  "), null);
+  assert.equal(normalizePanelHost(null), null);
 });
 
 test("shows friendly app names instead of iOS bundle identifiers", () => {
@@ -115,6 +350,20 @@ test("shows an all-day trip on every included calendar day", () => {
   assert.equal(eventOccursOnDay(trip, new Date(2027, 0, 10)), true);
   assert.equal(eventOccursOnDay(trip, new Date(2027, 0, 19)), true);
   assert.equal(eventOccursOnDay(trip, new Date(2027, 0, 20)), false);
+});
+
+test("places overlapping day events side by side without shrinking separate events", () => {
+  const events = [
+    { id: "a", start: "2026-08-24T09:00:00+02:00", end: "2026-08-24T10:00:00+02:00" },
+    { id: "b", start: "2026-08-24T09:15:00+02:00", end: "2026-08-24T10:00:00+02:00" },
+    { id: "c", start: "2026-08-24T10:00:00+02:00", end: "2026-08-24T11:00:00+02:00" },
+  ];
+
+  assert.deepEqual(layoutDayEvents(events).map(({ event, column, columnCount }) => [event.id, column, columnCount]), [
+    ["a", 0, 2],
+    ["b", 1, 2],
+    ["c", 0, 1],
+  ]);
 });
 
 test("steps one day, one week or one whole month at a time", () => {
@@ -523,4 +772,60 @@ test("en iPhone som bare ikke har sendt beholder serverens forklaring", () => {
     metrics: { screenTime: {}, sources: {} },
   }, now);
   assert.match(result.detail, /aldri sendt/);
+});
+
+test("dagsvisningen følger med over midnatt i stedet for å bli stående på i går", () => {
+  const trackedToday = new Date("2026-08-22T23:59:00+02:00");
+  const now = new Date("2026-08-23T00:01:00+02:00");
+  const rollover = followCalendarDay(new Date("2026-08-22T09:00:00+02:00"), trackedToday, now);
+
+  assert.equal(rollover.rolled, true);
+  assert.equal(rollover.date.getDate(), 23);
+  assert.equal(rollover.today.getDate(), 23);
+});
+
+test("en dag Ole selv har bladd seg fram til blir stående når døgnet skifter", () => {
+  const trackedToday = new Date("2026-08-22T23:59:00+02:00");
+  const now = new Date("2026-08-23T00:01:00+02:00");
+  const chosen = new Date("2026-08-28T09:00:00+02:00");
+  const rollover = followCalendarDay(chosen, trackedToday, now);
+
+  assert.equal(rollover.rolled, false);
+  assert.equal(rollover.date, chosen);
+  // Panelet måler neste skifte mot den nye dagen, ellers ville hvert tikk
+  // resten av døgnet melde om et døgnskifte som allerede er behandlet.
+  assert.equal(rollover.today.getDate(), 23);
+});
+
+test("en iPad som har sovet i flere døgn våkner på den ekte dagen", () => {
+  const trackedToday = new Date("2026-08-20T22:00:00+02:00");
+  const now = new Date("2026-08-23T07:30:00+02:00");
+  const rollover = followCalendarDay(new Date("2026-08-20T09:00:00+02:00"), trackedToday, now);
+
+  assert.equal(rollover.rolled, true);
+  assert.equal(rollover.date.getDate(), 23);
+});
+
+test("samme døgn rører ikke datoen, uansett hvor mange ganger klokka tikker", () => {
+  const trackedToday = new Date("2026-08-23T07:30:00+02:00");
+  const chosen = new Date("2026-08-23T09:00:00+02:00");
+  const rollover = followCalendarDay(chosen, trackedToday, new Date("2026-08-23T18:00:00+02:00"));
+
+  assert.equal(rollover.rolled, false);
+  assert.equal(rollover.date, chosen);
+  assert.equal(rollover.today, trackedToday);
+});
+
+test("Kalender-raden sier hvorfor lesingen feilet i stedet for å telle opp gamle hendelser", () => {
+  const now = new Date("2026-08-23T11:45:00.000Z");
+  const checks = buildStatusChecks({
+    syncCalendar: {
+      connected: true,
+      events: [{ id: "a" }, { id: "b" }],
+      appleError: "Panelet mangler tilgang til Apple Kalender (status 4)",
+    },
+  }, now);
+
+  assert.equal(checks[0].ok, false);
+  assert.equal(checks[0].detail, "Panelet mangler tilgang til Apple Kalender (status 4)");
 });

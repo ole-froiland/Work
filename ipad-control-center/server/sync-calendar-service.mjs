@@ -6,11 +6,31 @@ import { promisify } from "node:util";
 
 const CALENDAR_FILE = join(homedir(), "Library", "Caches", "ipad-control-center", "sync-calendar.json");
 const MAX_EVENTS = 1_000;
+// Det Mac-en leser av sin egen kalender er ikke ukjent inndata, så taket her er
+// bare en grense mot en kalender som har løpt løpsk, ikke mot et angrep.
+const APPLE_MAX_EVENTS = 5_000;
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const TONES = new Set(["violet", "emerald", "amber", "sky"]);
 const KINDS = new Set(["focus", "meeting", "launch", "deadline"]);
+// Disse kildene er slått av i Apple Kalender. EventKit eksponerer ikke
+// Kalender-appens avkryssing, så panelet må speile det valget eksplisitt for å
+// unngå at den gamle H26-planen legges oppå den nye Google-planen.
+const HIDDEN_APPLE_CALENDARS = new Set([
+  "HiOA",
+  "Manchester United",
+  "Styrketrening",
+  "Løpetrenign",
+  "NYC_Trip_Itinerary_Europe_Oslo",
+  "NHH H26",
+  "Rutine H26",
+  "US Holidays",
+]);
 const execFileAsync = promisify(execFile);
-const APPLE_CACHE_MS = 2 * 60 * 1000;
+// Panelet skal vise det samme som Apple Kalender, og et vindu på to minutter
+// gjorde at en ny avtale kunne mangle i over to minutter etter at den var lagt
+// inn. En lesing koster rundt 0,2 sekund, så vinduet følger heller pollingen i
+// nettleseren: det som står på veggen er aldri mer enn ett halvt minutt bak.
+const APPLE_CACHE_MS = 30 * 1000;
 let appleCache = { events: [], updatedAt: 0, ready: false, error: null };
 let appleRefresh = null;
 
@@ -18,8 +38,16 @@ function shortText(value, maximum) {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, maximum) : null;
 }
 
-export function normalizeSyncCalendar(input = {}) {
-  const candidates = Array.isArray(input.events) ? input.events.slice(0, MAX_EVENTS) : [];
+// Taket finnes for det Sync-appen sender inn utenfra. Apple Kalender leses
+// lokalt og skal ikke beskjæres mot den samme grensa — en kalender med mange
+// gjentakende serier er ikke et angrep.
+//
+// Beskjæringen skjedde før sorteringen, så nådde man taket forsvant tilfeldige
+// avtaler i den rekkefølgen EventKit tilfeldigvis svarte i. Nå sorteres det
+// først, slik at et tak som slår inn tar det fjerneste bort og lar det Ole
+// faktisk ser på være i fred.
+export function normalizeSyncCalendar(input = {}, max = MAX_EVENTS) {
+  const candidates = Array.isArray(input.events) ? input.events : [];
   const events = candidates.flatMap((value) => {
     const id = shortText(value?.id, 200);
     const title = shortText(value?.title, 300);
@@ -38,8 +66,12 @@ export function normalizeSyncCalendar(input = {}) {
       calendarName: shortText(value?.calendarName, 120),
       source: ["sync", "google", "apple", "microsoft"].includes(value?.source) ? value.source : "sync",
     }];
-  }).sort((a, b) => +new Date(a.start) - +new Date(b.start));
+  }).sort((a, b) => +new Date(a.start) - +new Date(b.start)).slice(0, max);
   return { updatedAt: new Date().toISOString(), events };
+}
+
+export function filterPanelCalendarEvents(events = []) {
+  return events.filter((event) => !HIDDEN_APPLE_CALENDARS.has(event?.calendarName));
 }
 
 export async function updateSyncCalendar(input) {
@@ -88,7 +120,10 @@ export async function mutateMacAppleCalendar(input, runner = execFileAsync) {
   return { events: created };
 }
 
-export async function getSyncCalendar() {
+// `force` er den manuelle oppdateringen: da skal svaret være lest nå, ikke
+// hentet fra vinduet. Uten den kunne et trykk på Kalender-raden gi nøyaktig den
+// samme utdaterte lista tilbake, og oppdateringen så ut som den ikke virket.
+export async function getSyncCalendar({ force = false, runner } = {}) {
   let snapshot = { updatedAt: null, events: [], connected: false, stale: false };
   try {
     const cached = JSON.parse(await readFile(CALENDAR_FILE, "utf8"));
@@ -97,24 +132,27 @@ export async function getSyncCalendar() {
   } catch (error) {
     if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
   }
-  if (appleCache.ready) refreshMacAppleCalendar();
-  else await refreshMacAppleCalendar();
+  if (force || !appleCache.ready) await refreshMacAppleCalendar({ force, runner });
+  else refreshMacAppleCalendar({ runner });
   if (appleCache.ready) {
     return {
       updatedAt: new Date(appleCache.updatedAt).toISOString(),
       events: mergeCalendarEvents(snapshot.events, appleCache.events),
       connected: true,
       stale: false,
-      appleError: null,
+      // En lesing som feiler etter en som gikk bra, etterlot seg `null` her.
+      // Da serverte panelet forrige lesing som om den var fersk, og raden sa
+      // «tilkoblet» mens Apple Kalender i praksis hadde løpt fra oss.
+      appleError: appleCache.error,
     };
   }
   return { ...snapshot, appleError: appleCache.error };
 }
 
-function refreshMacAppleCalendar() {
+function refreshMacAppleCalendar({ force = false, runner } = {}) {
   if (appleRefresh) return appleRefresh;
-  if (Date.now() - appleCache.updatedAt < APPLE_CACHE_MS) return Promise.resolve();
-  appleRefresh = readMacAppleCalendar()
+  if (!force && Date.now() - appleCache.updatedAt < APPLE_CACHE_MS) return Promise.resolve();
+  appleRefresh = (runner ? readMacAppleCalendar(runner) : readMacAppleCalendar())
     .then((events) => {
       appleCache = { events, updatedAt: Date.now(), ready: true, error: null };
     })
@@ -210,9 +248,14 @@ export function mergeCalendarEvents(cachedEvents = [], appleEvents = []) {
     .sort((a, b) => +new Date(a.start) - +new Date(b.start));
 }
 
+// Vinduet var 14 dager bakover og 240 framover, og da lå det avtaler i Apple
+// Kalender som panelet aldri kunne vise: bladde Ole forbi kanten, sto månedene
+// tomme selv om Kalender på Mac-en hadde noe der. Rekkevidden koster nesten
+// ingenting — hele spennet leses på under et tiendedels sekund — så den dekker
+// heller alt Ole realistisk bytter til: et år tilbake og tre fram.
 export async function readMacAppleCalendar(runner = execFileAsync, now = new Date()) {
-  const rangeStart = new Date(+now - 14 * 24 * 60 * 60 * 1000);
-  const rangeEnd = new Date(+now + 240 * 24 * 60 * 60 * 1000);
+  const rangeStart = new Date(+now - 365 * 24 * 60 * 60 * 1000);
+  const rangeEnd = new Date(+now + 3 * 365 * 24 * 60 * 60 * 1000);
   const script = `
     function run(argv) {
       ObjC.import('EventKit');
@@ -255,7 +298,7 @@ export async function readMacAppleCalendar(runner = execFileAsync, now = new Dat
     timeout: 10_000,
     maxBuffer: 4 * 1024 * 1024,
   });
-  return normalizeSyncCalendar({ events: JSON.parse(stdout) }).events;
+  return filterPanelCalendarEvents(normalizeSyncCalendar({ events: JSON.parse(stdout) }, APPLE_MAX_EVENTS).events);
 }
 
 function eventFingerprint(event) {

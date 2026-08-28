@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 import { describeSyncPayload, normalizeDeviceUpdate, weatherDescription } from "../server/device-metrics-service.mjs";
 
@@ -92,4 +93,16 @@ test("takes the sources that answered when one of them failed", () => {
   assert.deepEqual(utenPosisjon.location, previous.location);
   assert.deepEqual(utenPosisjon.sources.location, previous.sources.location);
   assert.equal(describeSyncPayload({ sources: { steps: { provider: "HealthKit", observedAt: nå } } }), "steps");
+});
+
+test("iPhone-koblingen registrerer datadrevet HealthKit-synk ved oppstart", async () => {
+  const [model, app] = await Promise.all([
+    readFile(new URL("../ios-companion/Sources/MetricsSyncModel.swift", import.meta.url), "utf8"),
+    readFile(new URL("../ios-companion/Sources/PanelCompanionApp.swift", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(model, /HKObserverQuery\(sampleType: stepType/);
+  assert.match(model, /enableBackgroundDelivery\(for: stepType, frequency: \.hourly/);
+  assert.match(model, /stepsStatus = "Godkjent"\s+startAutomaticSync\(\)/);
+  assert.match(app, /didFinishLaunchingWithOptions[\s\S]*MetricsSyncModel\.shared\.startAutomaticSync\(\)/);
 });

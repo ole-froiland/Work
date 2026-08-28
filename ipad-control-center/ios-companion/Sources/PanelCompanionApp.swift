@@ -1,9 +1,21 @@
 import BackgroundTasks
 import SwiftUI
+import UIKit
+
+final class PanelCompanionDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        MetricsSyncModel.shared.startAutomaticSync()
+        return true
+    }
+}
 
 @main
 struct PanelCompanionApp: App {
-    @StateObject private var syncModel = MetricsSyncModel()
+    @UIApplicationDelegateAdaptor(PanelCompanionDelegate.self) private var appDelegate
+    @StateObject private var syncModel = MetricsSyncModel.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -26,7 +38,6 @@ struct PanelCompanionApp: App {
         }
         .backgroundTask(.appRefresh(MetricsSyncModel.backgroundTaskIdentifier)) {
             await syncModel.refreshAll(requestPermissions: false)
-            await syncModel.scheduleBackgroundRefresh()
         }
     }
 }

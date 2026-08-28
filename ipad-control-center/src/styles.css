@@ -51,7 +51,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .dashboard-grid { height: var(--shell-height); min-height: 0; display: grid; grid-template-columns: minmax(250px, 280px) minmax(430px, 1fr) minmax(238px, 278px); gap: 12px; overflow: hidden; }
 .left-rail, .right-rail { display: grid; gap: 12px; min-width: 0; min-height: 0; overflow: hidden; }
 .left-rail { grid-template-rows: auto auto auto minmax(90px, 1fr); }
-.right-rail { grid-template-rows: auto auto auto 1fr auto; }
+.right-rail { grid-template-rows: auto auto auto auto minmax(90px, 1fr) auto; }
 .panel-card { border: 1px solid var(--line); border-radius: 20px; background: var(--panel); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025), 0 8px 22px rgba(0, 0, 0, .18); overflow: hidden; }
 .quick-grid { min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); justify-items: center; gap: 8px; }
 /* Ikonet er knappen. Ingen ramme eller boks rundt — flaten i seg selv er
@@ -59,6 +59,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .quick-action { width: min(100%, var(--tile)); height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 0; border-radius: 18px; background: transparent; cursor: pointer; transition: transform 140ms ease, filter 140ms ease; }
 .quick-action:hover { transform: translateY(-2px); filter: brightness(1.08); }
 .quick-action:active { transform: scale(.96); }
+.quick-action.is-toggle.is-off .action-icon { opacity: .42; filter: saturate(.35); }
+.quick-action.is-toggle.is-on .action-icon { opacity: 1; filter: none; box-shadow: 0 0 0 3px rgba(169, 148, 255, .2); }
 .action-icon { width: 100%; height: 100%; min-width: 0; display: grid; place-items: center; border-radius: 18px; }
 .action-icon svg { width: 55%; height: auto; aspect-ratio: 1; }
 .tone-lime .action-icon, .status-icon.tone-lime { color: var(--lime-ink); background: var(--lime); }
@@ -169,7 +171,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .device-list i { width: 7px; height: 7px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 3px rgba(216, 255, 98, .12); }
 .modal-hint code { padding: 1px 5px; border-radius: 5px; background: #101419; font-size: 11px; }
 
-/* Neste avtale, mellom Mac-snarveiene og fokuskortet. Samme høyde som musikkortet. */
+/* «Akkurat nå» har en egen, fast plass. Tomtilstanden beholder overskriften,
+   men viser ingen oppdiktet aktivitet eller forklaring. */
+.current-event-card { min-height: 64px; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 9px; padding: 9px 12px; background: #151b22; }
+.current-event-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: #222b34; color: var(--violet); }
+.current-event-card.tone-lime .current-event-icon { color: var(--lime); }
+.current-event-card.tone-orange .current-event-icon { color: var(--orange); }
+.current-event-card.tone-blue .current-event-icon { color: var(--blue); }
+.current-event-card.is-empty .current-event-icon { color: var(--dim); }
+.current-event-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.current-event-kicker { min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.current-event-kicker em { flex: 0 0 auto; color: var(--orange); font-size: 10px; font-style: normal; font-weight: 750; font-variant-numeric: tabular-nums; }
+.current-event-text strong { overflow: hidden; font-size: 13px; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Neste avtale, mellom «Akkurat nå» og fokuskortet. Samme høyde som musikkortet. */
 .next-event-card { min-height: var(--media-card); display: grid; grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; gap: 8px; padding: 10px 12px; background: #151b22; }
 .next-event-top { align-self: center; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
 .next-event-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 11px; background: #222b34; color: var(--violet); }
@@ -177,13 +192,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .next-event-card.tone-orange .next-event-icon { color: var(--orange); }
 .next-event-card.tone-blue .next-event-icon { color: var(--blue); }
 .next-event-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.next-event-kicker { min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
-.next-event-kicker em { flex: 0 0 auto; color: var(--orange); font-size: 10px; font-style: normal; font-weight: 750; font-variant-numeric: tabular-nums; }
 .next-event-text strong { overflow: hidden; font-size: 13px; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
 .next-event-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
 .next-event-meta span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .next-event-meta strong { flex: 0 0 auto; color: var(--lime); font-size: 13px; font-variant-numeric: tabular-nums; }
-.next-event-card.is-ongoing .next-event-meta strong { color: var(--orange); }
 .next-event-card.is-empty { align-content: center; gap: 5px; }
 .next-event-card.is-empty p { margin: 0; color: var(--muted); font-size: 12px; }
 
@@ -469,6 +481,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   .quick-action, .right-shortcut, .action-icon { border-radius: 15px; }
   .agent-card, .focus-card, .task-card { padding: 12px; }
   .now-playing-card, .next-event-card { gap: 6px; padding: 8px 10px; }
+  .current-event-card { min-height: 56px; padding: 7px 10px; }
+  .current-event-icon { width: 32px; height: 32px; }
   .now-playing-art, .next-event-icon { width: 36px; height: 36px; border-radius: 10px; }
   .now-playing-controls > button { min-height: 32px; }
   .next-event-meta { padding-top: 6px; }
@@ -540,3 +554,25 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 }
 
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+
+/* Skjermen Netlify-siden viser mens den kobler til, og velgeren som kommer når
+   adressen ikke svarte. Den skal kunne rulles: velgeren er høyere enn en iPhone
+   i liggende modus, og resten av panelet står med overflow: hidden. */
+.panel-entry { width: 100%; height: 100dvh; padding: 24px; display: grid; place-items: center; overflow: auto; background: var(--bg); }
+.panel-entry-card { width: min(100%, 440px); padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); }
+.panel-entry-card h1 { margin: 0 0 8px; font-size: 20px; letter-spacing: -.01em; }
+.panel-entry-lead { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.panel-entry-list { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.panel-entry-list button { width: 100%; display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 14px; background: var(--panel-raised); text-align: left; cursor: pointer; }
+.panel-entry-list button:hover { border-color: var(--line); }
+.panel-entry-label { font-size: 14px; font-weight: 600; }
+.panel-entry-host { font-size: 13px; color: var(--blue); }
+.panel-entry-note { font-size: 13px; color: var(--dim); line-height: 1.45; }
+.panel-entry-form { margin-top: 18px; display: grid; gap: 6px; }
+.panel-entry-form label { font-size: 13px; color: var(--muted); }
+.panel-entry-row { display: flex; gap: 8px; }
+.panel-entry-row input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg); color: var(--text); font-size: 14px; }
+.panel-entry-row button { padding: 10px 16px; border: 0; border-radius: 12px; background: var(--lime); color: var(--lime-ink); font-size: 14px; font-weight: 600; cursor: pointer; }
+.panel-entry-error { margin: 0; font-size: 13px; color: #ff6e78; line-height: 1.45; }
+.panel-entry-foot { margin: 16px 0 0; font-size: 13px; color: var(--dim); line-height: 1.5; }
+.panel-entry-foot a { color: var(--violet); }

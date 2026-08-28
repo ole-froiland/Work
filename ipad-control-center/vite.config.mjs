@@ -157,7 +157,8 @@ function syncCalendarApi() {
         }
         try {
           if (request.method === "GET") {
-            sendJson(response, 200, await getSyncCalendar());
+            const url = new URL(request.url ?? "/", "http://localhost");
+            sendJson(response, 200, await getSyncCalendar({ force: url.searchParams.get("force") === "1" }));
             return;
           }
           if (request.method === "POST") {
@@ -295,6 +296,36 @@ function spotifyApi() {
   };
 }
 
+function panelHelloApi() {
+  return {
+    name: "local-panel-hello-api",
+    configureServer(server) {
+      server.middlewares.use("/api/panel-hello", (request, response) => {
+        // Netlify-siden må kunne spørre «kjører panelet her?» før den forlater
+        // seg selv. Svaret er bare et ja — ingen data ligger i det — og derfor
+        // kan hvilken som helst opprinnelse stille spørsmålet. Chrome regner
+        // dette som en forespørsel inn i et privat nett og krever både en
+        // preflight og «Allow-Private-Network» før den slipper den gjennom.
+        response.setHeader("Access-Control-Allow-Origin", request.headers.origin ?? "*");
+        response.setHeader("Vary", "Origin");
+        response.setHeader("Access-Control-Allow-Private-Network", "true");
+        if (request.method === "OPTIONS") {
+          response.statusCode = 204;
+          response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+          response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          response.end();
+          return;
+        }
+        if (request.method !== "GET") {
+          sendJson(response, 405, { error: "Method not allowed" });
+          return;
+        }
+        sendJson(response, 200, { panel: true });
+      });
+    },
+  };
+}
+
 function macActionApi() {
   return {
     name: "local-mac-action-api",
@@ -358,10 +389,13 @@ export default defineConfig({
     // Nettlesere sender verten med små bokstaver, men Vite sammenligner tegn for
     // tegn — og resten av prosjektet skriver navnet med stor forbokstav. Begge
     // skrivemåtene står her, så en klient som ikke normaliserer ikke blir avvist.
-    allowedHosts: ["terminal.local", "ole-sin-macbook-air.local", "Ole-sin-MacBook-Air.local"],
+    // «.ts.net» slipper inn hele tailnettet. Tailscale-navnet er det eneste som
+    // svarer likt hjemme, på hotspot og på mobildata, og det er ikke kjent før
+    // Mac-en er logget inn — derfor domenet og ikke ett hardkodet vertsnavn.
+    allowedHosts: ["terminal.local", "ole-sin-macbook-air.local", "Ole-sin-MacBook-Air.local", ".ts.net"],
     warmup: {
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), spotifyApi(), macActionApi(), connectionRepairApi(), react()],
+  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), spotifyApi(), panelHelloApi(), macActionApi(), connectionRepairApi(), react()],
 });

@@ -19,6 +19,59 @@ Mac-funksjonene. Netlify-adressen videresender automatisk til denne adressen, si
 den offentlige serveren av sikkerhetsgrunner ikke kan lese lokale konto- og helsedata.
 Legg til `?public=1` på Netlify-adressen for å åpne det offentlige skallet ved feilsøking.
 
+`.local`-navnet svarer bare på samme LAN. En iPhone-hotspot slipper ikke Bonjour
+mellom klientene sine, så navnet slår aldri opp der og panelet blir en blank skjerm
+— også når Mac-en står på den samme hotspoten. Adressen kan derfor settes én gang
+og huskes i nettleseren:
+
+    https://ole-work-panel.netlify.app/?host=ole-sin-macbook-air.<tailnett>.ts.net
+
+Verten lagres under `panelHost` og brukes ved alle senere åpninger, så en ny adresse
+krever ingen ny utrulling. Bare verter som kan være Mac-en slippes gjennom —
+`.local`, `.ts.net` og private IP-adresser inkludert Tailscale-området 100.64/10 —
+ellers ville den offentlige siden vært en åpen videresending. `?host=` uten `?public=1`
+går rett videre; sammen med `?public=1` lagres adressen uten å hoppe.
+
+Standardadressen er derfor Tailscale-navnet, `http://ole-mac-panel.tail161d1e.ts.net:4173`,
+som svarer likt hjemme, på hotspot og på mobildata — så lenge Tailscale er slått på på
+iPad-en. Er den av, settes `.local`-adressen tilbake med `?host=ole-sin-macbook-air.local`.
+
+En adresse som ikke svarer har to helt ulike utfall, og bare det ene ser ut som en feil.
+Finnes ikke navnet, viser nettleseren sin egen feilside. Slår navnet opp uten at noen
+svarer på porten, skjer det derimot ingenting: navigeringen blir hengende, adressefeltet
+står igjen på Netlify-adressen, og fanen spinner over en tom side. Siden vår lever
+fortsatt mens det står på, så etter åtte sekunder (`PANEL_STALL_MS`) avbrytes forsøket
+med `window.stop()` og velgeren vises i stedet.
+
+Ingen enkelt adresse svarer på alle nett, så Netlify-siden gir seg ikke lenger når den
+første ikke gjør det. Den viser en «Kobler til …»-skjerm i stedet for å bli svart, og
+sender først videre etterpå. Svarer ikke adressen, kommer Ole tilbake til siden — og da
+står valget mellom Tailscale-navnet, `.local`, `localhost` og et felt for en hvilken som
+helst annen adresse. Den valgte adressen huskes under `panelHost`, så neste åpning går
+rett videre. Sporet fra forsøket ligger i `sessionStorage` under `panelRedirectAttempt`
+og gjelder i halvannet minutt; det er slik siden vet at den ble forlatt uten å nå fram.
+
+Åpnes panelet i en nettleser på Mac-en selv, svarer tailnett-navnet aldri: `tailscaled`
+kjører i userspace og ruter ikke Mac-ens egen trafikk inn i tailnettet, så navnet slår
+ikke engang opp. Derfor spør siden `http://localhost:4173/api/panel-hello` først og går
+dit hvis panelet svarer. `localhost` er den ene http-adressen en https-side får lov å
+hente fra; `.local` og `.ts.net` kan ikke sjekkes på forhånd i det hele tatt. Endepunktet
+svarer bare `{"panel":true}` og inneholder ingen data, men trenger både CORS og
+`Access-Control-Allow-Private-Network` for at Chrome skal slippe spørsmålet gjennom.
+
+Tailscale kjører som brukerprosess, ikke som systemtjeneste: `macos/com.ole.tailscaled.plist`
+starter `tailscaled --tun=userspace-networking` ved innlogging. Uten en TUN-enhet trengs
+ingen root, og oppsettet krever derfor aldri passord. Mac-en ruter ikke sin egen trafikk
+gjennom tailnettet i denne modusen — den svarer bare på innkommende, og innkommende TCP
+går videre til samme port på loopback, altså Vite på 4173. Status sjekkes med:
+
+    tailscale --socket=~/.tailscale/tailscaled.sock status
+
+Vite slipper inn hele `.ts.net` i `allowedHosts`, ikke ett hardkodet vertsnavn, slik at
+et nytt tailnett-navn ikke krever en kodeendring. iPhone-appen sender fortsatt bare til
+`.local` og private adresser: den krever samme nett som Mac-en til `ios-companion`
+eventuelt får sitt eget ATS-unntak for `.ts.net`.
+
 Mac-en bruker LaunchAgent-filen i `macos/com.ole.panel.plist`, slik at den lokale
 broen starter ved innlogging og startes på nytt automatisk hvis prosessen stopper.
 Plist-en sender ingen `--host` eller `--port`: kommandolinja overstyrer
@@ -92,13 +145,15 @@ POST /api/device-metrics
 }
 ```
 
-Appen synker i forgrunnen når den åpnes, og ellers via `BGAppRefreshTask`. Neste
+Appen synker i forgrunnen når den åpnes. Nye skritt vekker den automatisk gjennom
+HealthKit-bakgrunnslevering, og synken tar samtidig med posisjon og skjermtid når
+de kildene er tilgjengelige. `BGAppRefreshTask` står i tillegg som reserve. Neste
 bakgrunnskjøring planlegges uansett om synken lyktes. Lå kallet bare på
 suksessgrenen, døde kjeden for godt første gang en synk feilet — typisk når
 telefonen var utenfor hjemmenettet og `.local`-adressen ikke svarte — og appen
-våknet aldri igjen av seg selv. Merk at iOS selv bestemmer når bakgrunnsjobben
-kjøres; 30 minutter er tidligste tidspunkt, ikke en garanti, og jobben kjøres
-ikke i det hele tatt hvis appen er tvangsavsluttet fra appbytteren.
+våknet aldri igjen av seg selv. Merk at iOS selv bestemmer når reservejobben
+kjøres; 30 minutter er tidligste tidspunkt, ikke en garanti, og bakgrunnsarbeid
+stoppes hvis appen tvangsavsluttes fra appbytteren.
 
 Kortene skiller mellom «har aldri vært koblet til» og «sluttet å sende»: mangler
 ferske verdier, viser de hvor lenge siden mobilen sist sendte.
@@ -117,6 +172,9 @@ POST /api/mac-action
 ```
 
 - `spotify` åpner Spotify-appen på Mac-en, og faller tilbake til `open.spotify.com` hvis appen ikke er installert.
+- Fokus-knappen er en bryter. Når den er lilla, er Fokus slått på og panelet ber
+  iPadOS holde skjermen våken; når den er blek, er begge deler av. Wake Lock
+  gjenopprettes automatisk når panelet blir synlig igjen etter et appbytte.
 - `screen-mirror` kobler iPad-en til og fra som Sidecar-skjerm. Den bruker `server/sidecar-tool.m`, som bygges automatisk med `clang` ved første trykk og snakker med `SidecarCore` direkte — ingen Kontrollsenter-klikking og ingen tilgjengelighetstilgang. Enheten velges i innstillingsvinduet (standard `iPad`, kan også settes med `PANEL_MIRROR_DEVICE`) og matches mot navnet Sidecar rapporterer. Sidecar kobler til som utvidet skjerm; bytt til speiling i Skjerm-innstillingene hvis du heller vil ha det.
 
 - `focus-mode` kjører snarveiene «Fokus på» og «Fokus av» på Mac-en (kan overstyres med `PANEL_FOCUS_ON_SHORTCUT` og `PANEL_FOCUS_OFF_SHORTCUT`). Snarveiene er allerede installert; signerte kopier ligger i `server/shortcuts/` og kan importeres på nytt ved å åpne dem. Panelet slår opp det eksakte navnet med `shortcuts list` og starter snarveien via `shortcuts://run-shortcut` — `shortcuts run` henger når den kalles fra serverprosessen. Slår du på deling av fokus på tvers av enheter i Fokus-innstillingene, følger iPhone og iPad automatisk etter. Panelet sier eksplisitt fra hvis en snarvei mangler.
@@ -217,14 +275,16 @@ et utsnitt av siden i stedet.
 
 ## Neste aktivitet
 
-Kortet mellom Mac-snarveiene og fokusøkten henter neste avtale fra Apple Kalender og
-viser navn, når den er, og hvor lenge det er til. Det har samme høyde som musikkortet
-i venstre spalte — begge følger `--media-card` i `styles.css`.
+En egen «Akkurat nå»-plass under Mac-snarveiene viser avtalen som pågår. Hvis ingen
+avtale pågår, beholder den overskriften og står ellers tom.
 
-Kortet svarer på «hva er det neste jeg skal», så en avtale som ennå ikke har startet
-går foran en som pågår. Er det ingenting igjen på klokka, viser kortet avtalen som
-pågår med sluttidspunkt, og ellers en heldagsoppføring. Nedtellingen runder nedover,
-slik at den aldri viser mer tid enn du faktisk har.
+Kortet under henter neste avtale fra Apple Kalender og viser navn, når den er, og
+hvor lenge det er til. Det har samme høyde som musikkortet i venstre spalte — begge
+følger `--media-card` i `styles.css`.
+
+Neste-kortet svarer bare på «hva er det neste jeg skal», mens en avtale som pågår
+blir værende i «Akkurat nå». Finnes ingen senere avtale, brukes en heldagsoppføring.
+Nedtellingen runder nedover, slik at den aldri viser mer tid enn du faktisk har.
 
 ## Fokusøkt
 

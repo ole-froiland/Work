@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.ole.tailscaled</string>
+  <!-- «userspace-networking» er grunnen til at dette er en LaunchAgent og ikke
+       en systemtjeneste: uten en TUN-enhet trengs ingen root, og da kan panelet
+       nås utenfor LAN-et uten at oppsettet krever passord ved hver oppdatering.
+       Mac-en ruter ikke sin egen trafikk gjennom tailnettet i denne modusen —
+       den bare svarer på innkommende, som er alt panelet trenger. Innkommende
+       TCP sendes videre til samme port på loopback, altså Vite på 4173. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/opt/tailscale/bin/tailscaled</string>
+    <string>--tun=userspace-networking</string>
+    <string>--socket=/Users/ole-froiland/.tailscale/tailscaled.sock</string>
+    <string>--statedir=/Users/ole-froiland/.tailscale/state</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/ole-froiland/Library/Logs/Panel/tailscaled.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/ole-froiland/Library/Logs/Panel/tailscaled-error.log</string>
+</dict>
+</plist>

@@ -14,13 +14,211 @@ export function formatMinutes(value) {
   return `${hours} t ${String(remainder).padStart(2, "0")} min`;
 }
 
-export const LOCAL_PANEL_URL = "http://Ole-sin-MacBook-Air.local:4173";
+// Tailscale-adressen svarer likt hjemme, på hotspot og på mobildata, så lenge
+// Tailscale er på på iPad-en. .local-navnet under krever Bonjour og svarer bare
+// på samme LAN — det står igjen som reserve, og settes med ?host= ved behov.
+export const LOCAL_PANEL_URL = "http://ole-mac-panel.tail161d1e.ts.net:4173";
+export const LAN_PANEL_URL = "http://Ole-sin-MacBook-Air.local:4173";
+// Åpnes panelet i en nettleser på Mac-en selv, svarer tailnett-navnet aldri:
+// tailscaled kjører i userspace-modus og ruter ikke Mac-ens egen trafikk inn i
+// tailnettet, så navnet slår ikke engang opp. Loopback svarer alltid der.
+export const LOOPBACK_PANEL_URL = "http://localhost:4173";
+export const PANEL_HOST_KEY = "panelHost";
+// Adressen som ble forsøkt legges igjen her rett før siden forlates. Er den her
+// når siden lastes igjen, kom vi tilbake — altså svarte ikke Mac-en.
+export const PANEL_ATTEMPT_KEY = "panelRedirectAttempt";
+export const PANEL_ATTEMPT_WINDOW_MS = 90_000;
+// En adresse som ikke svarer gir ikke alltid en feilside. Slår navnet opp, men
+// svarer ingen på porten, blir navigeringen bare hengende: fanen spinner, siden
+// står tom og nettleseren viser fortsatt den gamle adressen. Dokumentet lever
+// derimot fortsatt, så etter denne fristen avbrytes forsøket og velgeren vises.
+export const PANEL_STALL_MS = 8_000;
+const PANEL_PORT = "4173";
 
-export function resolvePanelRedirect({ hostname = "", search = "" } = {}) {
-  const isPanelDeploy = hostname === "ole-work-panel.netlify.app"
+// .local-navnet krever Bonjour. Hjemme svarer det, men en iPhone-hotspot
+// slipper ikke multicast mellom klientene sine, så oppslaget dør og panelet
+// blir en blank skjerm uten noe som forklarer hvorfor. Derfor kan adressen
+// overstyres én gang med ?host= og huskes etterpå — da trengs ingen ny
+// utrulling når Mac-en får et nytt navn eller en ny adresse.
+function isPrivatePanelHostname(hostname = "") {
+  const host = hostname.toLowerCase();
+  if (host === "localhost") return true;
+  if (host === "local" || host.endsWith(".local")) return true;
+  if (host.endsWith(".ts.net")) return true;
+  const parts = host.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return false;
+  const [a, b] = parts.map(Number);
+  if (parts.some((part) => Number(part) > 255)) return false;
+  if (a === 10 || a === 127) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  // 100.64/10 er området Tailscale deler ut, og det ligger utenfor RFC 1918.
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  return false;
+}
+
+// Adressen står i en URL hvem som helst kan åpne, så den slipper bare gjennom
+// verter som faktisk kan være Mac-en. Ellers ville panelsiden vært en åpen
+// videresending til hva som helst.
+export function normalizePanelHost(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(raw) ? raw : `http://${raw}`);
+  } catch {
+    return null;
+  }
+  if (!isPrivatePanelHostname(url.hostname)) return null;
+  if (!url.port) url.port = PANEL_PORT;
+  return `${url.protocol}//${url.host}`;
+}
+
+function readStoredPanelHost(storage) {
+  try {
+    return normalizePanelHost(storage?.getItem(PANEL_HOST_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function rememberPanelHost(storage, value) {
+  try {
+    storage?.setItem(PANEL_HOST_KEY, value);
+  } catch {
+    // Privat vindu eller blokkert lagring: adressen gjelder da bare dette besøket.
+  }
+}
+
+export function storePanelHost(storage, value) {
+  const normalized = normalizePanelHost(value);
+  if (!normalized) return null;
+  rememberPanelHost(storage, normalized);
+  return normalized;
+}
+
+export function isPanelDeployHostname(hostname = "") {
+  return hostname === "ole-work-panel.netlify.app"
     || hostname.endsWith("--ole-work-panel.netlify.app");
-  const keepPublicShell = new URLSearchParams(search).get("public") === "1";
-  return isPanelDeploy && !keepPublicShell ? LOCAL_PANEL_URL : null;
+}
+
+export function resolvePanelRedirect({ hostname = "", search = "" } = {}, storage = null) {
+  if (!isPanelDeployHostname(hostname)) return null;
+  const params = new URLSearchParams(search);
+  const requested = normalizePanelHost(params.get("host"));
+  if (requested) rememberPanelHost(storage, requested);
+  if (params.get("public") === "1") return null;
+  return requested ?? readStoredPanelHost(storage) ?? LOCAL_PANEL_URL;
+}
+
+// Én adresse svarer ikke overalt: tailnettet krever Tailscale i begge ender,
+// .local krever samme LAN, og loopback finnes bare på Mac-en. Panelet skal
+// kunne åpnes uansett nett, så alle tre står som valg — og standardrekkefølgen
+// setter den som svarer flest steder først.
+export function panelHostCandidates({ stored = null } = {}) {
+  const seen = new Set();
+  const candidates = [];
+  const add = (value, label, note) => {
+    const url = normalizePanelHost(value);
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    candidates.push({ url, label, note });
+  };
+  add(stored, "Sist valgte adresse", "Adressen som ble valgt sist på denne enheten.");
+  add(LOCAL_PANEL_URL, "Tailscale", "Svarer hjemme, på hotspot og på mobildata — når Tailscale står på i begge ender.");
+  add(LAN_PANEL_URL, "Samme wifi", "Bonjour-navnet. Svarer bare på samme nett som Mac-en.");
+  add(LOOPBACK_PANEL_URL, "På Mac-en selv", "Når panelet åpnes i en nettleser på Mac-en som kjører det.");
+  return candidates;
+}
+
+export function notePanelAttempt(session, url, now = Date.now()) {
+  try {
+    session?.setItem(PANEL_ATTEMPT_KEY, JSON.stringify({ url, at: now }));
+  } catch {
+    // Uten sesjonslager mister vi bare muligheten til å se at vi kom tilbake.
+  }
+}
+
+function takePanelAttempt(session, now) {
+  let raw = null;
+  try {
+    raw = session?.getItem(PANEL_ATTEMPT_KEY) ?? null;
+    session?.removeItem(PANEL_ATTEMPT_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    const attempt = JSON.parse(raw);
+    if (!attempt?.url || !Number.isFinite(attempt.at)) return null;
+    if (now - attempt.at > PANEL_ATTEMPT_WINDOW_MS) return null;
+    return attempt.url;
+  } catch {
+    return null;
+  }
+}
+
+// Netlify-siden er bare et veiskilt, og et veiskilt som peker feil skal si det
+// selv. Før dette forlot siden seg selv med én gang: svarte ikke adressen, satt
+// Ole igjen med en blank skjerm og ingen måte å velge en annen adresse på.
+export function planPanelEntry({ location = {}, storage = null, session = null, now = Date.now() } = {}) {
+  const { hostname = "", search = "" } = location;
+  if (!isPanelDeployHostname(hostname)) return { mode: "app", candidates: [] };
+  const params = new URLSearchParams(search);
+  const requested = normalizePanelHost(params.get("host"));
+  if (requested) rememberPanelHost(storage, requested);
+  const stored = readStoredPanelHost(storage);
+  const candidates = panelHostCandidates({ stored });
+  const failedUrl = takePanelAttempt(session, now);
+  if (params.get("public") === "1") return { mode: "app", candidates };
+  // En adresse Ole nettopp skrev inn skal alltid prøves, også rett etter at en
+  // annen feilet — ellers ville rettelsen havnet i velgeren i stedet for å åpne.
+  if (failedUrl && !requested) return { mode: "chooser", candidates, failedUrl };
+  return { mode: "redirect", url: requested ?? stored ?? LOCAL_PANEL_URL, candidates };
+}
+
+// Selve hoppet til Mac-en, med begge feilene et hopp kan ha: adressen som ikke
+// finnes (nettleseren viser sin egen feilside, og Ole kommer tilbake hit), og
+// adressen som aldri svarer (ingenting skjer i det hele tatt). Den siste er den
+// som så ut som en blank skjerm, og den fanges bare av en frist.
+export function createPanelOpener({
+  location,
+  storage = null,
+  session = null,
+  onStalled = () => {},
+  stallMs = PANEL_STALL_MS,
+  setTimer = setTimeout,
+  now = Date.now,
+} = {}) {
+  return function openPanel(value, { remember = false } = {}) {
+    const url = normalizePanelHost(value);
+    if (!url) return null;
+    if (remember) rememberPanelHost(storage, url);
+    notePanelAttempt(session, url, now());
+    location.replace(url);
+    setTimer(() => onStalled(url), stallMs);
+    return url;
+  };
+}
+
+// Svarer panelet her? Spørsmålet kan bare stilles til http://localhost: en
+// https-side får ikke lov å hente fra andre http-adresser, og et tailnett-navn
+// som ikke svarer kan derfor ikke oppdages på forhånd — bare etter at siden er
+// forlatt. Endepunktet inneholder ingen data, bare et ja.
+export async function isPanelReachable(url, { fetchImpl = globalThis.fetch, timeoutMs = 1500 } = {}) {
+  if (!url || typeof fetchImpl !== "function") return false;
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetchImpl(`${url}/api/panel-hello`, { cache: "no-store", signal: controller?.signal });
+    if (!response?.ok) return false;
+    const body = await response.json();
+    return body?.panel === true;
+  } catch {
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export async function readUsageResponse(response) {
@@ -133,6 +331,43 @@ export function eventOccursOnDay(event, day) {
   return +dayStart >= +eventStart && +dayStart < +end;
 }
 
+// Dagsvisningen bruker absolutte posisjoner. Når to avtaler overlapper i tid,
+// må de derfor få hver sin kolonne; full bredde på begge gjør at den som
+// tegnes sist skjuler den andre. Hendelser som bare berører samme minutt
+// (én slutter idet neste starter) kan fortsatt bruke hele bredden.
+export function layoutDayEvents(events = []) {
+  const result = events.map((event) => ({ event, column: 0, columnCount: 1 }));
+  const timed = result
+    .map((item, index) => ({ ...item, index, start: +new Date(item.event?.start ?? ""), end: +new Date(item.event?.end ?? "") }))
+    .filter((item) => !item.event?.allDay && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  function placeGroup(group) {
+    const columnEnds = [];
+    for (const item of group) {
+      let column = columnEnds.findIndex((end) => end <= item.start);
+      if (column < 0) column = columnEnds.length;
+      columnEnds[column] = item.end;
+      item.column = column;
+    }
+    for (const item of group) result[item.index] = { event: item.event, column: item.column, columnCount: columnEnds.length };
+  }
+
+  let group = [];
+  let groupEnd = -Infinity;
+  for (const item of timed) {
+    if (group.length > 0 && item.start >= groupEnd) {
+      placeGroup(group);
+      group = [];
+      groupEnd = -Infinity;
+    }
+    group.push(item);
+    groupEnd = Math.max(groupEnd, item.end);
+  }
+  if (group.length > 0) placeGroup(group);
+  return result;
+}
+
 export const DAY_MINUTES = 24 * 60;
 
 // Ett steg frem eller tilbake, målt i den enheten man faktisk ser på. Måned var
@@ -149,6 +384,30 @@ export function shiftCalendarDate(date, view, direction) {
   const next = new Date(date);
   next.setDate(date.getDate() + step * (view === "week" ? 7 : 1));
   return next;
+}
+
+function sameCalendarDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+// Panelet henger på veggen døgnet rundt, og datoen ble bare satt den gangen
+// fanen ble åpnet. Etter midnatt gikk klokka videre mens dagsvisningen ble
+// stående på gårsdagen, og da viste panelet noe annet enn Apple Kalender helt
+// til noen trykket «I dag».
+//
+// `trackedToday` er dagen panelet mente var i dag ved forrige måling, og den
+// avgjør forskjellen på de to tilfellene: fulgte visningen dagens dato, følger
+// den med over skiftet — hadde Ole bladd seg bort til en annen dag, får han bli
+// der. Sov iPad-en i flere døgn, lander den på den ekte dagen, ikke på dagen
+// etter den den sovnet på.
+export function followCalendarDay(date, trackedToday, now) {
+  const changed = !sameCalendarDay(trackedToday, now);
+  const rolled = changed && sameCalendarDay(date, trackedToday);
+  return {
+    date: rolled ? new Date(now) : date,
+    today: changed ? new Date(now) : trackedToday,
+    rolled,
+  };
 }
 
 // Dagsvisningen dekker hele døgnet, så den kan ikke åpne på midnatt — da ser
@@ -229,13 +488,16 @@ export function buildStatusChecks({ syncCalendar, syncNotes, deviceMetrics, usag
     return provider.ok ? "Kvoten er hentet" : provider.error || "Leverandøren svarte ikke";
   };
   return [
+    // Raden heter Apple Kalender, så den skal svare for Apple Kalender. Feilet
+    // lesingen mens en eldre en fortsatt lå i minnet, sto raden grønn og talte
+    // opp hendelser som ikke lenger var hentet fra noe sted — den utdaterte
+    // lista så da helt frisk ut. Årsaken finnes, og da er det den som skal stå.
     {
       id: "calendar",
       label: "Apple Kalender",
-      ok: Boolean(syncCalendar?.connected),
-      detail: syncCalendar?.connected
-        ? `${events.length} hendelser hentet`
-        : "Åpne Kalender på Mac-en",
+      ok: Boolean(syncCalendar?.connected) && !syncCalendar?.appleError,
+      detail: syncCalendar?.appleError
+        || (syncCalendar?.connected ? `${events.length} hendelser hentet` : "Åpne Kalender på Mac-en"),
     },
     {
       id: "notes",

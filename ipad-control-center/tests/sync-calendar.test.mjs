@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appleCalendarAccessMissing, describeCalendarAccess, mergeCalendarEvents, mutateMacAppleCalendar, normalizeSyncCalendar, readAppleCalendarNow, readMacAppleCalendar } from "../server/sync-calendar-service.mjs";
+import { appleCalendarAccessMissing, describeCalendarAccess, filterPanelCalendarEvents, getSyncCalendar, mergeCalendarEvents, mutateMacAppleCalendar, normalizeSyncCalendar, readAppleCalendarNow, readMacAppleCalendar } from "../server/sync-calendar-service.mjs";
 import { normalizeSyncNoteCommand, normalizeSyncNotes } from "../server/sync-notes-service.mjs";
 
 test("normalizes and sorts trusted Sync calendar snapshots", () => {
@@ -24,6 +24,17 @@ test("Apple Calendar replaces stale Apple snapshots without duplicating Sync eve
   assert.deepEqual(mergeCalendarEvents(cached, apple).map((event) => event.id), ["apple-local:new"]);
 });
 
+test("keeps calendars hidden on the Mac out of the wall panel", () => {
+  const events = [
+    { id: "new", calendarName: "olealexanderfroiland02@gmail.com" },
+    { id: "old-study", calendarName: "NHH H26" },
+    { id: "old-routine", calendarName: "Rutine H26" },
+    { id: "home", calendarName: "Hjem" },
+  ];
+
+  assert.deepEqual(filterPanelCalendarEvents(events).map((event) => event.id), ["new", "home"]);
+});
+
 test("reads and normalizes events returned by the local Calendar app", async () => {
   let invocation;
   const runner = async (...args) => {
@@ -43,7 +54,9 @@ test("reads and normalizes events returned by the local Calendar app", async () 
   assert.equal(invocation[0], "/usr/bin/osascript");
   assert.match(invocation[1][3], /EventKit/);
   assert.doesNotMatch(invocation[1][3], /Application\(['"]Calendar['"]\)/);
-  assert.deepEqual(invocation[1].slice(-2), ["1785412800", "1807358400"]);
+  // Ett år tilbake og tre fram: kortere vindu lot avtaler ligge i Apple
+  // Kalender som panelet ikke kunne vise når Ole bladde forbi kanten.
+  assert.deepEqual(invocation[1].slice(-2), ["1755086400", "1881230400"]);
   assert.equal(invocation[2].timeout, 10_000);
   assert.equal(events.length, 1);
   assert.deepEqual(
@@ -128,4 +141,69 @@ test("skiller skrivetilgang fra avslag og fra aldri å ha blitt spurt", () => {
   assert.match(describeCalendarAccess("Panelet mangler tilgang til Apple Kalender (status 2)"), /avslått/);
   assert.match(describeCalendarAccess("Panelet mangler tilgang til Apple Kalender (status 0)"), /aldri fått spørsmålet/);
   assert.equal(describeCalendarAccess("noe helt annet"), "Panelet mangler tilgang til Apple Kalender");
+});
+
+test("en manuell oppdatering leser Apple Kalender på nytt i stedet for å servere vinduet om igjen", async () => {
+  let reads = 0;
+  const runner = async () => {
+    reads += 1;
+    return { stdout: JSON.stringify([{
+      id: `apple-local:${reads}`,
+      title: "Cowork",
+      start: "2026-08-18T08:00:00.000Z",
+      end: "2026-08-18T10:00:00.000Z",
+      source: "apple",
+      calendarName: "Hjem",
+    }]) };
+  };
+
+  await getSyncCalendar({ force: true, runner });
+  assert.equal(reads, 1);
+
+  // Pollingen skal fortsatt kunne hvile i vinduet: to iPad-er og en Mac som
+  // spør samtidig skal ikke bety én osascript-kjøring hver.
+  await getSyncCalendar({ runner });
+  assert.equal(reads, 1);
+
+  // Trykket på Kalender-raden skal forbi vinduet. Gjorde det ikke det, fikk
+  // Ole nøyaktig den samme utdaterte lista tilbake av en oppdatering.
+  const forced = await getSyncCalendar({ force: true, runner });
+  assert.equal(reads, 2);
+  assert.equal(forced.connected, true);
+  assert.equal(forced.appleError, null);
+});
+
+test("en lesing som feiler etter en som gikk bra melder fra i stedet for å se frisk ut", async () => {
+  const working = async () => ({ stdout: JSON.stringify([{
+    id: "apple-local:one",
+    title: "Cowork",
+    start: "2026-08-18T08:00:00.000Z",
+    end: "2026-08-18T10:00:00.000Z",
+    source: "apple",
+    calendarName: "Hjem",
+  }]) });
+  await getSyncCalendar({ force: true, runner: working });
+
+  const failing = async () => {
+    const error = new Error("Command failed");
+    error.stderr = "execution error: Panelet mangler tilgang til Apple Kalender (status 4)";
+    throw error;
+  };
+  const snapshot = await getSyncCalendar({ force: true, runner: failing });
+
+  // Hendelsene fra sist ligger der fortsatt, men panelet skal ikke påstå at de
+  // er hentet nå: raden leser `appleError` og sier hva som er galt.
+  assert.equal(snapshot.appleError, "Panelet mangler tilgang til Apple Kalender (status 4)");
+});
+
+test("et tak som slår inn tar det fjerneste bort, ikke tilfeldige avtaler", () => {
+  // EventKit svarer ikke i tidsrekkefølge. Ble det beskåret før sorteringen,
+  // kunne dagens avtale ryke mens en i 2029 ble stående.
+  const events = [
+    { id: "langt-fram", title: "Langt fram", start: "2029-07-03T22:00:00.000Z", end: "2029-07-03T23:00:00.000Z" },
+    { id: "i-dag", title: "I dag", start: "2026-08-23T08:00:00.000Z", end: "2026-08-23T09:00:00.000Z" },
+    { id: "i-morgen", title: "I morgen", start: "2026-08-24T08:00:00.000Z", end: "2026-08-24T09:00:00.000Z" },
+  ];
+
+  assert.deepEqual(normalizeSyncCalendar({ events }, 2).events.map((event) => event.id), ["i-dag", "i-morgen"]);
 });

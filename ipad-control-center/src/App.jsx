@@ -48,7 +48,8 @@ import {
   XLogo,
   YoutubeLogo,
 } from "@phosphor-icons/react";
-import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, formatMinutes, formatResetTime, formatTimer, needsCompanionUpdate, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
+import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatMinutes, formatResetTime, formatTimer, layoutDayEvents, needsCompanionUpdate, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
+import { createScreenWakeLockController } from "./wake-lock.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -178,7 +179,7 @@ function FocusCycle({ label, value, options, format, onPick }) {
 function QuickAction({ action, onTrigger }) {
   const Icon = action.icon;
   return (
-    <button className={`quick-action tone-${action.tone}`} type="button" onClick={() => onTrigger(action)} title={`${action.label} · ${action.detail}`} aria-label={`${action.label} · ${action.detail}`}>
+    <button className={`quick-action tone-${action.tone}${action.toggle ? ` is-toggle ${action.active ? "is-on" : "is-off"}` : ""}`} type="button" onClick={() => onTrigger(action)} title={`${action.label} · ${action.detail}`} aria-label={`${action.label} · ${action.detail}`} aria-pressed={action.toggle ? action.active : undefined}>
       <span className="action-icon"><Icon size={28} weight="fill" /></span>
     </button>
   );
@@ -455,14 +456,28 @@ function NowPlayingCard({ onToast, onConfigure }) {
   );
 }
 
+// Egen, fast plass for det som faktisk pågår. Når kalenderen ikke har en
+// pågående avtale, blir innholdet stående tomt slik at «Neste aktivitet» ikke
+// feilaktig ser ut som noe Ole skal gjøre allerede nå.
+function CurrentEventCard({ events, now }) {
+  const current = useMemo(() => describeCalendarActivity(events, now).current, [events, now]);
+
+  return (
+    <section className={`panel-card current-event-card${current ? ` tone-${calendarTone[current.tone] || "violet"}` : " is-empty"}`} aria-label="Akkurat nå">
+      <span className="current-event-icon"><CalendarBlank size={17} weight="duotone" /></span>
+      <span className="current-event-text">
+        <span className="current-event-kicker"><span className="eyebrow">Akkurat nå</span>{current && <em>{current.remaining}</em>}</span>
+        {current && <strong title={current.title}>{current.title}</strong>}
+      </span>
+    </section>
+  );
+}
+
 // Neste avtale fra Apple Kalender, i samme høyde som musikkortet i venstre spalte.
 function NextEventCard({ events, connected, now }) {
-  const activity = useMemo(() => describeCalendarActivity(events, now), [events, now]);
-  const current = activity.current;
-  const next = activity.next;
-  const primary = current || next;
+  const next = useMemo(() => describeCalendarActivity(events, now).next, [events, now]);
 
-  if (!primary) {
+  if (!next) {
     return (
       <section className="panel-card next-event-card is-empty">
         <span className="eyebrow">Neste aktivitet</span>
@@ -472,23 +487,16 @@ function NextEventCard({ events, connected, now }) {
   }
 
   return (
-    <section className={`panel-card next-event-card tone-${calendarTone[primary.tone] || "violet"}${current ? " is-ongoing" : ""}`}>
+    <section className={`panel-card next-event-card tone-${calendarTone[next.tone] || "violet"}`}>
       <div className="next-event-top">
         <span className="next-event-icon"><CalendarBlank size={19} weight="duotone" /></span>
         <span className="next-event-text">
-          <span className="next-event-kicker">
-            <span className="eyebrow">{current ? "Pågår nå" : "Neste aktivitet"}</span>
-            {current && <em>{current.remaining}</em>}
-          </span>
-          <strong title={primary.title}>{primary.title}</strong>
+          <span className="eyebrow">Neste aktivitet</span>
+          <strong title={next.title}>{next.title}</strong>
         </span>
       </div>
       <div className="next-event-meta">
-        {current ? (
-          next
-            ? <><span title={`Neste: ${next.title}`}>Neste: {next.title}</span><strong>{next.countdown}</strong></>
-            : <><span>{current.when}</span><strong>Ingen neste</strong></>
-        ) : <><span>{next.when}</span><strong>{next.countdown}</strong></>}
+        <span>{next.when}</span><strong>{next.countdown}</strong>
       </div>
     </section>
   );
@@ -649,17 +657,21 @@ function eventsOnDay(events, date) {
 // 08–18, og alt utenfor ble klemt inn i kanten i stedet for å vises der det er.
 const DAY_HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
 
-function eventStyle(event) {
+function eventStyle(event, column = 0, columnCount = 1) {
   if (event.allDay) return { top: 0, height: "44px" };
   const start = new Date(event.start);
   const end = new Date(event.end);
   const startMinutes = Math.max(0, Math.min(DAY_MINUTES, start.getHours() * 60 + start.getMinutes()));
   const duration = Math.max(30, Math.min(DAY_MINUTES - startMinutes, (+end - +start) / 60_000));
-  return { top: `${(startMinutes / DAY_MINUTES) * 100}%`, height: `${(duration / DAY_MINUTES) * 100}%` };
+  const horizontal = columnCount > 1
+    ? { left: `calc(${(column / columnCount) * 100}% + ${column * 2}px)`, right: "auto", width: `calc(${100 / columnCount}% - 2px)` }
+    : {};
+  return { top: `${(startMinutes / DAY_MINUTES) * 100}%`, height: `${(duration / DAY_MINUTES) * 100}%`, ...horizontal };
 }
 
 function DayCalendar({ date, events, now }) {
   const dayEvents = eventsOnDay(events, date);
+  const laidOutEvents = layoutDayEvents(dayEvents);
   const showNow = isSameCalendarDay(now, date);
   const nowTop = ((now.getHours() * 60 + now.getMinutes()) / DAY_MINUTES) * 100;
   return (
@@ -670,8 +682,8 @@ function DayCalendar({ date, events, now }) {
         </div>
       ))}
       <div className="calendar-events">
-        {dayEvents.map((event) => (
-          <article className={`event-card tone-${calendarTone[event.tone] || "violet"}`} style={eventStyle(event)} key={event.id}>
+        {laidOutEvents.map(({ event, column, columnCount }) => (
+          <article className={`event-card tone-${calendarTone[event.tone] || "violet"}`} style={eventStyle(event, column, columnCount)} key={event.id}>
             <span className="event-time">{event.allDay ? "Hele dagen" : `${formatEventTime(event.start)}–${formatEventTime(event.end)}`}</span>
             <strong>{event.title}</strong>
             <small>{event.note || event.calendarName || (event.source === "sync" ? "Sync" : event.source)}</small>
@@ -767,15 +779,18 @@ function useCalendarSwipe(onSwipe) {
 // Reparasjonen trenger å hente én av dem med én gang den er ferdig — ellers står
 // raden rød i opptil et minutt etter at den er i orden — og det gikk ikke så
 // lenge løkka var låst inne i en useEffect.
-function usePolledResource(url, { interval, initial = null, parse, onError }) {
+// `refreshUrl` skiller det manuelle trykket fra takten: kalenderen ber Mac-en
+// lese Apple Kalender på nytt der, i stedet for å få det siste svaret servert om
+// igjen.
+function usePolledResource(url, { interval, initial = null, parse, onError, refreshUrl = url }) {
   const [value, setValue] = useState(initial);
   const settings = useRef({ parse, onError });
   settings.current = { parse, onError };
 
-  const load = useCallback(async (alive = () => true) => {
+  const load = useCallback(async (alive = () => true, target = url) => {
     const { parse: read, onError: fail } = settings.current;
     try {
-      const response = await fetch(url, { cache: "no-store" });
+      const response = await fetch(target, { cache: "no-store" });
       const snapshot = read ? await read(response) : await readJsonResponse(response);
       if (alive()) setValue(snapshot);
     } catch (error) {
@@ -791,7 +806,7 @@ function usePolledResource(url, { interval, initial = null, parse, onError }) {
     return () => { active = false; window.clearInterval(timer); };
   }, [load, interval]);
 
-  return [value, useCallback(() => load(), [load]), setValue];
+  return [value, useCallback(() => load(undefined, refreshUrl), [load, refreshUrl]), setValue];
 }
 
 async function readJsonResponse(response) {
@@ -803,6 +818,7 @@ function App() {
   const [view, setView] = useState("day");
   const [date, setDate] = useState(() => new Date());
   const [now, setNow] = useState(() => new Date());
+  const [dayRollovers, setDayRollovers] = useState(0);
   const [toast, setToast] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem("panel-bridge-url") || "");
@@ -818,6 +834,9 @@ function App() {
   const [focusSets, setFocusSets] = useState(() => Number(localStorage.getItem("panel-focus-sets")) || 2);
   const [focusModeWanted, setFocusModeWanted] = useState(() => localStorage.getItem("panel-focus-mode") === "on");
   const [focusModeActive, setFocusModeActive] = useState(false);
+  const [keepAwakeWanted, setKeepAwakeWanted] = useState(() => localStorage.getItem("panel-keep-awake") === "on");
+  const [screenAwake, setScreenAwake] = useState(false);
+  const wakeLockController = useRef(null);
   const [usage, refreshUsageData, setUsage] = usePolledResource("/api/usage", {
     interval: 60_000,
     parse: readUsageResponse,
@@ -837,6 +856,7 @@ function App() {
   const [activeMetric, setActiveMetric] = useState(null);
   const [syncCalendar, refreshSyncCalendar, setSyncCalendar] = usePolledResource("/api/sync-calendar", {
     interval: 30_000,
+    refreshUrl: "/api/sync-calendar?force=1",
     initial: { events: [], connected: false, stale: false },
     onError: (current) => ({ ...current, connected: false }),
   });
@@ -856,6 +876,38 @@ function App() {
     const clock = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(clock);
   }, []);
+
+  useEffect(() => {
+    const controller = createScreenWakeLockController({
+      wakeLock: navigator.wakeLock,
+      isVisible: () => document.visibilityState === "visible",
+      onActiveChange: setScreenAwake,
+    });
+    wakeLockController.current = controller;
+    const restore = () => controller.handleVisibilityChange();
+    document.addEventListener("visibilitychange", restore);
+    if (keepAwakeWanted) {
+      controller.setWanted(true).then((active) => {
+        if (!active) setToast("Skjermen kunne ikke holdes våken. Trykk på Fokus-knappen for å prøve igjen.");
+      });
+    }
+    return () => {
+      document.removeEventListener("visibilitychange", restore);
+      wakeLockController.current = null;
+      controller.destroy();
+    };
+  }, []);
+
+  // Klokka tikker hvert halve minutt, og hvert tikk spør om døgnet har skiftet
+  // under panelet. Regelen ligger i `followCalendarDay`.
+  const trackedToday = useRef(now);
+  useEffect(() => {
+    const rollover = followCalendarDay(date, trackedToday.current, now);
+    trackedToday.current = rollover.today;
+    if (!rollover.rolled) return;
+    setDate(rollover.date);
+    setDayRollovers((count) => count + 1);
+  }, [now, date]);
 
   useEffect(() => {
     function syncFullscreen() { setIsFullscreen(Boolean(fullscreenElement())); }
@@ -925,7 +977,11 @@ function App() {
   const fullscreenAction = isFullscreen
     ? { id: "fullscreen", label: "Forminsk", detail: "Avslutt fullskjerm", icon: ArrowsIn, tone: "lime" }
     : { id: "fullscreen", label: "Utvid", detail: "Fyll hele skjermen", icon: ArrowsOut, tone: "lime" };
-  const visibleActions = isStandaloneApp() ? staticQuickActions : [fullscreenAction, ...staticQuickActions];
+  const focusActionActive = keepAwakeWanted && screenAwake;
+  const quickActions = staticQuickActions.map((action) => action.id === "focus"
+    ? { ...action, toggle: true, active: focusActionActive, detail: focusActionActive ? "Fokus er på · skjermen holdes våken" : "Slå på Fokus og hold skjermen våken" }
+    : action);
+  const visibleActions = isStandaloneApp() ? quickActions : [fullscreenAction, ...quickActions];
 
   const monthTitle = useMemo(() => new Intl.DateTimeFormat("nb-NO", { month: "long", year: "numeric" }).format(date), [date]);
   const fullDate = useMemo(() => new Intl.DateTimeFormat("nb-NO", { weekday: "long", day: "numeric", month: "long" }).format(date), [date]);
@@ -958,8 +1014,11 @@ function App() {
   const dayContext = useRef(null);
   dayContext.current = { date, events: calendarEvents };
 
-  // Bare når visningen byttes. Sveiper man videre til neste dag, blir man
-  // stående på samme klokkeslett — slik Kalender på iPad gjør det.
+  // Bare når visningen byttes — og når døgnet skifter under panelet. Sveiper
+  // man selv videre til neste dag, blir man stående på samme klokkeslett, slik
+  // Kalender på iPad gjør det; et midnattsskifte er ikke et sveip, og da skal
+  // flaten begynne på den nye dagen i stedet for å bli hengende igjen i går
+  // kveld.
   useEffect(() => {
     const stage = calendarStage.current;
     if (!stage) return;
@@ -970,10 +1029,10 @@ function App() {
     }
     const { date: day, events } = dayContext.current;
     stage.scrollTop = Math.round((calendarDayScrollMinute(day, events, new Date()) / DAY_MINUTES) * grid.offsetHeight);
-  }, [view]);
+  }, [view, dayRollovers]);
   // Slår Fokus på Mac-en av/på. Med delt fokus følger iPhone og iPad etter.
-  async function setFocusMode(enabled, { quiet = false } = {}) {
-    if (enabled === focusModeActive) return true;
+  async function setFocusMode(enabled, { quiet = false, force = false } = {}) {
+    if (enabled === focusModeActive && !force) return true;
     try {
       const response = await fetch("/api/mac-action", {
         method: "POST",
@@ -1042,7 +1101,17 @@ function App() {
   }
 
   async function toggleFocusMode() {
-    await setFocusMode(!focusModeActive);
+    const enabled = !keepAwakeWanted;
+    setKeepAwakeWanted(enabled);
+    localStorage.setItem("panel-keep-awake", enabled ? "on" : "off");
+    const wakeLockReady = await wakeLockController.current?.setWanted(enabled);
+    if (enabled && !wakeLockReady) {
+      setKeepAwakeWanted(false);
+      localStorage.setItem("panel-keep-awake", "off");
+      setToast("Safari kunne ikke holde skjermen våken. Oppdater iPadOS eller åpne panelet fra Hjem-skjermen.");
+      return;
+    }
+    await setFocusMode(enabled, { force: true });
   }
 
   function toggleFocusModeWanted() {
@@ -1369,6 +1438,7 @@ function App() {
             {macLinkActions.map((action) => <MacLinkAction action={action} onTrigger={triggerAction} key={action.id} />)}
           </section>
 
+          <CurrentEventCard events={calendarEvents} now={now} />
           <NextEventCard events={calendarEvents} connected={syncCalendar.connected} now={now} />
 
           <section className={`panel-card focus-card ${focusPhase === "break" ? "is-break" : ""}`}>

@@ -28,6 +28,7 @@ struct MetricsPayload: Encodable {
 
 @MainActor
 final class MetricsSyncModel: ObservableObject {
+    static let shared = MetricsSyncModel()
     static let backgroundTaskIdentifier = "no.olefroiland.PanelCompanion.refresh"
 
     @Published var endpoint = UserDefaults.standard.string(forKey: "panelEndpoint")
@@ -41,6 +42,34 @@ final class MetricsSyncModel: ObservableObject {
 
     private let healthStore = HKHealthStore()
     private let locationProvider = LocationProvider()
+    private var stepsObserverQuery: HKObserverQuery?
+
+    // BGAppRefresh er bare et ønske til iOS og kan bli utsatt lenge. Skritt har
+    // en bedre, datadrevet vekkemekanisme: HealthKit starter appen når nye
+    // skrittprøver kommer inn. Den samme synken tar med posisjon og skjermtid
+    // når de kildene er tilgjengelige, mens den vanlige bakgrunnsjobben blir
+    // stående som reserve.
+    func startAutomaticSync() {
+        guard let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else { return }
+
+        if stepsObserverQuery == nil {
+            let query = HKObserverQuery(sampleType: stepType, predicate: nil) { [weak self] _, completion, error in
+                guard error == nil else { completion(); return }
+                let observerCompletion = ObserverCompletion(completion)
+                Task { @MainActor [weak self] in
+                    if let self {
+                        await self.refreshAll(requestPermissions: false)
+                    }
+                    observerCompletion.call()
+                }
+            }
+            stepsObserverQuery = query
+            healthStore.execute(query)
+        }
+        // Første forsøk kan skje før brukeren har godkjent Helse. Metoden
+        // kalles derfor også rett etter tillatelsesdialogen og ved hver oppstart.
+        healthStore.enableBackgroundDelivery(for: stepType, frequency: .hourly) { _, _ in }
+    }
 
     func connectAndSync() async {
         await refreshAll(requestPermissions: true)
@@ -124,6 +153,7 @@ final class MetricsSyncModel: ObservableObject {
         }
         try await healthStore.requestAuthorization(toShare: [], read: [stepType])
         stepsStatus = "Godkjent"
+        startAutomaticSync()
 
         #if PANEL_USAGE_EXPORT
         try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
@@ -260,6 +290,21 @@ final class MetricsSyncModel: ObservableObject {
         let request = BGAppRefreshTaskRequest(identifier: Self.backgroundTaskIdentifier)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
         try? BGTaskScheduler.shared.submit(request)
+    }
+}
+
+// HealthKit gir en vanlig Objective-C completion-blokk, mens Swift 6 krever at
+// verdier som flyttes inn i en MainActor-task er Sendable. Blokken kalles
+// nøyaktig én gang etter synken; den muterer ingen Swift-tilstand i boksen.
+private final class ObserverCompletion: @unchecked Sendable {
+    private let completion: () -> Void
+
+    init(_ completion: @escaping () -> Void) {
+        self.completion = completion
+    }
+
+    func call() {
+        completion()
     }
 }
 
