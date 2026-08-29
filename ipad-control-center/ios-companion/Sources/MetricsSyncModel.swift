@@ -60,6 +60,11 @@ final class MetricsSyncModel: ObservableObject {
                     if let self {
                         await self.refreshAll(requestPermissions: false)
                     }
+                    // Skrittene kommer inn i bakgrunnen, og natta ligger i
+                    // tidsstemplene deres. Det er her søvnrytmen får vite noe
+                    // uten at Ole åpner appen.
+                    await WakeDetector.shared.evaluateFromHealth()
+                    await SleepAlarms.shared.refresh()
                     observerCompletion.call()
                 }
             }

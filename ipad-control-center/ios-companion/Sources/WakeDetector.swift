@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 
 // Mac-en sover om morgenen, og det er nettopp da signalet oppstår. Tidspunktet
 // skrives derfor til disk med én gang og sendes på nytt ved hver senere
@@ -27,30 +28,73 @@ final class WakeDetector {
     func noteActivity(now: Date = .now) {
         defer { defaults.set(now, forKey: lastActiveKey) }
         guard let candidate = detect(now: now) else { return }
-        defaults.set(dayKey(candidate), forKey: reportedDayKey)
-        // Den siste aktiviteten før stillheten er omtrent da telefonen ble lagt
-        // fra seg. Det er ikke det samme som å ha sovnet, og panelet merker det
-        // som et anslag — men det er begge endene av natta uten at Ole gjør noe.
+        record(wokeAt: candidate, sleptAt: defaults.object(forKey: lastActiveKey) as? Date)
+        Task { await flushPending() }
+    }
+
+    // Én vei inn i køen, brukt både av forgrunnen og av helsedataene. To veier
+    // ville før eller siden notert natta på hver sin måte.
+    func record(wokeAt: Date, sleptAt: Date?) {
+        let dag = isoDay(wokeAt)
+        guard defaults.string(forKey: reportedDayKey) != dag else { return }
+        defaults.set(dag, forKey: reportedDayKey)
+
         let formatter = ISO8601DateFormatter()
-        var entry: [String: String] = ["date": isoDay(candidate), "wokeAt": formatter.string(from: candidate)]
-        if let lastActive = defaults.object(forKey: lastActiveKey) as? Date {
-            entry["sleepAt"] = formatter.string(from: lastActive)
+        var entry: [String: String] = ["date": dag, "wokeAt": formatter.string(from: wokeAt)]
+        if let sleptAt {
+            entry["sleepAt"] = formatter.string(from: sleptAt)
             // Om leggetiden ble ignorert avgjøres kvelden før, mens Mac-en godt
             // kan ha sovet. Svaret følger med natta i stedet for å gå tapt.
-            let kveld = SleepAlarms.shared.tonight()
-            entry["ignoredBedtime"] = BedtimeWatch.shared.ignoredBedtime(rule: kveld.rule, now: lastActive) ? "1" : "0"
+            entry["ignoredBedtime"] = BedtimeWatch.shared.ignoredBedtime(rule: SleepAlarms.shared.tonight().rule, now: sleptAt) ? "1" : "0"
         }
         var queue = defaults.array(forKey: queueKey) as? [[String: String]] ?? []
         queue.removeAll { $0["date"] == entry["date"] }
         queue.append(entry)
         defaults.set(Array(queue.suffix(maxQueued)), forKey: queueKey)
-        Task { await flushPending() }
+    }
+
+    // Å åpne denne appen er et dårlig mål på «Ole brukte telefonen». Gjør han
+    // det én gang i uka, blir den ene gangen til hele natta. Skrittene har
+    // derimot ekte tidsstempler, og HealthKit leverer dem i bakgrunnen uten at
+    // appen åpnes — så natta finnes i dataene enten Ole rører appen eller ei.
+    //
+    // Et opphold på fire timer eller mer, som ender i vinduet 04–13, er en natt.
+    // Enden er da han sto opp, og starten er da han la fra seg telefonen.
+    func evaluateFromHealth() async {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
+        let store = HKHealthStore()
+        let fra = Date.now.addingTimeInterval(-36 * 60 * 60)
+        let predikat = HKQuery.predicateForSamples(withStart: fra, end: .now)
+        let sortering = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+
+        let prøver: [HKSample] = await withCheckedContinuation { fortsettelse in
+            let spørring = HKSampleQuery(sampleType: stepType, predicate: predikat, limit: HKObjectQueryNoLimit, sortDescriptors: sortering) { _, resultat, _ in
+                fortsettelse.resume(returning: resultat ?? [])
+            }
+            store.execute(spørring)
+        }
+        guard prøver.count > 1 else { return }
+
+        var sisteSlutt = prøver[0].endDate
+        var natt: (sov: Date, våknet: Date)?
+        for prøve in prøver.dropFirst() {
+            let opphold = prøve.startDate.timeIntervalSince(sisteSlutt)
+            let time = Calendar.current.component(.hour, from: prøve.startDate)
+            if opphold >= quietGap, window.contains(time) {
+                natt = (sov: sisteSlutt, våknet: prøve.startDate)
+            }
+            sisteSlutt = max(sisteSlutt, prøve.endDate)
+        }
+        guard let natt else { return }
+        record(wokeAt: natt.våknet, sleptAt: natt.sov)
+        await flushPending()
     }
 
     func detect(now: Date = .now) -> Date? {
         let hour = Calendar.current.component(.hour, from: now)
         guard window.contains(hour) else { return nil }
-        guard defaults.string(forKey: reportedDayKey) != dayKey(now) else { return nil }
+        guard defaults.string(forKey: reportedDayKey) != isoDay(now) else { return nil }
         guard let lastActive = defaults.object(forKey: lastActiveKey) as? Date else { return nil }
         guard now.timeIntervalSince(lastActive) >= quietGap else { return nil }
         return now
@@ -100,10 +144,5 @@ final class WakeDetector {
               let url = URL(string: endpoint),
               url.host?.hasSuffix(".local") == true || url.host?.isPrivateNetworkAddress == true else { return nil }
         return url.deletingLastPathComponent().appendingPathComponent("day-plan")
-    }
-
-    private func dayKey(_ date: Date) -> String {
-        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        return "\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
     }
 }

@@ -151,7 +151,7 @@
 					D578E9B25E369E7C74FB9E9E = {
 						DevelopmentTeam = KK679X38PZ;
 						ProvisioningStyle = Automatic;
-						SystemCapabilities = "[\"com.apple.FamilyControls\": [\"enabled\": 1], \"com.apple.HealthKit\": [\"enabled\": 1]]";
+						SystemCapabilities = "[\"com.apple.HealthKit\": [\"enabled\": 1], \"com.apple.FamilyControls\": [\"enabled\": 1]]";
 					};
 				};
 			};

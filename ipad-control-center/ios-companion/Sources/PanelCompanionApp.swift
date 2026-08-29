@@ -42,6 +42,7 @@ struct PanelCompanionApp: App {
         .backgroundTask(.appRefresh(MetricsSyncModel.backgroundTaskIdentifier)) {
             // Oppvåkningen kan ha oppstått mens Mac-en sov. Den prøves på nytt
             // her, før alt annet, siden dagen ellers står feil til appen åpnes.
+            await WakeDetector.shared.evaluateFromHealth()
             await WakeDetector.shared.flushPending()
             await SleepAlarms.shared.refresh()
             await syncModel.refreshAll(requestPermissions: false)

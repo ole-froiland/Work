@@ -356,10 +356,15 @@ er ikke nok.
 
 ## Søvnrytme og alarmer
 
-Begge endene av natta måles allerede. `WakeDetector` noterer siste gang telefonen
-var i bruk, og når den oppdager en oppvåkning er akkurat den verdien den siste
-aktiviteten *før* stillheten — altså omtrent da telefonen ble lagt fra seg. Begge
-sendes til `POST /api/day-plan`, som `wokeAt` og `sleepAt`.
+Begge endene av natta leses ut av skrittdataene. HealthKit leverer skritt i
+bakgrunnen omtrent hver time, og `WakeDetector.evaluateFromHealth()` ser etter et
+opphold på fire timer eller mer som ender i vinduet 04–13. Enden av oppholdet er
+oppvåkningen, starten er da telefonen ble lagt fra seg. Begge sendes til
+`POST /api/day-plan`, som `wokeAt` og `sleepAt`.
+
+Dette er med vilje ikke basert på når appen ble åpnet. Den første versjonen målte
+nettopp det, og åpner Ole appen én gang i uka blir den ene gangen til hele natta.
+Skrittene har ekte tidsstempler og kommer inn uten at appen røres.
 
 Presisjonen skal ikke overdrives: `sleepAt` er når telefonen ble lagt fra seg,
 ikke når Ole sovnet. Kortet i panelet sier «anslått» hver gang tallet vises.
