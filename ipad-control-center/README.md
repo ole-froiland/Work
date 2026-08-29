@@ -307,3 +307,49 @@ npm test
 npm run build
 npm run test:sites
 ```
+
+## Oppvåkning og dagsplan
+
+Panelet legger en dagsmal ut fra klokkeslettet Ole faktisk sto opp. Malen ligger i
+`~/Library/Application Support/ipad-control-center/day-plan.json` — den er skrevet
+for hånd og kan ikke utledes på nytt, og hører derfor ikke hjemme i `Caches/` der
+kalendercachen ligger. Oppvåkningen for dagen ligger derimot i
+`~/Library/Caches/ipad-control-center/day-wake.json`; den gjelder ett døgn og
+utledes på nytt i morgen.
+
+Apple-avtalene flytter seg ikke. De er ankre, og bolkene glir forbi dem. En bolk
+som ikke får plass før `dayEnd` havner i lista under dagen i stedet for å
+forsvinne. Trykker man på en bolk, hukes den av; trykker man igjen, angres det.
+En avhuket bolk varte fra der den sto til den ble huket av, så resten av dagen
+flyter derfra — blir en økt kortere enn planlagt, rykker resten fram.
+
+Skyvingen går bare framover. Står Ole opp tidligere enn malen, skjer ingenting.
+
+To kilder melder fra om oppvåkningen, begge til `POST /api/day-plan`.
+
+Companion-appen gjør det av seg selv: første gang appen blir aktiv etter mer enn
+fire timer stille, i vinduet 04–13, sender den tidspunktet som et gjett. Panelet
+viser gjettet som et gjett og lar det rettes med ett trykk. Sov Mac-en da signalet
+oppsto, blir tidspunktet liggende på telefonen og sendes på nytt ved neste
+anledning — planen er en ren funksjon av oppvåkningstidspunktet, så et signal som
+kommer fram tre timer for sent gir nøyaktig samme dag.
+
+Snarveien treffer riktig minutt og er den som bør brukes. Den settes opp én gang
+i Snarveier på iPhone:
+
+1. **Automasjon → Ny → Vekking** (eventuelt **Alarm → Stoppes**).
+2. Slå på **Kjør umiddelbart** og slå av **Spør før kjøring**. Uten dette må et
+   varsel trykkes bort, og da er signalet verdiløst på en morgen.
+3. Handling: **Hent innhold fra URL**.
+   - URL: `http://Ole-sin-MacBook-Air.local:4173/api/day-plan`
+   - Metode: `POST`, forespørselstekst `JSON`
+   - `kind` (tekst): `wake`
+   - `source` (tekst): `shortcut`
+   - `wokeAt` (tekst): variabelen **Gjeldende dato**, formatert som ISO 8601
+
+En rettelse Ole har gjort selv overskrives aldri av et signal som kommer etterpå.
+Gjettet taper alltid mot mennesket.
+
+En ny fil i `ios-companion/Sources` krever `xcodegen generate` før den er med i
+`PanelCompanion.xcodeproj`. Prosjektfila er sjekket inn, og `project.yml` alene
+er ikke nok.

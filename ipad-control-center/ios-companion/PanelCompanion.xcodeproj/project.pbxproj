@@ -11,6 +11,7 @@
 		1B6458F54A82FF8C253386D6 /* PanelCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F90B25E55B24B3FA51E971 /* PanelCompanionApp.swift */; };
 		20938863155F270253C4EC61 /* LocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C7B1D7A907762B24D03F786 /* LocationProvider.swift */; };
 		2263B5B4FDE8DE9F91AEBC0C /* SyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DB8D89EEDDDDB32E7FE9C6B /* SyncView.swift */; };
+		29B2C7BE9C423849B16A9165 /* WakeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1784149B81019906F7A66AA /* WakeDetector.swift */; };
 		A6872E43C7A5C2595E075EA1 /* SocialApps.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF367E00C6A569F789462E37 /* SocialApps.swift */; };
 		B9C47769C54B835B6BC970A6 /* MetricsSyncModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D671052259C864180C513CEA /* MetricsSyncModel.swift */; };
 /* End PBXBuildFile section */
@@ -34,6 +35,7 @@
 		7D0EB47B125A505057382F38 /* PanelCompanion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PanelCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D671052259C864180C513CEA /* MetricsSyncModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsSyncModel.swift; sourceTree = "<group>"; };
 		DF367E00C6A569F789462E37 /* SocialApps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialApps.swift; sourceTree = "<group>"; };
+		F1784149B81019906F7A66AA /* WakeDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeDetector.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -53,6 +55,7 @@
 				42F90B25E55B24B3FA51E971 /* PanelCompanionApp.swift */,
 				DF367E00C6A569F789462E37 /* SocialApps.swift */,
 				6DB8D89EEDDDDB32E7FE9C6B /* SyncView.swift */,
+				F1784149B81019906F7A66AA /* WakeDetector.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -130,7 +133,7 @@
 					D578E9B25E369E7C74FB9E9E = {
 						DevelopmentTeam = KK679X38PZ;
 						ProvisioningStyle = Automatic;
-						SystemCapabilities = "[\"com.apple.HealthKit\": [\"enabled\": 1], \"com.apple.FamilyControls\": [\"enabled\": 1]]";
+						SystemCapabilities = "[\"com.apple.FamilyControls\": [\"enabled\": 1], \"com.apple.HealthKit\": [\"enabled\": 1]]";
 					};
 				};
 			};
@@ -172,6 +175,7 @@
 				1B6458F54A82FF8C253386D6 /* PanelCompanionApp.swift in Sources */,
 				A6872E43C7A5C2595E075EA1 /* SocialApps.swift in Sources */,
 				2263B5B4FDE8DE9F91AEBC0C /* SyncView.swift in Sources */,
+				29B2C7BE9C423849B16A9165 /* WakeDetector.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

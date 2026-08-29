@@ -316,7 +316,9 @@ private extension JSONEncoder {
     }
 }
 
-private extension String {
+// Delt med WakeDetector. Sjekken avgjør hvilke verter appen i det hele tatt
+// snakker med, og skal finnes ett sted framfor å drive fra hverandre i to.
+extension String {
     var isPrivateNetworkAddress: Bool {
         self == "localhost" || hasPrefix("192.168.") || hasPrefix("10.") || hasPrefix("172.16.") || hasPrefix("172.17.") || hasPrefix("172.18.") || hasPrefix("172.19.") || hasPrefix("172.2") || hasPrefix("172.30.") || hasPrefix("172.31.")
     }

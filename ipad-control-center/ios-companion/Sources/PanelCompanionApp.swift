@@ -33,10 +33,14 @@ struct PanelCompanionApp: App {
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     guard newPhase == .active else { return }
+                    WakeDetector.shared.noteActivity()
                     Task { await syncModel.refreshAll(requestPermissions: false) }
                 }
         }
         .backgroundTask(.appRefresh(MetricsSyncModel.backgroundTaskIdentifier)) {
+            // Oppvåkningen kan ha oppstått mens Mac-en sov. Den prøves på nytt
+            // her, før alt annet, siden dagen ellers står feil til appen åpnes.
+            await WakeDetector.shared.flushPending()
             await syncModel.refreshAll(requestPermissions: false)
         }
     }
