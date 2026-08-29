@@ -12,8 +12,10 @@ final class WakeDetector {
     private let defaults = UserDefaults.standard
     private let lastActiveKey = "wakeLastActiveAt"
     private let reportedDayKey = "wakeReportedDay"
-    private let pendingKey = "wakePendingAt"
-    private let pendingSleepKey = "wakePendingSleepAt"
+    // En kø, ikke ett tidspunkt. Mac-en kan sove i dagevis, og en natt som ikke
+    // ble levert er fortsatt en natt — den skal ligge her til den kommer fram.
+    private let queueKey = "wakePendingNights"
+    private let maxQueued = 90
 
     // Fire timer stille er ikke en pause, det er en natt. Vinduet 04–13 holder
     // en lang ettermiddagslur utenfor.
@@ -26,13 +28,18 @@ final class WakeDetector {
         defer { defaults.set(now, forKey: lastActiveKey) }
         guard let candidate = detect(now: now) else { return }
         defaults.set(dayKey(candidate), forKey: reportedDayKey)
-        defaults.set(candidate, forKey: pendingKey)
         // Den siste aktiviteten før stillheten er omtrent da telefonen ble lagt
         // fra seg. Det er ikke det samme som å ha sovnet, og panelet merker det
         // som et anslag — men det er begge endene av natta uten at Ole gjør noe.
+        let formatter = ISO8601DateFormatter()
+        var entry: [String: String] = ["date": isoDay(candidate), "wokeAt": formatter.string(from: candidate)]
         if let lastActive = defaults.object(forKey: lastActiveKey) as? Date {
-            defaults.set(lastActive, forKey: pendingSleepKey)
+            entry["sleepAt"] = formatter.string(from: lastActive)
         }
+        var queue = defaults.array(forKey: queueKey) as? [[String: String]] ?? []
+        queue.removeAll { $0["date"] == entry["date"] }
+        queue.append(entry)
+        defaults.set(Array(queue.suffix(maxQueued)), forKey: queueKey)
         Task { await flushPending() }
     }
 
@@ -46,33 +53,39 @@ final class WakeDetector {
     }
 
     func flushPending() async {
-        guard let pending = defaults.object(forKey: pendingKey) as? Date else { return }
-        // Et tidspunkt fra i går avvises av panelet uansett. Da er det bedre å
-        // kaste det her enn å prøve det hver gang appen åpnes resten av uka.
-        guard Calendar.current.isDateInToday(pending) else {
-            defaults.removeObject(forKey: pendingKey)
-            defaults.removeObject(forKey: pendingSleepKey)
-            return
+        var queue = defaults.array(forKey: queueKey) as? [[String: String]] ?? []
+        guard !queue.isEmpty, let target = WakeDetector.shared.dayPlanURL() else { return }
+        let today = isoDay(.now)
+        var levert: [String] = []
+        for entry in queue {
+            guard let date = entry["date"], let wokeAt = entry["wokeAt"] else { continue }
+            // Dagens natt legger også dagen ut på nytt. Etterslepet skal bare
+            // inn i historikken, og panelet avviser en oppvåkning som ikke er
+            // fra i dag — derfor to ulike kall.
+            var body: [String: Any] = date == today
+                ? ["kind": "wake", "source": "usage", "wokeAt": wokeAt]
+                : ["kind": "night", "date": date, "wokeAt": wokeAt]
+            if let sleepAt = entry["sleepAt"] { body["sleepAt"] = sleepAt }
+            if await post(body, to: target) { levert.append(date) }
         }
-        guard let target = dayPlanURL() else { return }
-        var request = URLRequest(url: target)
+        queue.removeAll { levert.contains($0["date"] ?? "") }
+        defaults.set(queue, forKey: queueKey)
+    }
+
+    private func post(_ body: [String: Any], to url: URL) async -> Bool {
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 8
-        let formatter = ISO8601DateFormatter()
-        var body: [String: Any] = [
-            "kind": "wake",
-            "source": "usage",
-            "wokeAt": formatter.string(from: pending),
-        ]
-        if let slept = defaults.object(forKey: pendingSleepKey) as? Date {
-            body["sleepAt"] = formatter.string(from: slept)
-        }
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         guard let (_, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
-        defaults.removeObject(forKey: pendingKey)
-        defaults.removeObject(forKey: pendingSleepKey)
+              let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
+        return true
+    }
+
+    private func isoDay(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     // Endepunktet ligger ved siden av det companion allerede sender til, og

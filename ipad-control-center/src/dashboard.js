@@ -1033,3 +1033,32 @@ export function alarmTimes({ targetBedtime = null, targetWake = null } = {}) {
     { id: "opp-naa", at: clockText(wake + 5), label: "Opp nå" },
   ];
 }
+
+// Mac-en sover, og telefonen kan gå dager uten å nå den. Rampen er deterministisk
+// — et kvarter per døgn mot ankeret — så hele uken kan regnes ut på forhånd og
+// sendes med. Telefonen plukker dagens rad og trenger ikke å spørre igjen.
+export function projectAlarms({ rhythm, wakeAnchor = null, days = 14, from = new Date() } = {}) {
+  if (!rhythm || rhythm.learning) return [];
+  const anchorMinute = clockMinutes(wakeAnchor);
+  let wakeMinute = clockMinutes(rhythm.targetWake);
+  const sleepNeed = Number(rhythm.sleepNeed);
+  if (wakeMinute === null || !Number.isFinite(sleepNeed)) return [];
+
+  const projected = [];
+  for (let offset = 0; offset < days; offset += 1) {
+    if (offset > 0 && anchorMinute !== null) {
+      const gap = anchorMinute - wakeMinute;
+      wakeMinute += Math.sign(gap) * Math.min(Math.abs(gap), MAX_DRIFT);
+    }
+    const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + offset);
+    const targetWake = clockText(wakeMinute);
+    const targetBedtime = clockText(wakeMinute - sleepNeed - FALL_ASLEEP);
+    projected.push({
+      date: `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`,
+      targetWake,
+      targetBedtime,
+      alarms: alarmTimes({ targetBedtime, targetWake }),
+    });
+  }
+  return projected;
+}

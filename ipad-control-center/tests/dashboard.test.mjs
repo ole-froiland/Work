@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeSleepRhythm, describeWake, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, alarmTimes, notePanelAttempt, panelHostCandidates, planDay, planPanelEntry, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
+import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeSleepRhythm, describeWake, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, alarmTimes, notePanelAttempt, panelHostCandidates, planDay, planPanelEntry, projectAlarms, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
 
 function fakeStorage(seed = {}) {
   const values = new Map(Object.entries(seed));
@@ -1081,4 +1081,24 @@ test("uten advance står målet stille, uansett hvor mange ganger det leses", ()
   const args = { nights: sent, wakeAnchor: "07:00", previousTarget: "09:00", advance: false };
   assert.equal(describeSleepRhythm(args).targetWake, "09:00");
   assert.equal(describeSleepRhythm(args).targetWake, "09:00");
+});
+
+test("alarmene projiseres framover, så telefonen tåler at Mac-en sover", () => {
+  const rytme = { learning: false, sleepNeed: 480, targetWake: "09:00", targetBedtime: "00:15" };
+  const dager = projectAlarms({ rhythm: rytme, wakeAnchor: "07:00", days: 3, from: new Date(2026, 7, 29) });
+  assert.deepEqual(dager.map((d) => d.date), ["2026-08-29", "2026-08-30", "2026-08-31"]);
+  // Rampen rykker et kvarter per døgn mot ankeret, også når ingen henter den.
+  assert.deepEqual(dager.map((d) => d.targetWake), ["09:00", "08:45", "08:30"]);
+  assert.equal(dager[1].alarms.find((a) => a.id === "stå-opp").at, "08:45");
+  assert.equal(dager[0].alarms.length, 5);
+});
+
+test("projeksjonen stopper på ankeret og går ikke forbi", () => {
+  const rytme = { learning: false, sleepNeed: 480, targetWake: "07:10", targetBedtime: "22:55" };
+  const dager = projectAlarms({ rhythm: rytme, wakeAnchor: "07:00", days: 3, from: new Date(2026, 7, 29) });
+  assert.deepEqual(dager.map((d) => d.targetWake), ["07:10", "07:00", "07:00"]);
+});
+
+test("en rytme som fortsatt lærer projiseres ikke", () => {
+  assert.deepEqual(projectAlarms({ rhythm: { learning: true }, wakeAnchor: "07:00", days: 3 }), []);
 });

@@ -9,6 +9,10 @@ function tools(overrides = {}) {
     exec: async () => ({ stdout: "", stderr: "" }),
     wait: async () => {},
     runMacAction: async () => ({ ok: true }),
+    // Uten denne kalles den ekte osascript-forespørselen om kalendertilgang.
+    // Den kan bli stående på en systemdialog til taket på 60 sekunder slår inn,
+    // og testen faller da på «Tok for lang tid» i stedet for på det den måler.
+    requestAppleCalendarAccess: async () => ({ granted: false }),
     ...overrides,
   };
 }

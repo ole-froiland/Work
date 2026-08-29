@@ -17,7 +17,8 @@ final class SleepAlarms {
     static let shared = SleepAlarms()
 
     private let defaults = UserDefaults.standard
-    private let cachedKey = "sleepAlarmTimes"
+    private let cachedKey = "sleepAlarmSchedule"
+    private let scheduledDayKey = "sleepAlarmScheduledDay"
     private let scheduledKey = "sleepAlarmIds"
     private let manager = AlarmManager.shared
 
@@ -32,10 +33,23 @@ final class SleepAlarms {
     }
 
     func refresh() async {
-        if let fetched = await fetchTimes() {
+        if let fetched = await fetchSchedule() {
             defaults.set(fetched, forKey: cachedKey)
         }
-        guard let times = defaults.array(forKey: cachedKey) as? [[String: String]], !times.isEmpty else { return }
+        guard let schedule = defaults.array(forKey: cachedKey) as? [[String: Any]], !schedule.isEmpty else { return }
+
+        // Mac-en kan ha sovet i dagevis. Hele uken ligger bufret, så dagens rad
+        // finnes selv om ingenting ble hentet — og er den også gått ut, brukes
+        // den siste kjente framfor å la telefonen stå uten alarmer.
+        let today = isoDay(.now)
+        let row = schedule.first { ($0["date"] as? String) == today } ?? schedule.last
+        guard let times = row?["alarms"] as? [[String: String]], !times.isEmpty else { return }
+
+        // Alarmene settes én gang per døgn. Uten dette ville hver forgrunnsvekking
+        // avlyse og sette dem på nytt, og en alarm kunne rekke å bli borte i
+        // sekundet den skulle ringt.
+        guard defaults.string(forKey: scheduledDayKey) != today else { return }
+
         await cancelScheduled()
         var ids: [String] = []
         for entry in times {
@@ -60,6 +74,12 @@ final class SleepAlarms {
             }
         }
         defaults.set(ids, forKey: scheduledKey)
+        defaults.set(today, forKey: scheduledDayKey)
+    }
+
+    private func isoDay(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     // Alarmene settes på nytt hver dag, så gårsdagens må bort først. Uten dette
@@ -81,14 +101,14 @@ final class SleepAlarms {
         return Calendar.current.nextDate(after: .now, matching: components, matchingPolicy: .nextTime)
     }
 
-    private func fetchTimes() async -> [[String: String]]? {
+    private func fetchSchedule() async -> [[String: Any]]? {
         guard let url = WakeDetector.shared.dayPlanURL() else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 8
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse, http.statusCode == 200,
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let alarms = payload["alarms"] as? [[String: String]] else { return nil }
-        return alarms
+              let schedule = payload["schedule"] as? [[String: Any]] else { return nil }
+        return schedule
     }
 }
