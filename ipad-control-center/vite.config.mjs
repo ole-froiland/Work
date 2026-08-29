@@ -6,6 +6,7 @@ import { runMacAction } from "./server/mac-action-service.mjs";
 import { getUsageSnapshot } from "./server/usage-service.mjs";
 import { getAgentSessions } from "./server/agent-session-service.mjs";
 import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
+import { getDayPlan, markBlockDone, recordWake } from "./server/day-plan-service.mjs";
 import { completeSpotifyAuth, getSpotifyState, listSpotifyDevices, runSpotifyCommand } from "./server/spotify-service.mjs";
 import {
   acknowledgeSyncNoteCommand,
@@ -168,6 +169,45 @@ function syncCalendarApi() {
               return;
             }
             sendJson(response, 200, await updateSyncCalendar(body));
+            return;
+          }
+          sendJson(response, 405, { error: "Method not allowed" });
+        } catch (error) {
+          sendJson(response, 400, { error: error instanceof Error ? error.message : "Ukjent feil" });
+        }
+      });
+    },
+  };
+}
+
+function dayPlanApi() {
+  return {
+    name: "local-day-plan-api",
+    configureServer(server) {
+      server.middlewares.use("/api/day-plan", async (request, response) => {
+        if (!setSyncCors(request, response)) {
+          sendJson(response, 403, { error: "Origin not allowed" });
+          return;
+        }
+        if (request.method === "OPTIONS") {
+          response.statusCode = 204;
+          response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+          response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          response.end();
+          return;
+        }
+        try {
+          if (request.method === "GET") {
+            sendJson(response, 200, await getDayPlan(new Date()));
+            return;
+          }
+          if (request.method === "POST") {
+            const body = await readJsonBody(request, 32_768);
+            if (body.kind === "done") {
+              sendJson(response, 200, { wake: await markBlockDone(body, new Date()) });
+              return;
+            }
+            sendJson(response, 200, { wake: await recordWake(body, new Date()) });
             return;
           }
           sendJson(response, 405, { error: "Method not allowed" });
@@ -397,5 +437,5 @@ export default defineConfig({
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), spotifyApi(), panelHelloApi(), macActionApi(), connectionRepairApi(), react()],
+  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), dayPlanApi(), spotifyApi(), panelHelloApi(), macActionApi(), connectionRepairApi(), react()],
 });

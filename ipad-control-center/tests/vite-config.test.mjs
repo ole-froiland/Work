@@ -36,3 +36,8 @@ test("svarer på om panelet kjører, så Netlify-siden slipper å gjette", () =>
   const names = viteConfig.plugins.flat(Infinity).map((plugin) => plugin?.name);
   assert.ok(names.includes("local-panel-hello-api"));
 });
+
+test("dagsplanen er montert som eget endepunkt", () => {
+  const names = viteConfig.plugins.flat(Infinity).map((plugin) => plugin?.name);
+  assert.ok(names.includes("local-day-plan-api"));
+});
