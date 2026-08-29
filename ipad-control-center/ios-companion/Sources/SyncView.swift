@@ -2,6 +2,9 @@ import SwiftUI
 
 struct SyncView: View {
     @ObservedObject var model: MetricsSyncModel
+    // En alarm som stille lot være å bli satt er det verste utfallet her, så
+    // tillatelsen har sin egen rad i stedet for å bli bedt om i bakgrunnen.
+    @State private var alarmStatus = "Ikke godkjent"
 
     var body: some View {
         NavigationStack {
@@ -10,6 +13,22 @@ struct SyncView: View {
                     sourceRow("Sosiale medier", status: model.screenTimeStatus, icon: "hourglass")
                     sourceRow("Skritt", status: model.stepsStatus, icon: "figure.walk")
                     sourceRow("Posisjon", status: model.locationStatus, icon: "location.fill")
+                }
+
+                Section("Alarmer") {
+                    HStack {
+                        Image(systemName: "alarm.fill").foregroundStyle(.orange).frame(width: 24)
+                        Text("Leggetid og oppvåkning")
+                        Spacer()
+                        Text(alarmStatus).foregroundStyle(.secondary)
+                    }
+                    Button("Gi alarmtilgang") {
+                        Task {
+                            let granted = await SleepAlarms.shared.authorize()
+                            alarmStatus = granted ? "Klar" : "Avslått"
+                            if granted { await SleepAlarms.shared.refresh() }
+                        }
+                    }
                 }
 
                 Section("Dashboard på Mac") {

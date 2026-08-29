@@ -353,3 +353,41 @@ Gjettet taper alltid mot mennesket.
 En ny fil i `ios-companion/Sources` krever `xcodegen generate` før den er med i
 `PanelCompanion.xcodeproj`. Prosjektfila er sjekket inn, og `project.yml` alene
 er ikke nok.
+
+## Søvnrytme og alarmer
+
+Begge endene av natta måles allerede. `WakeDetector` noterer siste gang telefonen
+var i bruk, og når den oppdager en oppvåkning er akkurat den verdien den siste
+aktiviteten *før* stillheten — altså omtrent da telefonen ble lagt fra seg. Begge
+sendes til `POST /api/day-plan`, som `wokeAt` og `sleepAt`.
+
+Presisjonen skal ikke overdrives: `sleepAt` er når telefonen ble lagt fra seg,
+ikke når Ole sovnet. Kortet i panelet sier «anslått» hver gang tallet vises.
+
+Nettene ligger i `~/Library/Application Support/ipad-control-center/sleep-history.json`,
+de siste 60. De kan ikke utledes på nytt, og hører derfor ikke hjemme i `Caches/`.
+
+Søvnbehovet er medianen av nettene, klemt til mellom 6 t og 9 t 30 min — klemmen
+finnes for netter der telefonen ble liggende og lyse. Oppvåkningsmålet beveger
+seg høyst et kvarter per dag mot `wakeAnchor` i dagsmalen, altså tidspunktet Ole
+selv har skrevet. Leggetiden er målet minus søvnbehovet minus kvarteret det tar
+å sovne.
+
+Rampen rykker **én gang i døgnet, ikke én gang per henting**. Panelet poller
+hvert halve minutt, så uten `targetWakeDate` ville målet løpt helt til ankeret på
+noen minutter. Utregningen skjer i `vite.config.mjs`, som det eneste stedet både
+`dashboard.js` og tjenesten er tilgjengelige; panelet og telefonen leser begge
+svaret framfor å ha hver sin kopi av reglene.
+
+Under tre netter settes ingen alarmer og vises ingen tall. Et gjennomsnitt av to
+netter er ikke en rytme.
+
+Fem alarmer settes av companion gjennom AlarmKit: 30 minutter før leggetid, ved
+leggetid, og fem minutter før, ved og fem minutter etter oppvåkning. De lever i
+Panelkobling og ikke i Klokke — det finnes ingen vei inn i Apples Klokke-app.
+Tilgangen gis i companion under **Alarmer**, med vilje som et eget trykk: en
+alarm som stille lot være å bli satt er det verste utfallet her.
+
+`AlarmManager` er ikke `Sendable`, så `SleepAlarms.swift` bruker
+`@preconcurrency import AlarmKit`. Rammeverket er ennå ikke revidert for Swift 6
+sin strenge samtidighet.

@@ -13,6 +13,7 @@ final class WakeDetector {
     private let lastActiveKey = "wakeLastActiveAt"
     private let reportedDayKey = "wakeReportedDay"
     private let pendingKey = "wakePendingAt"
+    private let pendingSleepKey = "wakePendingSleepAt"
 
     // Fire timer stille er ikke en pause, det er en natt. Vinduet 04–13 holder
     // en lang ettermiddagslur utenfor.
@@ -26,6 +27,12 @@ final class WakeDetector {
         guard let candidate = detect(now: now) else { return }
         defaults.set(dayKey(candidate), forKey: reportedDayKey)
         defaults.set(candidate, forKey: pendingKey)
+        // Den siste aktiviteten før stillheten er omtrent da telefonen ble lagt
+        // fra seg. Det er ikke det samme som å ha sovnet, og panelet merker det
+        // som et anslag — men det er begge endene av natta uten at Ole gjør noe.
+        if let lastActive = defaults.object(forKey: lastActiveKey) as? Date {
+            defaults.set(lastActive, forKey: pendingSleepKey)
+        }
         Task { await flushPending() }
     }
 
@@ -44,6 +51,7 @@ final class WakeDetector {
         // kaste det her enn å prøve det hver gang appen åpnes resten av uka.
         guard Calendar.current.isDateInToday(pending) else {
             defaults.removeObject(forKey: pendingKey)
+            defaults.removeObject(forKey: pendingSleepKey)
             return
         }
         guard let target = dayPlanURL() else { return }
@@ -52,14 +60,19 @@ final class WakeDetector {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 8
         let formatter = ISO8601DateFormatter()
-        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+        var body: [String: Any] = [
             "kind": "wake",
             "source": "usage",
             "wokeAt": formatter.string(from: pending),
-        ])
+        ]
+        if let slept = defaults.object(forKey: pendingSleepKey) as? Date {
+            body["sleepAt"] = formatter.string(from: slept)
+        }
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         guard let (_, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
         defaults.removeObject(forKey: pendingKey)
+        defaults.removeObject(forKey: pendingSleepKey)
     }
 
     // Endepunktet ligger ved siden av det companion allerede sender til, og
