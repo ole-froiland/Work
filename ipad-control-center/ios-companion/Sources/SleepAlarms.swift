@@ -24,7 +24,21 @@ final class SleepAlarms {
 
     private init() {}
 
+    // Den virkelige tilstanden, ikke en gjetning appen har lagret. Uten dette
+    // sto raden på «Ikke godkjent» hver gang appen ble åpnet, også når tilgangen
+    // var gitt for lenge siden.
+    var isAuthorized: Bool {
+        manager.authorizationState == .authorized
+    }
+
+    // Hvor mange alarmer som faktisk ligger i systemet. Det er det eneste svaret
+    // som betyr noe: at appen ba om tilgang sier ingenting om at noe ble satt.
+    var scheduledCount: Int {
+        (try? manager.alarms.count) ?? 0
+    }
+
     func authorize() async -> Bool {
+        if isAuthorized { return true }
         do {
             return try await manager.requestAuthorization() == .authorized
         } catch {

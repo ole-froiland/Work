@@ -4,7 +4,8 @@ struct SyncView: View {
     @ObservedObject var model: MetricsSyncModel
     // En alarm som stille lot være å bli satt er det verste utfallet her, så
     // tillatelsen har sin egen rad i stedet for å bli bedt om i bakgrunnen.
-    @State private var alarmStatus = "Ikke godkjent"
+    @State private var alarmStatus = "Sjekker …"
+    @State private var alarmCount = 0
 
     var body: some View {
         NavigationStack {
@@ -22,14 +23,18 @@ struct SyncView: View {
                         Spacer()
                         Text(alarmStatus).foregroundStyle(.secondary)
                     }
-                    Button("Gi alarmtilgang") {
+                    // Knappen het «Gi alarmtilgang» også etter at tilgangen var
+                    // gitt, og så ut som at ingenting hadde skjedd. Nå sier den
+                    // hva den faktisk gjør i den tilstanden appen er i.
+                    Button(SleepAlarms.shared.isAuthorized ? "Sett alarmene på nytt" : "Gi alarmtilgang") {
                         Task {
                             let granted = await SleepAlarms.shared.authorize()
-                            alarmStatus = granted ? "Klar" : "Avslått"
                             if granted { await SleepAlarms.shared.refresh() }
+                            oppdaterAlarmstatus()
                         }
                     }
                 }
+                .task { oppdaterAlarmstatus() }
 
                 Section("Dashboard på Mac") {
                     TextField("Adresse", text: $model.endpoint)
@@ -58,6 +63,15 @@ struct SyncView: View {
                 .disabled(model.isSyncing)
             }
             .navigationTitle("Panelkobling")
+        }
+    }
+
+    private func oppdaterAlarmstatus() {
+        alarmCount = SleepAlarms.shared.scheduledCount
+        if !SleepAlarms.shared.isAuthorized {
+            alarmStatus = "Ikke godkjent"
+        } else {
+            alarmStatus = alarmCount > 0 ? "\(alarmCount) satt" : "Ingen satt"
         }
     }
 
