@@ -517,6 +517,11 @@ function SleepRhythmCard({ rhythm }) {
         <span><em>Stå opp</em><strong>{rhythm.targetWake}</strong></span>
       </div>
       <small>{`${formatMinutes(rhythm.sleepNeed)} søvn, anslått fra ${rhythm.nightCount} netter`}</small>
+      {rhythm.ignoredRecently > 0 && (
+        <small className="sleep-ignored">
+          {`Leggetiden gikk forbi ${rhythm.ignoredRecently} av de siste 7 nettene. Rytmen strammer ikke inn de nettene.`}
+        </small>
+      )}
     </section>
   );
 }

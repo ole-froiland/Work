@@ -34,6 +34,7 @@ struct PanelCompanionApp: App {
                 .onChange(of: scenePhase) { _, newPhase in
                     guard newPhase == .active else { return }
                     WakeDetector.shared.noteActivity()
+                    BedtimeWatch.shared.noteActivity(targetBedtime: SleepAlarms.shared.tonight().bedtime)
                     Task { await syncModel.refreshAll(requestPermissions: false) }
                     Task { await SleepAlarms.shared.refresh() }
                 }

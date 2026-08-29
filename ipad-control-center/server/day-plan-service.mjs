@@ -150,6 +150,8 @@ export async function recordNight(input) {
     date,
     wokeAt: woke.toISOString(),
     sleepAt: Number.isFinite(+slept) && +slept < +woke ? slept.toISOString() : null,
+    // Telefonen avgjør dette om natta, når Mac-en kan sove. Her lagres svaret.
+    ignoredBedtime: input?.ignoredBedtime === true,
   };
   const history = await readSleepHistory();
   // Én oppføring per dato. Retter Ole oppvåkningen sin, skal natta oppdateres

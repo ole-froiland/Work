@@ -35,6 +35,10 @@ final class WakeDetector {
         var entry: [String: String] = ["date": isoDay(candidate), "wokeAt": formatter.string(from: candidate)]
         if let lastActive = defaults.object(forKey: lastActiveKey) as? Date {
             entry["sleepAt"] = formatter.string(from: lastActive)
+            // Om leggetiden ble ignorert avgjøres kvelden før, mens Mac-en godt
+            // kan ha sovet. Svaret følger med natta i stedet for å gå tapt.
+            let kveld = SleepAlarms.shared.tonight()
+            entry["ignoredBedtime"] = BedtimeWatch.shared.ignoredBedtime(rule: kveld.rule, now: lastActive) ? "1" : "0"
         }
         var queue = defaults.array(forKey: queueKey) as? [[String: String]] ?? []
         queue.removeAll { $0["date"] == entry["date"] }
@@ -66,6 +70,7 @@ final class WakeDetector {
                 ? ["kind": "wake", "source": "usage", "wokeAt": wokeAt]
                 : ["kind": "night", "date": date, "wokeAt": wokeAt]
             if let sleepAt = entry["sleepAt"] { body["sleepAt"] = sleepAt }
+            if entry["ignoredBedtime"] == "1" { body["ignoredBedtime"] = true }
             if await post(body, to: target) { levert.append(date) }
         }
         queue.removeAll { levert.contains($0["date"] ?? "") }

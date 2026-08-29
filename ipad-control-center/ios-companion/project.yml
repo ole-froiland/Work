@@ -16,6 +16,7 @@ targets:
     platform: iOS
     sources:
       - Sources
+      - Resources
     info:
       path: Config/Info.plist
       properties:

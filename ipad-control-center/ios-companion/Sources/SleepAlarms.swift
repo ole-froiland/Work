@@ -59,6 +59,13 @@ final class SleepAlarms {
         let row = schedule.first { ($0["date"] as? String) == today } ?? schedule.last
         guard let times = row?["alarms"] as? [[String: String]], !times.isEmpty else { return }
 
+        // Ble leggetiden ignorert i natt, skyves morgenen. Regelen kommer som
+        // tall fra Mac-en, så telefonen har ingen egen kopi av den.
+        let push = BedtimeWatch.shared.pushMinutes(
+            targetBedtime: row?["targetBedtime"] as? String,
+            rule: row?["lateNight"] as? [String: Any]
+        )
+
         // Alarmene settes én gang per døgn. Uten dette ville hver forgrunnsvekking
         // avlyse og sette dem på nytt, og en alarm kunne rekke å bli borte i
         // sekundet den skulle ringt.
@@ -67,7 +74,9 @@ final class SleepAlarms {
         await cancelScheduled()
         var ids: [String] = []
         for entry in times {
-            guard let at = entry["at"], let label = entry["label"], let fireDate = nextDate(for: at) else { continue }
+            guard let at = entry["at"], let label = entry["label"] else { continue }
+            let morgen = entry["id"] != "avrunding" && entry["id"] != "leggetid"
+            guard let fireDate = nextDate(for: at, plus: morgen ? push : 0) else { continue }
             let id = UUID()
             // Stoppknappen lages av systemet. AlarmButton har ingen ferdig
             // variant av den, og alerten uten `stopButton` er den som gjelder.
@@ -79,9 +88,14 @@ final class SleepAlarms {
                 metadata: SleepAlarmMetadata(label: label),
                 tintColor: Color.orange
             )
+            // Kveldsalarmene skal minne, ikke rive. Morgenalarmene skal rive.
+            // AlertSound har ingen stillhet, så det mykeste som finnes er en
+            // egen, dempet lyd.
+            let kveld = entry["id"] == "avrunding" || entry["id"] == "leggetid"
             let configuration = AlarmManager.AlarmConfiguration<SleepAlarmMetadata>.alarm(
                 schedule: .fixed(fireDate),
-                attributes: attributes
+                attributes: attributes,
+                sound: kveld ? .named("pling.caf") : .default
             )
             if (try? await manager.schedule(id: id, configuration: configuration)) != nil {
                 ids.append(id.uuidString)
@@ -89,6 +103,13 @@ final class SleepAlarms {
         }
         defaults.set(ids, forKey: scheduledKey)
         defaults.set(today, forKey: scheduledDayKey)
+    }
+
+    /// Kveldens leggetid og regelen for den, fra den bufrede uken.
+    func tonight() -> (bedtime: String?, rule: [String: Any]?) {
+        guard let schedule = defaults.array(forKey: cachedKey) as? [[String: Any]] else { return (nil, nil) }
+        let row = schedule.first { ($0["date"] as? String) == isoDay(.now) } ?? schedule.last
+        return (row?["targetBedtime"] as? String, row?["lateNight"] as? [String: Any])
     }
 
     private func isoDay(_ date: Date) -> String {
@@ -106,13 +127,14 @@ final class SleepAlarms {
         defaults.removeObject(forKey: scheduledKey)
     }
 
-    private func nextDate(for clock: String) -> Date? {
+    private func nextDate(for clock: String, plus minutes: Int = 0) -> Date? {
         let parts = clock.split(separator: ":").compactMap { Int($0) }
         guard parts.count == 2 else { return nil }
         var components = DateComponents()
         components.hour = parts[0]
         components.minute = parts[1]
-        return Calendar.current.nextDate(after: .now, matching: components, matchingPolicy: .nextTime)
+        guard let base = Calendar.current.nextDate(after: .now, matching: components, matchingPolicy: .nextTime) else { return nil }
+        return minutes == 0 ? base : base.addingTimeInterval(TimeInterval(minutes * 60))
     }
 
     private func fetchSchedule() async -> [[String: Any]]? {

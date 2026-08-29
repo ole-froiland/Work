@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeSleepRhythm, describeWake, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, alarmTimes, notePanelAttempt, panelHostCandidates, planDay, planPanelEntry, projectAlarms, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
+import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeSleepRhythm, describeWake, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, alarmTimes, notePanelAttempt, panelHostCandidates, planDay, planPanelEntry, projectAlarms, pushForLateNight, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
 
 function fakeStorage(seed = {}) {
   const values = new Map(Object.entries(seed));
@@ -1101,4 +1101,54 @@ test("projeksjonen stopper på ankeret og går ikke forbi", () => {
 
 test("en rytme som fortsatt lærer projiseres ikke", () => {
   assert.deepEqual(projectAlarms({ rhythm: { learning: true }, wakeAnchor: "07:00", days: 3 }), []);
+});
+
+test("går Ole til sengs i tide, skyves ingenting", () => {
+  assert.equal(pushForLateNight({ targetBedtime: "00:00", sleptAtMinute: 0 }), 0);
+  assert.equal(pushForLateNight({ targetBedtime: "00:00", sleptAtMinute: 23 * 60 + 50 }), 0);
+});
+
+test("et lite overtramp er innafor og skyver ingenting", () => {
+  // Nådeperioden er en halvtime. Å legge seg ti på er ikke å ignorere alarmen.
+  assert.equal(pushForLateNight({ targetBedtime: "00:00", sleptAtMinute: 10 }), 0);
+  assert.equal(pushForLateNight({ targetBedtime: "00:00", sleptAtMinute: 30 }), 0);
+});
+
+test("morgenen skyves halvparten av overtrampet", () => {
+  assert.equal(pushForLateNight({ targetBedtime: "00:00", sleptAtMinute: 60 }), 15);
+  assert.equal(pushForLateNight({ targetBedtime: "00:00", sleptAtMinute: 90 }), 30);
+});
+
+test("skyvingen har et tak, ellers ville morgenen drevet fritt", () => {
+  assert.equal(pushForLateNight({ targetBedtime: "00:00", sleptAtMinute: 4 * 60 }), 45);
+});
+
+test("leggetid før midnatt håndteres uten å tro at natta er et døgn lang", () => {
+  // Leggetid 22:45, sovnet 23:45 — én time for sent, ikke 23 timer for tidlig.
+  assert.equal(pushForLateNight({ targetBedtime: "22:45", sleptAtMinute: 23 * 60 + 45 }), 15);
+  // 22:45 til 00:30 er 105 minutter for sent: 75 over nåden, halvparten er 38.
+  assert.equal(pushForLateNight({ targetBedtime: "22:45", sleptAtMinute: 30 }), 38);
+});
+
+test("teller hvor mange av de siste nettene leggetiden ble ignorert", () => {
+  const blandet = [
+    { ...natt(20, 23 * 60, 7 * 60), ignoredBedtime: true },
+    { ...natt(21, 23 * 60, 7 * 60), ignoredBedtime: false },
+    { ...natt(22, 23 * 60, 7 * 60), ignoredBedtime: true },
+  ];
+  const svar = describeSleepRhythm({ nights: blandet, wakeAnchor: "07:00", previousTarget: "08:00" });
+  assert.equal(svar.ignoredRecently, 2);
+});
+
+test("rampen strammer ikke inn etter en natt leggetiden ble ignorert", () => {
+  const nekta = [
+    natt(20, 23 * 60, 7 * 60),
+    natt(21, 23 * 60, 7 * 60),
+    { ...natt(22, 23 * 60, 7 * 60), ignoredBedtime: true },
+  ];
+  // Siste natt ble ignorert, så målet blir stående der det var.
+  assert.equal(describeSleepRhythm({ nights: nekta, wakeAnchor: "07:00", previousTarget: "08:00" }).targetWake, "08:00");
+  // Holdt han leggetiden, rykker den som før.
+  const holdt = [...nekta.slice(0, 2), natt(22, 23 * 60, 7 * 60)];
+  assert.equal(describeSleepRhythm({ nights: holdt, wakeAnchor: "07:00", previousTarget: "08:00" }).targetWake, "07:45");
 });

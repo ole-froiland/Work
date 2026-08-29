@@ -662,3 +662,4 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .sleep-times strong { font-size: 17px; font-variant-numeric: tabular-nums; }
 .sleep-card small, .sleep-card p { color: var(--muted); font-size: 11px; }
 .sleep-card p { margin: 4px 0 0; }
+.sleep-ignored { display: block; margin-top: 3px; color: var(--orange); }

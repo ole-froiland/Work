@@ -984,7 +984,7 @@ function clockText(minute) {
 export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTarget = null, advance = true } = {}) {
   const usable = (Array.isArray(nights) ? nights : []).filter((night) => Number.isFinite(+new Date(night?.wokeAt ?? "")));
   if (usable.length < MIN_NIGHTS) {
-    return { learning: true, nightCount: usable.length, sleepNeed: null, targetWake: null, targetBedtime: null };
+    return { learning: true, nightCount: usable.length, ignoredRecently: 0, sleepNeed: null, targetWake: null, targetBedtime: null };
   }
 
   // En natt uten leggetid er fortsatt en natt. Oppvåkningen er sann selv om den
@@ -1005,9 +1005,16 @@ export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTa
   const anchorMinute = clockMinutes(wakeAnchor);
   const previousMinute = clockMinutes(previousTarget);
 
+  // Rytmen strammer bare inn på netter Ole faktisk holdt leggetiden. Å flytte
+  // målet nærmere ankeret etter en natt han satt oppe ville gjort morgenen
+  // hardere nettopp den dagen han sov minst.
+  const recent = usable.slice(-7);
+  const ignoredRecently = recent.filter((night) => night?.ignoredBedtime === true).length;
+  const lastIgnored = usable[usable.length - 1]?.ignoredBedtime === true;
+
   // Uten anker er det ingenting å trekke mot, og målet blir stående der Ole er.
   let targetMinute = previousMinute ?? median(wakeMinutes);
-  if (advance && anchorMinute !== null && previousMinute !== null) {
+  if (advance && !lastIgnored && anchorMinute !== null && previousMinute !== null) {
     const gap = anchorMinute - previousMinute;
     targetMinute = previousMinute + Math.sign(gap) * Math.min(Math.abs(gap), MAX_DRIFT);
   }
@@ -1015,6 +1022,7 @@ export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTa
   return {
     learning: false,
     nightCount: usable.length,
+    ignoredRecently,
     sleepNeed,
     targetWake: clockText(targetMinute),
     targetBedtime: clockText(targetMinute - sleepNeed - FALL_ASLEEP),
@@ -1058,7 +1066,33 @@ export function projectAlarms({ rhythm, wakeAnchor = null, days = 14, from = new
       targetWake,
       targetBedtime,
       alarms: alarmTimes({ targetBedtime, targetWake }),
+      // Telefonen må kunne skyve morgenen om natta, når Mac-en sover. Reglene
+      // sendes med som tall i stedet for at telefonen får sin egen kopi av dem.
+      lateNight: { grace: BEDTIME_GRACE, factor: LATE_FACTOR, max: MAX_PUSH },
     });
   }
   return projected;
+}
+
+export const BEDTIME_GRACE = 30;
+export const LATE_FACTOR = 0.5;
+export const MAX_PUSH = 45;
+
+// Ignorerer Ole leggetiden, skyves morgenen — men bare halvparten av
+// overtrampet, og aldri mer enn tre kvarter. Full kompensasjon ville latt
+// natta gli fritt utover; ingen ville vekket ham etter fire timer fordi han
+// ble sittende oppe. Halvparten er kompromisset: han taper litt søvn, og
+// rytmen taper litt terreng, i stedet for at én av dem taper alt.
+export function pushForLateNight({ targetBedtime, sleptAtMinute, grace = BEDTIME_GRACE, factor = LATE_FACTOR, max = MAX_PUSH } = {}) {
+  const bed = clockMinutes(targetBedtime);
+  if (bed === null || !Number.isFinite(sleptAtMinute)) return 0;
+
+  // Klokkeslett er en sirkel. Leggetid 22:45 og innsovning 00:30 er ett kvarter
+  // over midnatt, ikke 22 timer for tidlig, så avstanden måles den korte veien.
+  let overshoot = sleptAtMinute - bed;
+  if (overshoot < -DAY_MINUTES / 2) overshoot += DAY_MINUTES;
+  if (overshoot > DAY_MINUTES / 2) overshoot -= DAY_MINUTES;
+
+  if (overshoot <= grace) return 0;
+  return Math.min(max, Math.round((overshoot - grace) * factor));
 }

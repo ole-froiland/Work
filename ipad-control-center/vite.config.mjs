@@ -204,6 +204,8 @@ function dayPlanApi() {
             const now = new Date();
             const plan = await getDayPlan(now);
             const today = now.toISOString().slice(0, 10);
+            // Rampen rykker én gang i døgnet, og bare når gårsdagens leggetid
+            // faktisk ble holdt. describeSleepRhythm avgjør det siste selv.
             const advance = plan.history?.targetWakeDate !== today;
             const rhythm = describeSleepRhythm({
               nights: plan.history?.nights ?? [],

@@ -12,9 +12,11 @@
 		20938863155F270253C4EC61 /* LocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C7B1D7A907762B24D03F786 /* LocationProvider.swift */; };
 		2263B5B4FDE8DE9F91AEBC0C /* SyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DB8D89EEDDDDB32E7FE9C6B /* SyncView.swift */; };
 		29B2C7BE9C423849B16A9165 /* WakeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1784149B81019906F7A66AA /* WakeDetector.swift */; };
+		2E3470A3BEEE8AB32B2116CD /* pling.caf in Resources */ = {isa = PBXBuildFile; fileRef = 3189D511A4D03F9B76C49245 /* pling.caf */; };
 		A6872E43C7A5C2595E075EA1 /* SocialApps.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF367E00C6A569F789462E37 /* SocialApps.swift */; };
 		B9C47769C54B835B6BC970A6 /* MetricsSyncModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D671052259C864180C513CEA /* MetricsSyncModel.swift */; };
 		E221B7E2F834BCCA3BB46BEA /* SleepAlarms.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA725DC9CD9250B649EE1E37 /* SleepAlarms.swift */; };
+		F201AFA11B4EC4843D506BF1 /* BedtimeWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A75593EF857BB2094BB731EB /* BedtimeWatch.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -29,11 +31,13 @@
 
 /* Begin PBXFileReference section */
 		2525514BB8E0EE10AED1AF16 /* PanelCompanionUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PanelCompanionUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3189D511A4D03F9B76C49245 /* pling.caf */ = {isa = PBXFileReference; path = pling.caf; sourceTree = "<group>"; };
 		42F90B25E55B24B3FA51E971 /* PanelCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelCompanionApp.swift; sourceTree = "<group>"; };
 		6C7B1D7A907762B24D03F786 /* LocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationProvider.swift; sourceTree = "<group>"; };
 		6DB8D89EEDDDDB32E7FE9C6B /* SyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncView.swift; sourceTree = "<group>"; };
 		731F4357F36B07B8EFCBB07C /* PermissionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionFlowTests.swift; sourceTree = "<group>"; };
 		7D0EB47B125A505057382F38 /* PanelCompanion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PanelCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A75593EF857BB2094BB731EB /* BedtimeWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedtimeWatch.swift; sourceTree = "<group>"; };
 		D671052259C864180C513CEA /* MetricsSyncModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsSyncModel.swift; sourceTree = "<group>"; };
 		DA725DC9CD9250B649EE1E37 /* SleepAlarms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepAlarms.swift; sourceTree = "<group>"; };
 		DF367E00C6A569F789462E37 /* SocialApps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialApps.swift; sourceTree = "<group>"; };
@@ -52,6 +56,7 @@
 		88AABDB0F98F003D55258F91 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				A75593EF857BB2094BB731EB /* BedtimeWatch.swift */,
 				6C7B1D7A907762B24D03F786 /* LocationProvider.swift */,
 				D671052259C864180C513CEA /* MetricsSyncModel.swift */,
 				42F90B25E55B24B3FA51E971 /* PanelCompanionApp.swift */,
@@ -63,9 +68,18 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
+		898CD7BAD925BA04A611868C /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				3189D511A4D03F9B76C49245 /* pling.caf */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		A50C67793B68260E95D46B05 = {
 			isa = PBXGroup;
 			children = (
+				898CD7BAD925BA04A611868C /* Resources */,
 				88AABDB0F98F003D55258F91 /* Sources */,
 				110FC189A42B16FB51303EF5 /* UITests */,
 				AD1CC4F03C31E641F91F40E2 /* Products */,
@@ -107,6 +121,7 @@
 			buildConfigurationList = D299190C88ABB72A372C8E40 /* Build configuration list for PBXNativeTarget "PanelCompanion" */;
 			buildPhases = (
 				BBDB26E6D04528636166D035 /* Sources */,
+				B30A0AF3F55348DEBA16DB25 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -136,7 +151,7 @@
 					D578E9B25E369E7C74FB9E9E = {
 						DevelopmentTeam = KK679X38PZ;
 						ProvisioningStyle = Automatic;
-						SystemCapabilities = "[\"com.apple.HealthKit\": [\"enabled\": 1], \"com.apple.FamilyControls\": [\"enabled\": 1]]";
+						SystemCapabilities = "[\"com.apple.FamilyControls\": [\"enabled\": 1], \"com.apple.HealthKit\": [\"enabled\": 1]]";
 					};
 				};
 			};
@@ -160,6 +175,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		B30A0AF3F55348DEBA16DB25 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2E3470A3BEEE8AB32B2116CD /* pling.caf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		791D7DDE2792D66DC3544BFF /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -173,6 +199,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F201AFA11B4EC4843D506BF1 /* BedtimeWatch.swift in Sources */,
 				20938863155F270253C4EC61 /* LocationProvider.swift in Sources */,
 				B9C47769C54B835B6BC970A6 /* MetricsSyncModel.swift in Sources */,
 				1B6458F54A82FF8C253386D6 /* PanelCompanionApp.swift in Sources */,
