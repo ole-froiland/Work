@@ -104,7 +104,12 @@ export async function markBlockDone(input, now = new Date()) {
   const at = new Date(input?.at ?? now);
   if (!Number.isFinite(+at)) throw new Error("Ugyldig tidspunkt");
   const current = await readWake(now);
-  const done = [...current.done.filter((entry) => entry?.id !== id), { id, at: at.toISOString() }];
+  // En bryter, ikke en enveisdør. Uten dette kunne en bolk som ble huket av ved
+  // et uhell aldri hukes av igjen — og haket den av før tida, krympet den til
+  // en stripe det ikke gikk an å treffe.
+  const already = current.done.some((entry) => entry?.id === id);
+  const rest = current.done.filter((entry) => entry?.id !== id);
+  const done = already ? rest : [...rest, { id, at: at.toISOString() }];
   const next = { ...current, done };
   await writeJsonFile(WAKE_FILE, next);
   return next;

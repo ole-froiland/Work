@@ -48,7 +48,7 @@ import {
   XLogo,
   YoutubeLogo,
 } from "@phosphor-icons/react";
-import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatMinutes, formatResetTime, formatTimer, layoutDayEvents, needsCompanionUpdate, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
+import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatMinutes, formatResetTime, formatTimer, layoutDayEvents, needsCompanionUpdate, planDay, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
 import { createScreenWakeLockController } from "./wake-lock.js";
 
 const staticQuickActions = [
@@ -669,7 +669,14 @@ function eventStyle(event, column = 0, columnCount = 1) {
   return { top: `${(startMinutes / DAY_MINUTES) * 100}%`, height: `${(duration / DAY_MINUTES) * 100}%`, ...horizontal };
 }
 
-function DayCalendar({ date, events, now }) {
+function blockStyle(block) {
+  const duration = Math.max(30, block.endMinute - block.startMinute);
+  return { top: `${(block.startMinute / DAY_MINUTES) * 100}%`, height: `${(duration / DAY_MINUTES) * 100}%` };
+}
+
+// Bolkene ligger bak avtalene og er stiplet. En avtale og en bolk er ikke samme
+// slags ting, og skal ikke kunne forveksles på en vegg man ser på i forbifarten.
+function DayCalendar({ date, events, now, plan = null, onDone }) {
   const dayEvents = eventsOnDay(events, date);
   const laidOutEvents = layoutDayEvents(dayEvents);
   const showNow = isSameCalendarDay(now, date);
@@ -681,6 +688,22 @@ function DayCalendar({ date, events, now }) {
           <time>{hour}:00</time><span />
         </div>
       ))}
+      {plan && plan.placed.length > 0 && (
+        <div className="calendar-blocks" aria-label="Dagens bolker">
+          {plan.placed.map((block) => (
+            <button
+              type="button"
+              className={`plan-block tone-${calendarTone[block.tone] || "violet"}${block.done ? " is-done" : ""}`}
+              style={blockStyle(block)}
+              key={block.id}
+              onClick={() => onDone?.(block.id)}
+            >
+              <span className="event-time">{`${formatEventTime(block.start)}–${formatEventTime(block.end)}`}</span>
+              <strong>{block.title}</strong>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="calendar-events">
         {laidOutEvents.map(({ event, column, columnCount }) => (
           <article className={`event-card tone-${calendarTone[event.tone] || "violet"}`} style={eventStyle(event, column, columnCount)} key={event.id}>
@@ -865,6 +888,11 @@ function App() {
     initial: { notes: [], connected: false, stale: false, pending: 0 },
     onError: (current) => ({ ...current, connected: false }),
   });
+  const [dayPlan, refreshDayPlan, setDayPlan] = usePolledResource("/api/day-plan", {
+    interval: 30_000,
+    initial: { template: null, wake: null, connected: false },
+    onError: (current) => ({ ...current, connected: false }),
+  });
   const [newNote, setNewNote] = useState("");
   const [calendarComposer, setCalendarComposer] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(() => Boolean(fullscreenElement()));
@@ -1005,6 +1033,16 @@ function App() {
   const hasLocationSource = deviceMetrics?.weather?.locationSource === "device";
   const calendarEvents = Array.isArray(syncCalendar.events) ? syncCalendar.events : [];
   const selectedDayEvents = eventsOnDay(calendarEvents, date);
+  const plannedDay = useMemo(() => {
+    if (!dayPlan.template) return null;
+    return planDay({
+      template: dayPlan.template,
+      wokeAt: dayPlan.wake?.wokeAt ?? null,
+      anchors: selectedDayEvents,
+      day: date,
+      done: dayPlan.wake?.done ?? [],
+    });
+  }, [dayPlan.template, dayPlan.wake, selectedDayEvents, date]);
   const plannedMinutes = selectedDayEvents.reduce((total, event) => total + Math.max(0, (+new Date(event.end) - +new Date(event.start)) / 60_000), 0);
   const calendarStage = useRef(null);
   const calendarSwipe = useCalendarSwipe(moveDate);
@@ -1323,6 +1361,21 @@ function App() {
     }
   }
 
+  async function markDone(id) {
+    try {
+      const response = await fetch("/api/day-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "done", id, at: new Date().toISOString() }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setDayPlan((current) => ({ ...current, wake: result.wake }));
+    } catch (error) {
+      setToast(`Kunne ikke huke av bolken (${error.message})`);
+    }
+  }
+
   function openCalendarComposer(day = date, title = "", noteId = null) {
     const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9, 0);
     const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -1421,7 +1474,7 @@ function App() {
           </div>
           <div className="calendar-date-strip"><CalendarBlank size={19} weight="duotone" /><strong>{syncCalendar.connected ? `${selectedDayEvents.length} arrangement${selectedDayEvents.length === 1 ? "" : "er"}` : "Apple Kalender kobles til"}</strong><span>{syncCalendar.connected ? `${formatMinutes(plannedMinutes)} planlagt${syncCalendar.stale ? " · sist synket" : ""}` : "Venter på Kalender på Mac-en"}</span><button className="calendar-add" type="button" onClick={() => openCalendarComposer()} aria-label="Nytt arrangement"><Plus size={16} weight="bold" /> Ny</button></div>
           <div className="calendar-stage" ref={calendarStage} {...calendarSwipe} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropNoteInCalendar(event)}>
-            {view === "day" && <DayCalendar date={date} events={calendarEvents} now={now} />}
+            {view === "day" && <DayCalendar date={date} events={calendarEvents} now={now} plan={plannedDay} onDone={markDone} />}
             {view === "week" && <WeekCalendar date={date} events={calendarEvents} />}
             {view === "month" && <MonthCalendar date={date} events={calendarEvents} onSelectDay={openDay} onDropNote={dropNoteInCalendar} />}
           </div>

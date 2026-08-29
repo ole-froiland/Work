@@ -216,16 +216,7 @@ export function planDay({ template, wokeAt = null, anchors = [], day = new Date(
     const minutes = Number(block?.minutes);
     if (!Number.isFinite(minutes) || minutes <= 0) continue;
 
-    // Det som er gjort er gjort. Avhukede bolker legges der de faktisk skjedde,
-    // slik at en rettelse midt på dagen ikke skriver om formiddagen som har vært.
     const doneAt = doneById.get(block.id);
-    if (doneAt !== undefined) {
-      placed.push({ ...block, startMinute: doneAt, endMinute: doneAt + minutes, done: true,
-        start: minuteDate(day, doneAt).toISOString(), end: minuteDate(day, doneAt + minutes).toISOString() });
-      cursor = Math.max(cursor, doneAt + minutes);
-      continue;
-    }
-
     let start = cursor;
     // Ett hopp per anker holder: ankrene er sortert, og hvert hopp lander på
     // slutten av det ankeret som var i veien.
@@ -233,6 +224,17 @@ export function planDay({ template, wokeAt = null, anchors = [], day = new Date(
       const hit = busy.find((slot) => start < slot.end && slot.start < start + minutes);
       if (!hit) break;
       start = hit.end;
+    }
+
+    // En avhuket bolk varte fra der den sto til den ble huket av. Da retter
+    // planen seg hele dagen og ikke bare om morgenen. Bolken flyttes aldri
+    // bakover til avhukingstidspunktet — det la den oppå den som lå der.
+    if (doneAt !== undefined) {
+      const end = Math.max(start + 1, doneAt);
+      placed.push({ ...block, startMinute: start, endMinute: end, done: true,
+        start: minuteDate(day, start).toISOString(), end: minuteDate(day, end).toISOString() });
+      cursor = end;
+      continue;
     }
 
     // Markøren står stille når en bolk faller ut, slik at en kortere bolk lenger

@@ -117,9 +117,15 @@ Reglene:
 5. Ankre er Apple-avtaler på dagen som *ikke* er heldagsavtaler. En heldagsavtale
    er ingen tidsbegrensning, og ville ellers spist hele dagen.
 
-Bolker Ole har huket av som gjort beholder tidspunktet de faktisk ble gjort på.
-Bare det som gjenstår legges ut på nytt. Det gjør at en rettelse midt på dagen
-ikke skriver om formiddagen som allerede har vært.
+En bolk Ole har huket av varer fra der den sto til han huket den av, og resten
+av dagen flyter derfra. Det gjør at planen retter seg hele dagen og ikke bare om
+morgenen: blir en økt kortere enn planlagt, rykker resten fram, og drar den ut,
+skyves resten.
+
+Bolken flyttes aldri bakover til avhukingstidspunktet. Det var det første
+forsøket, og det la en bolk som ble huket av tidlig rett oppå den som allerede
+lå der — den forsvant fra flaten uten spor. Avhukingen er dessuten en bryter og
+ikke en enveisdør: en bolk som ble huket av ved et uhell kan hukes av igjen.
 
 ## Oppdagelsen
 

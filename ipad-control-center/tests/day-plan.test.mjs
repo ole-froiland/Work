@@ -63,3 +63,12 @@ test("avviser en ukjent kilde", () => {
     /Ukjent kilde/,
   );
 });
+
+test("avhukingen er en bryter, ikke en enveisdør", async () => {
+  const { markBlockDone, readWake } = await import("../server/day-plan-service.mjs");
+  const first = await markBlockDone({ id: "prøve-bolk", at: new Date().toISOString() });
+  assert.ok(first.done.some((entry) => entry.id === "prøve-bolk"));
+  const second = await markBlockDone({ id: "prøve-bolk", at: new Date().toISOString() });
+  assert.ok(!second.done.some((entry) => entry.id === "prøve-bolk"));
+  assert.deepEqual((await readWake()).done.filter((entry) => entry.id === "prøve-bolk"), []);
+});

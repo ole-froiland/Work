@@ -939,12 +939,21 @@ test("en kort bolk etter en droppet bolk får fortsatt plass", () => {
   assert.deepEqual(placed.map((block) => [block.id, block.startMinute]), [["kort", 1320]]);
 });
 
-test("en avhuket bolk beholder tidspunktet den faktisk ble gjort på", () => {
+test("en avhuket bolk varer til den ble huket av, og resten flyter derfra", () => {
   const done = [{ id: "morgen", at: tid(10, 5) }];
   const { placed } = planDay({ template: malen, wokeAt: tid(9, 40), anchors: [], day: dagen, done });
-  assert.deepEqual(placed.map((block) => [block.id, block.startMinute, block.done]), [
-    ["morgen", 605, true],
-    ["lese", 635, false],
+  assert.deepEqual(placed.map((block) => [block.id, block.startMinute, block.endMinute, block.done]), [
+    ["morgen", 580, 605, true],
+    ["lese", 605, 695, false],
+  ]);
+});
+
+test("hakes en bolk av før tiden, rykker resten av dagen fram", () => {
+  const done = [{ id: "morgen", at: tid(9, 50) }];
+  const { placed } = planDay({ template: malen, wokeAt: tid(9, 40), anchors: [], day: dagen, done });
+  assert.deepEqual(placed.map((block) => [block.id, block.startMinute, block.endMinute]), [
+    ["morgen", 580, 590],
+    ["lese", 590, 680],
   ]);
 });
 
