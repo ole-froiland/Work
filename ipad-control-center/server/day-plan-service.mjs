@@ -7,6 +7,10 @@ import { dirname, join } from "node:path";
 // ligger. Oppvåkningen gjelder én dag og kan utledes på nytt i morgen.
 const TEMPLATE_FILE = join(homedir(), "Library", "Application Support", "ipad-control-center", "day-plan.json");
 const WAKE_FILE = join(homedir(), "Library", "Caches", "ipad-control-center", "day-wake.json");
+// Nettene kan ikke utledes på nytt når de først er tapt, og hører derfor hjemme
+// sammen med malen framfor i Caches.
+const HISTORY_FILE = join(homedir(), "Library", "Application Support", "ipad-control-center", "sleep-history.json");
+const MAX_NIGHTS = 60;
 const MAX_BLOCKS = 40;
 const MAX_MINUTES = 12 * 60;
 const TONES = new Set(["violet", "emerald", "amber", "sky"]);
@@ -49,11 +53,15 @@ export function normalizeWake(input, now = new Date()) {
   if (+wokeAt > +now) throw new Error("Tidspunktet ligger fram i tid");
   if (dateKey(wokeAt) !== dateKey(now)) throw new Error("Tidspunktet er ikke i dag");
   if (!SOURCES.has(input?.source)) throw new Error("Ukjent kilde");
-  return { wokeAt: wokeAt.toISOString(), source: input.source };
+  // Leggetiden er et tillegg, ikke et krav. En natt der den mangler er fortsatt
+  // en natt, og oppvåkningen skal ikke avvises fordi den andre enden er borte.
+  const slept = new Date(input?.sleepAt ?? "");
+  const sleepAt = Number.isFinite(+slept) && +slept < +wokeAt ? slept.toISOString() : null;
+  return { wokeAt: wokeAt.toISOString(), source: input.source, sleepAt };
 }
 
 function emptyWake(now) {
-  return { date: dateKey(now), wokeAt: null, source: null, confirmed: false, done: [] };
+  return { date: dateKey(now), wokeAt: null, source: null, sleepAt: null, confirmed: false, done: [] };
 }
 
 async function readJsonFile(path) {
@@ -82,19 +90,21 @@ export async function readWake(now = new Date()) {
     date: stored.date,
     wokeAt: typeof stored.wokeAt === "string" ? stored.wokeAt : null,
     source: SOURCES.has(stored.source) ? stored.source : null,
+    sleepAt: typeof stored.sleepAt === "string" ? stored.sleepAt : null,
     confirmed: stored.source === "manual",
     done: Array.isArray(stored.done) ? stored.done : [],
   };
 }
 
 export async function recordWake(input, now = new Date()) {
-  const { wokeAt, source } = normalizeWake(input, now);
+  const { wokeAt, source, sleepAt } = normalizeWake(input, now);
   const current = await readWake(now);
   // En rettelse Ole har gjort for hånd skal ikke kunne overskrives av et signal
   // som kommer etterpå. Gjettet taper alltid mot mennesket.
   if (current.source === "manual" && source !== "manual") return current;
-  const next = { ...current, wokeAt, source, confirmed: source === "manual" };
+  const next = { ...current, wokeAt, source, sleepAt: sleepAt ?? current.sleepAt, confirmed: source === "manual" };
   await writeJsonFile(WAKE_FILE, next);
+  await recordNight({ date: next.date, wokeAt: next.wokeAt, sleepAt: next.sleepAt });
   return next;
 }
 
@@ -116,7 +126,46 @@ export async function markBlockDone(input, now = new Date()) {
 }
 
 export async function getDayPlan(now = new Date()) {
-  const [template, wake] = await Promise.all([readDayPlanTemplate(), readWake(now)]);
+  const [template, wake, history] = await Promise.all([readDayPlanTemplate(), readWake(now), readSleepHistory()]);
   // Fraværet av en mal er ingen feiltilstand. Da oppfører panelet seg som før.
-  return { template, wake, connected: template !== null };
+  return { template, wake, history, connected: template !== null };
+}
+
+export async function readSleepHistory() {
+  const stored = await readJsonFile(HISTORY_FILE);
+  return {
+    version: 1,
+    targetWake: clockText(stored?.targetWake),
+    nights: Array.isArray(stored?.nights) ? stored.nights.slice(-MAX_NIGHTS) : [],
+  };
+}
+
+export async function recordNight(input) {
+  const date = shortText(input?.date, 10);
+  const woke = new Date(input?.wokeAt ?? "");
+  if (!date || !Number.isFinite(+woke)) throw new Error("Ugyldig natt");
+  const slept = new Date(input?.sleepAt ?? "");
+  const night = {
+    date,
+    wokeAt: woke.toISOString(),
+    sleepAt: Number.isFinite(+slept) && +slept < +woke ? slept.toISOString() : null,
+  };
+  const history = await readSleepHistory();
+  // Én oppføring per dato. Retter Ole oppvåkningen sin, skal natta oppdateres
+  // og ikke legges til en gang til.
+  const nights = [...history.nights.filter((entry) => entry?.date !== date), night]
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+    .slice(-MAX_NIGHTS);
+  const next = { ...history, nights };
+  await writeJsonFile(HISTORY_FILE, next);
+  return next;
+}
+
+export async function saveTargetWake(value) {
+  const targetWake = clockText(value);
+  if (!targetWake) throw new Error("Ugyldig klokkeslett");
+  const history = await readSleepHistory();
+  const next = { ...history, targetWake };
+  await writeJsonFile(HISTORY_FILE, next);
+  return next;
 }

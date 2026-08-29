@@ -72,3 +72,27 @@ test("avhukingen er en bryter, ikke en enveisdør", async () => {
   assert.ok(!second.done.some((entry) => entry.id === "prøve-bolk"));
   assert.deepEqual((await readWake()).done.filter((entry) => entry.id === "prøve-bolk"), []);
 });
+
+test("en oppvåkning kan ha med når telefonen ble lagt fra seg", () => {
+  const wake = normalizeWake({
+    wokeAt: new Date(2026, 7, 28, 9, 40).toISOString(),
+    sleepAt: new Date(2026, 7, 27, 23, 30).toISOString(),
+    source: "usage",
+  }, naa);
+  assert.equal(new Date(wake.sleepAt).getHours(), 23);
+});
+
+test("en leggetid som ikke er en tid blir bare borte, oppvåkningen står", () => {
+  const wake = normalizeWake({ wokeAt: new Date(2026, 7, 28, 9, 40).toISOString(), sleepAt: "i går", source: "usage" }, naa);
+  assert.equal(wake.sleepAt, null);
+  assert.ok(wake.wokeAt);
+});
+
+test("en leggetid etter oppvåkningen er ikke en leggetid", () => {
+  const wake = normalizeWake({
+    wokeAt: new Date(2026, 7, 28, 9, 40).toISOString(),
+    sleepAt: new Date(2026, 7, 28, 10, 0).toISOString(),
+    source: "usage",
+  }, naa);
+  assert.equal(wake.sleepAt, null);
+});
