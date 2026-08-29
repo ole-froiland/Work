@@ -546,7 +546,7 @@ function SleepRhythmCard({ rhythm }) {
         <span><em>Legg deg</em><strong>{rhythm.targetBedtime}</strong></span>
         <span><em>Stå opp</em><strong>{rhythm.targetWake}</strong></span>
       </div>
-      <small>{`${formatMinutes(rhythm.sleepNeed)} søvn, anslått fra ${rhythm.nightCount} netter`}</small>
+      <small>{`${formatMinutes(rhythm.timeInBed)} i senga · ${formatMinutes(rhythm.sleepNeed)} søvn, anslått fra ${rhythm.nightCount} netter`}</small>
       {!rhythm.insideWindow && rhythm.windowText && (
         <small className="sleep-toward">{`Der du er nå. På vei mot ${rhythm.windowText}.`}</small>
       )}

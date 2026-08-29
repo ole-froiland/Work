@@ -1248,3 +1248,13 @@ test("rytmen sier fra når målet ennå er utenfor vinduet", () => {
   const inne = describeSleepRhythm({ nights: sent, ...vindu, previousTarget: "07:30" });
   assert.equal(inne.insideWindow, true);
 });
+
+test("tiden i senga regnes av tallene som faktisk vises", () => {
+  const sent = [natt(20, 3 * 60, 11 * 60), natt(21, 3 * 60, 11 * 60), natt(22, 3 * 60, 11 * 60)];
+  const svar = describeSleepRhythm({ nights: sent, ...vindu, previousTarget: "08:45" });
+  const legg = clockMinutes(svar.targetBedtime);
+  const opp = clockMinutes(svar.targetWake);
+  //差en over midnatt, målt den korte veien — det er nettopp den kortet viser.
+  assert.equal(svar.timeInBed, ((opp - legg) + 24 * 60) % (24 * 60));
+  assert.ok(svar.timeInBed >= svar.sleepNeed, "man ligger aldri kortere enn man sover");
+});

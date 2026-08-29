@@ -1039,7 +1039,7 @@ function clockText(minute) {
 export function describeSleepRhythm({ nights = [], wakeAnchor = null, wakeWindow = null, bedWindow = null, previousTarget = null, advance = true } = {}) {
   const usable = (Array.isArray(nights) ? nights : []).filter((night) => Number.isFinite(+new Date(night?.wokeAt ?? "")));
   if (usable.length < MIN_NIGHTS) {
-    return { learning: true, nightCount: usable.length, ignoredRecently: 0, sleepNeed: null, targetWake: null, targetBedtime: null, insideWindow: true, windowText: null };
+    return { learning: true, nightCount: usable.length, ignoredRecently: 0, sleepNeed: null, targetWake: null, targetBedtime: null, timeInBed: null, insideWindow: true, windowText: null };
   }
 
   // En natt uten leggetid er fortsatt en natt. Oppvåkningen er sann selv om den
@@ -1093,6 +1093,11 @@ export function describeSleepRhythm({ nights = [], wakeAnchor = null, wakeWindow
     sleepNeed,
     targetWake: clockText(targetMinute),
     targetBedtime: clockText(bedMinute),
+    // Leggetiden klemmes inn i vinduet og et kvarter går til innsovning, så
+    // «søvnbehov» og avstanden mellom de to klokkeslettene er ikke samme tall.
+    // Kortet viste bare det ene, og da så regnestykket feil ut for den som
+    // trakk tidene fra hverandre selv.
+    timeInBed: (((clockMinutes(clockText(targetMinute)) - clockMinutes(clockText(bedMinute))) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES,
     insideWindow: wake ? windowGap(normalised, wake) === 0 : true,
     windowText: wake && wake.from !== wake.to ? `${wake.from}–${wake.to}` : null,
   };
