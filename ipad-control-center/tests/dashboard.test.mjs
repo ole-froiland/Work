@@ -1238,3 +1238,13 @@ test("projeksjonen stopper i vinduet, ikke forbi det", () => {
   // Gulvet på ti minutter gjør de siste stegene jevne, og den stopper på kanten.
   assert.deepEqual(dager.map((d) => d.targetWake), ["08:45", "08:34", "08:24", "08:14", "08:04", "08:00"]);
 });
+
+test("rytmen sier fra når målet ennå er utenfor vinduet", () => {
+  const sent = [natt(20, 3 * 60, 11 * 60), natt(21, 3 * 60, 11 * 60), natt(22, 3 * 60, 11 * 60)];
+  const ute = describeSleepRhythm({ nights: sent, ...vindu, previousTarget: "11:00" });
+  assert.equal(ute.insideWindow, false);
+  assert.equal(ute.windowText, "07:00–08:00");
+
+  const inne = describeSleepRhythm({ nights: sent, ...vindu, previousTarget: "07:30" });
+  assert.equal(inne.insideWindow, true);
+});

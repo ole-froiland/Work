@@ -1039,7 +1039,7 @@ function clockText(minute) {
 export function describeSleepRhythm({ nights = [], wakeAnchor = null, wakeWindow = null, bedWindow = null, previousTarget = null, advance = true } = {}) {
   const usable = (Array.isArray(nights) ? nights : []).filter((night) => Number.isFinite(+new Date(night?.wokeAt ?? "")));
   if (usable.length < MIN_NIGHTS) {
-    return { learning: true, nightCount: usable.length, ignoredRecently: 0, sleepNeed: null, targetWake: null, targetBedtime: null };
+    return { learning: true, nightCount: usable.length, ignoredRecently: 0, sleepNeed: null, targetWake: null, targetBedtime: null, insideWindow: true, windowText: null };
   }
 
   // En natt uten leggetid er fortsatt en natt. Oppvåkningen er sann selv om den
@@ -1083,6 +1083,9 @@ export function describeSleepRhythm({ nights = [], wakeAnchor = null, wakeWindow
   let bedMinute = targetMinute - sleepNeed - FALL_ASLEEP;
   if (bedWindow) bedMinute += windowGap(((bedMinute % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES, bedWindow);
 
+  // Kortet viste 08:45 uten å si at det er der Ole er, ikke der han skal. Da
+  // så det ut som om rytmen foreslo å stå opp utenfor vinduet han selv satte.
+  const normalised = ((targetMinute % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
   return {
     learning: false,
     nightCount: usable.length,
@@ -1090,6 +1093,8 @@ export function describeSleepRhythm({ nights = [], wakeAnchor = null, wakeWindow
     sleepNeed,
     targetWake: clockText(targetMinute),
     targetBedtime: clockText(bedMinute),
+    insideWindow: wake ? windowGap(normalised, wake) === 0 : true,
+    windowText: wake && wake.from !== wake.to ? `${wake.from}–${wake.to}` : null,
   };
 }
 
