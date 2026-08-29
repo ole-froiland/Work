@@ -6,7 +6,10 @@ import { runMacAction } from "./server/mac-action-service.mjs";
 import { getUsageSnapshot } from "./server/usage-service.mjs";
 import { getAgentSessions } from "./server/agent-session-service.mjs";
 import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
-import { getDayPlan, markBlockDone, recordWake } from "./server/day-plan-service.mjs";
+import { getDayPlan, markBlockDone, recordWake, saveTargetWake } from "./server/day-plan-service.mjs";
+// Reglene for rytmen bor i dashboard.js sammen med resten av utregningene.
+// Telefonen skal hente alarmtidene herfra og ikke ha sin egen kopi av dem.
+import { alarmTimes, describeSleepRhythm } from "./src/dashboard.js";
 import { completeSpotifyAuth, getSpotifyState, listSpotifyDevices, runSpotifyCommand } from "./server/spotify-service.mjs";
 import {
   acknowledgeSyncNoteCommand,
@@ -198,7 +201,18 @@ function dayPlanApi() {
         }
         try {
           if (request.method === "GET") {
-            sendJson(response, 200, await getDayPlan(new Date()));
+            const now = new Date();
+            const plan = await getDayPlan(now);
+            const today = now.toISOString().slice(0, 10);
+            const advance = plan.history?.targetWakeDate !== today;
+            const rhythm = describeSleepRhythm({
+              nights: plan.history?.nights ?? [],
+              wakeAnchor: plan.template?.wakeAnchor ?? null,
+              previousTarget: plan.history?.targetWake ?? null,
+              advance,
+            });
+            if (!rhythm.learning && advance) await saveTargetWake(rhythm.targetWake, now);
+            sendJson(response, 200, { ...plan, rhythm, alarms: rhythm.learning ? [] : alarmTimes(rhythm) });
             return;
           }
           if (request.method === "POST") {

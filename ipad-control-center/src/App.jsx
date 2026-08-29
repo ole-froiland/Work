@@ -497,6 +497,30 @@ function WakeBanner({ wake, template, calendarConnected, onCorrect }) {
   );
 }
 
+// sleepAt er når telefonen ble lagt fra seg, ikke når Ole sovnet. Kortet sier
+// «anslått» hver gang tallet vises, i stedet for å la det se ut som en måling.
+function SleepRhythmCard({ rhythm }) {
+  if (!rhythm) return null;
+  if (rhythm.learning) {
+    return (
+      <section className="panel-card sleep-card" aria-label="Søvnrytme">
+        <span className="eyebrow">Søvnrytme</span>
+        <p>{`Lærer fortsatt — ${rhythm.nightCount} ${rhythm.nightCount === 1 ? "natt" : "netter"} av tre.`}</p>
+      </section>
+    );
+  }
+  return (
+    <section className="panel-card sleep-card" aria-label="Søvnrytme">
+      <span className="eyebrow">Søvnrytme</span>
+      <div className="sleep-times">
+        <span><em>Legg deg</em><strong>{rhythm.targetBedtime}</strong></span>
+        <span><em>Stå opp</em><strong>{rhythm.targetWake}</strong></span>
+      </div>
+      <small>{`${formatMinutes(rhythm.sleepNeed)} søvn, anslått fra ${rhythm.nightCount} netter`}</small>
+    </section>
+  );
+}
+
 function DroppedList({ dropped }) {
   if (!dropped?.length) return null;
   return (
@@ -1535,6 +1559,7 @@ function App() {
             {view === "month" && <MonthCalendar date={date} events={calendarEvents} onSelectDay={openDay} onDropNote={dropNoteInCalendar} />}
           </div>
           {view === "day" && <DroppedList dropped={plannedDay?.dropped} />}
+          {view === "day" && dayPlan.connected && <SleepRhythmCard rhythm={dayPlan.rhythm} />}
           <footer className="system-strip">
             <MiniStatus icon={Laptop} label="Sosiale medier" value={hasScreenTimeSource ? formatMinutes(deviceMetrics?.screenTime?.socialMinutes) : companionOutdated ? "Utdatert app" : "Ikke synket"} detail={hasScreenTimeSource ? `I går · uke ${formatMinutes(deviceMetrics?.screenTime?.socialWeeklyAverageMinutes)}` : screenTimeAge} tone="violet" onClick={() => setActiveMetric((current) => current?.id === "screenTime" ? null : { id: "screenTime", icon: Laptop, tone: "violet", anchor: 0 })} />
             <MiniStatus icon={Footprints} label="Skritt · i dag" value={hasStepsSource ? new Intl.NumberFormat("nb-NO").format(deviceMetrics.steps.today) : "Ikke synket"} detail={hasStepsSource ? formatStepComparison(deviceMetrics?.steps?.today, deviceMetrics?.steps?.weeklyAverage) : stepsAge} tone="lime" onClick={() => setActiveMetric((current) => current?.id === "steps" ? null : { id: "steps", icon: Footprints, tone: "lime", anchor: 1 })} />

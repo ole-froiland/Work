@@ -654,3 +654,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
    plassholder endrer antallet barn seg med visningen, og radmålene forskyver
    seg slik at stripa havnet oppå kalenderen. */
 .calendar-banner-slot { min-width: 0; }
+
+.sleep-card { margin-top: 8px; padding: 10px 12px; }
+.sleep-times { display: flex; gap: 18px; margin: 6px 0 4px; }
+.sleep-times span { display: flex; flex-direction: column; gap: 1px; }
+.sleep-times em { color: var(--muted); font-size: 11px; font-style: normal; }
+.sleep-times strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+.sleep-card small, .sleep-card p { color: var(--muted); font-size: 11px; }
+.sleep-card p { margin: 4px 0 0; }

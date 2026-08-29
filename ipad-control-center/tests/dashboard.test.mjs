@@ -1075,3 +1075,10 @@ test("alarmene tåler at leggetiden krysser midnatt", () => {
   assert.equal(alarmer[0].at, "23:40");
   assert.equal(alarmer[1].at, "00:10");
 });
+
+test("uten advance står målet stille, uansett hvor mange ganger det leses", () => {
+  const sent = [natt(20, 24 * 60, 9 * 60), natt(21, 24 * 60, 9 * 60), natt(22, 24 * 60, 9 * 60)];
+  const args = { nights: sent, wakeAnchor: "07:00", previousTarget: "09:00", advance: false };
+  assert.equal(describeSleepRhythm(args).targetWake, "09:00");
+  assert.equal(describeSleepRhythm(args).targetWake, "09:00");
+});

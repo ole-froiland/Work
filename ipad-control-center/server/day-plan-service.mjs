@@ -136,6 +136,7 @@ export async function readSleepHistory() {
   return {
     version: 1,
     targetWake: clockText(stored?.targetWake),
+    targetWakeDate: shortText(stored?.targetWakeDate, 10),
     nights: Array.isArray(stored?.nights) ? stored.nights.slice(-MAX_NIGHTS) : [],
   };
 }
@@ -161,11 +162,12 @@ export async function recordNight(input) {
   return next;
 }
 
-export async function saveTargetWake(value) {
+export async function saveTargetWake(value, now = new Date()) {
   const targetWake = clockText(value);
   if (!targetWake) throw new Error("Ugyldig klokkeslett");
   const history = await readSleepHistory();
-  const next = { ...history, targetWake };
+  // Datoen er det som holder rampen til ett rykk i døgnet.
+  const next = { ...history, targetWake, targetWakeDate: dateKey(now) };
   await writeJsonFile(HISTORY_FILE, next);
   return next;
 }

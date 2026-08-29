@@ -978,7 +978,10 @@ function clockText(minute) {
 // Rytmen bygger på Oles egne netter. Den påstår ingenting om hva som er sunt,
 // bare hva han faktisk pleier å gjøre — og trekker det sakte mot tidspunktet
 // han selv har skrevet i dagsmalen.
-export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTarget = null } = {}) {
+// `advance` er én gang i døgnet, ikke én gang per henting. Panelet poller hvert
+// halve minutt, og uten dette ville rampen på et kvarter per dag løpt helt fram
+// til ankeret i løpet av noen minutter.
+export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTarget = null, advance = true } = {}) {
   const usable = (Array.isArray(nights) ? nights : []).filter((night) => Number.isFinite(+new Date(night?.wokeAt ?? "")));
   if (usable.length < MIN_NIGHTS) {
     return { learning: true, nightCount: usable.length, sleepNeed: null, targetWake: null, targetBedtime: null };
@@ -1004,7 +1007,7 @@ export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTa
 
   // Uten anker er det ingenting å trekke mot, og målet blir stående der Ole er.
   let targetMinute = previousMinute ?? median(wakeMinutes);
-  if (anchorMinute !== null && previousMinute !== null) {
+  if (advance && anchorMinute !== null && previousMinute !== null) {
     const gap = anchorMinute - previousMinute;
     targetMinute = previousMinute + Math.sign(gap) * Math.min(Math.abs(gap), MAX_DRIFT);
   }

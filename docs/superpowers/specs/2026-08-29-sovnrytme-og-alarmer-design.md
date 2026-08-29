@@ -51,20 +51,22 @@ sammen med malen, ikke i `Caches/`:
     {
       "version": 1,
       "targetWake": "08:15",
+      "targetWakeDate": "2026-08-29",
       "nights": [
         { "date": "2026-08-29", "sleepAt": "...T23:41:00+02:00", "wokeAt": "...T08:52:00+02:00" }
       ]
     }
 
-Én oppføring per dato, de siste 60 nettene. `targetWake` lagres fordi rampen på
-et kvarter per dag trenger å huske hvor den var i går; uten det ville målet
-regnes fra bunnen av hver morgen og aldri bevege seg.
+Én oppføring per dato, de siste 60 nettene. `targetWake` lagres sammen med `targetWakeDate`
+fordi rampen på et kvarter per dag trenger å huske både hvor den var i går og
+at den allerede har rykket i dag. Panelet poller hvert halve minutt; uten datoen
+ville rampen løpt helt fram til ankeret i løpet av noen minutter.
 
 ## Utregningen
 
 En ren funksjon i `src/dashboard.js`, ved siden av `planDay`:
 
-    describeSleepRhythm({ nights, wakeAnchor, previousTarget, now })
+    describeSleepRhythm({ nights, wakeAnchor, previousTarget, advance })
       -> { learning, nightCount, sleepNeed, targetWake, targetBedtime }
 
 Reglene:
