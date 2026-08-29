@@ -42,7 +42,14 @@ export function normalizeDayPlanTemplate(input) {
     if (!id || !title || !Number.isFinite(minutes) || minutes <= 0 || minutes > MAX_MINUTES) return [];
     return [{ id, title, minutes, tone: TONES.has(value?.tone) ? value.tone : "violet" }];
   });
-  return { wakeAnchor, dayEnd, blocks };
+  // Vinduene er valgfrie. Uten dem oppfører malen seg som før, med wakeAnchor
+  // som et punkt.
+  const window = (value) => {
+    const from = clockText(value?.from);
+    const to = clockText(value?.to);
+    return from && to ? { from, to } : null;
+  };
+  return { wakeAnchor, dayEnd, blocks, wakeWindow: window(input?.wakeWindow), bedWindow: window(input?.bedWindow) };
 }
 
 export function normalizeWake(input, now = new Date()) {

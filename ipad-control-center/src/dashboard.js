@@ -664,6 +664,19 @@ export function formatCountdown(milliseconds) {
   return restHours ? `om ${days} d ${restHours} t` : `om ${days} d`;
 }
 
+// De fire fagene Ole tar dette semesteret. Kalenderen skriver fagkoden i
+// tittelen («🔵 BUS400N – oppgaver / aktiv gjenhenting»), så koden er det eneste
+// panelet trenger for å vite hvilket fag økta gjelder. Adressene til
+// ChatGPT-prosjektene ligger bare på Mac-en, i `server/subject-service.mjs`, og
+// sendes aldri til nettleseren. Endres lista her, må den endres der også.
+const SUBJECT_CODES = ["BUS400N", "BUS401E", "BUS446", "STR402A"];
+const SUBJECT_PATTERN = new RegExp(`\\b(${SUBJECT_CODES.join("|")})\\b`, "i");
+
+export function subjectForTitle(title) {
+  const match = SUBJECT_PATTERN.exec(typeof title === "string" ? title : "");
+  return match ? match[1].toUpperCase() : null;
+}
+
 function describeEntry(entry, extra) {
   const { event } = entry;
   return {
@@ -671,6 +684,7 @@ function describeEntry(entry, extra) {
     title: event.title || "Uten navn",
     tone: event.tone || "violet",
     calendarName: event.calendarName || (event.source === "sync" ? "Sync" : event.source) || "",
+    subject: subjectForTitle(event.title),
     ...extra,
   };
 }
@@ -694,6 +708,7 @@ export function describeNextEvent(events, now = new Date()) {
       ongoing: false,
       when: `${formatEventDay(upcoming.start, now)} ${formatEventClock(upcoming.start)}${hasEnd ? `–${formatEventClock(upcoming.end)}` : ""}`,
       countdown: formatCountdown(+upcoming.start - +now),
+      sessionMinutes: hasEnd ? Math.max(1, Math.round((+upcoming.end - +upcoming.start) / 60_000)) : null,
     });
   }
 
@@ -705,6 +720,7 @@ export function describeNextEvent(events, now = new Date()) {
       ongoing: true,
       when: `Slutter ${formatEventClock(ongoing.end)}`,
       countdown: "pågår nå",
+      sessionMinutes: Math.max(1, Math.round((+ongoing.end - +now) / 60_000)),
     });
   }
 
@@ -748,6 +764,9 @@ export function describeCalendarActivity(events, now = new Date()) {
       ongoing: true,
       when: `Slutter ${formatEventClock(ongoing.end)}`,
       remaining: formatRemaining(+ongoing.end - +now),
+      // Er økta i gang, er det tiden som faktisk står igjen som er økta — ikke
+      // lengden avtalen en gang hadde.
+      sessionMinutes: Math.max(1, Math.round((+ongoing.end - +now) / 60_000)),
     })
     : null;
 
@@ -962,6 +981,42 @@ const MIN_SLEEP = 6 * 60;
 const MAX_SLEEP = 9 * 60 + 30;
 const FALL_ASLEEP = 15;
 const MAX_DRIFT = 15;
+const PULL_FACTOR = 0.25;
+const MIN_STEP = 10;
+const MAX_STEP = 45;
+
+// Et vindu, ikke et punkt. «Legg deg mellom 23 og 24» er lettere å treffe enn
+// et klokkeslett, og regelmessighet er det som betyr noe — ikke å lande på
+// minuttet. Vinduet tåler å krysse midnatt.
+export function windowGap(minute, window) {
+  const from = clockMinutes(window?.from);
+  const to = clockMinutes(window?.to);
+  if (from === null || to === null) return 0;
+  // Strengt mindre: et vindu uten bredde (anker) krysser ikke midnatt. Med <=
+  // ble 07:00–07:00 lest som hele døgnet, og da lå målet alltid «inne».
+  const wraps = to < from;
+  const inside = wraps ? minute >= from || minute <= to : minute >= from && minute <= to;
+  if (inside) return 0;
+  const short = (a, b) => {
+    let d = a - b;
+    if (d < -DAY_MINUTES / 2) d += DAY_MINUTES;
+    if (d > DAY_MINUTES / 2) d -= DAY_MINUTES;
+    return d;
+  };
+  const toFrom = short(from, minute);
+  const toTo = short(to, minute);
+  return Math.abs(toFrom) <= Math.abs(toTo) ? toFrom : toTo;
+}
+
+// Jo lengre ute rytmen har drevet, jo hardere trekkes den tilbake. Et fast
+// kvarter ville brukt en uke på å hente inn tre timer; en fjerdedel av avviket
+// gjør det på fire dager, uten å flytte morgenen mer enn tre kvarter om gangen.
+function pullStep(gap, halved) {
+  if (gap === 0) return 0;
+  const size = Math.min(MAX_STEP, Math.max(MIN_STEP, Math.round(Math.abs(gap) * PULL_FACTOR)));
+  const capped = Math.min(size, Math.abs(gap));
+  return Math.sign(gap) * (halved ? Math.round(capped / 2) : capped);
+}
 
 function median(values) {
   if (!values.length) return null;
@@ -981,7 +1036,7 @@ function clockText(minute) {
 // `advance` er én gang i døgnet, ikke én gang per henting. Panelet poller hvert
 // halve minutt, og uten dette ville rampen på et kvarter per dag løpt helt fram
 // til ankeret i løpet av noen minutter.
-export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTarget = null, advance = true } = {}) {
+export function describeSleepRhythm({ nights = [], wakeAnchor = null, wakeWindow = null, bedWindow = null, previousTarget = null, advance = true } = {}) {
   const usable = (Array.isArray(nights) ? nights : []).filter((night) => Number.isFinite(+new Date(night?.wokeAt ?? "")));
   if (usable.length < MIN_NIGHTS) {
     return { learning: true, nightCount: usable.length, ignoredRecently: 0, sleepNeed: null, targetWake: null, targetBedtime: null };
@@ -1002,7 +1057,9 @@ export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTa
   });
 
   const sleepNeed = Math.min(MAX_SLEEP, Math.max(MIN_SLEEP, median(durations) ?? MIN_SLEEP));
-  const anchorMinute = clockMinutes(wakeAnchor);
+  // wakeAnchor lever videre som et vindu uten bredde, så en mal uten vinduer
+  // oppfører seg som før.
+  const wake = wakeWindow ?? (wakeAnchor ? { from: wakeAnchor, to: wakeAnchor } : null);
   const previousMinute = clockMinutes(previousTarget);
 
   // Rytmen strammer bare inn på netter Ole faktisk holdt leggetiden. Å flytte
@@ -1014,10 +1071,17 @@ export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTa
 
   // Uten anker er det ingenting å trekke mot, og målet blir stående der Ole er.
   let targetMinute = previousMinute ?? median(wakeMinutes);
-  if (advance && !lastIgnored && anchorMinute !== null && previousMinute !== null) {
-    const gap = anchorMinute - previousMinute;
-    targetMinute = previousMinute + Math.sign(gap) * Math.min(Math.abs(gap), MAX_DRIFT);
+  if (advance && wake && previousMinute !== null) {
+    // En ignorert natt halverer tempoet i stedet for å stanse det. Å stanse
+    // helt lot ham bli stående ute for alltid dersom leggetiden gled hver kveld.
+    targetMinute = previousMinute + pullStep(windowGap(previousMinute, wake), lastIgnored);
   }
+
+  // Leggetiden følger av oppvåkningen, men holdes innenfor sitt eget vindu. Et
+  // kort søvnbehov ville ellers sagt «legg deg 00:45», som er stikk i strid med
+  // det vinduet er til for.
+  let bedMinute = targetMinute - sleepNeed - FALL_ASLEEP;
+  if (bedWindow) bedMinute += windowGap(((bedMinute % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES, bedWindow);
 
   return {
     learning: false,
@@ -1025,7 +1089,7 @@ export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTa
     ignoredRecently,
     sleepNeed,
     targetWake: clockText(targetMinute),
-    targetBedtime: clockText(targetMinute - sleepNeed - FALL_ASLEEP),
+    targetBedtime: clockText(bedMinute),
   };
 }
 
@@ -1045,22 +1109,23 @@ export function alarmTimes({ targetBedtime = null, targetWake = null } = {}) {
 // Mac-en sover, og telefonen kan gå dager uten å nå den. Rampen er deterministisk
 // — et kvarter per døgn mot ankeret — så hele uken kan regnes ut på forhånd og
 // sendes med. Telefonen plukker dagens rad og trenger ikke å spørre igjen.
-export function projectAlarms({ rhythm, wakeAnchor = null, days = 14, from = new Date() } = {}) {
+export function projectAlarms({ rhythm, wakeAnchor = null, wakeWindow = null, bedWindow = null, days = 14, from = new Date() } = {}) {
   if (!rhythm || rhythm.learning) return [];
-  const anchorMinute = clockMinutes(wakeAnchor);
+  const wake = wakeWindow ?? (wakeAnchor ? { from: wakeAnchor, to: wakeAnchor } : null);
   let wakeMinute = clockMinutes(rhythm.targetWake);
   const sleepNeed = Number(rhythm.sleepNeed);
   if (wakeMinute === null || !Number.isFinite(sleepNeed)) return [];
 
   const projected = [];
   for (let offset = 0; offset < days; offset += 1) {
-    if (offset > 0 && anchorMinute !== null) {
-      const gap = anchorMinute - wakeMinute;
-      wakeMinute += Math.sign(gap) * Math.min(Math.abs(gap), MAX_DRIFT);
-    }
+    // Samme henting som describeSleepRhythm gjør daglig, kjørt framover. Uten
+    // dette gikk projeksjonen rett forbi vinduskanten med et fast kvarter.
+    if (offset > 0 && wake) wakeMinute += pullStep(windowGap(wakeMinute, wake), false);
     const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + offset);
     const targetWake = clockText(wakeMinute);
-    const targetBedtime = clockText(wakeMinute - sleepNeed - FALL_ASLEEP);
+    let bedMinute = wakeMinute - sleepNeed - FALL_ASLEEP;
+    if (bedWindow) bedMinute += windowGap(((bedMinute % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES, bedWindow);
+    const targetBedtime = clockText(bedMinute);
     projected.push({
       date: `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`,
       targetWake,

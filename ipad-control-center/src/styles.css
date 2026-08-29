@@ -183,6 +183,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .current-event-kicker { min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 .current-event-kicker em { flex: 0 0 auto; color: var(--orange); font-size: 10px; font-style: normal; font-weight: 750; font-variant-numeric: tabular-nums; }
 .current-event-text strong { overflow: hidden; font-size: 13px; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+/* Kolonnen legges bare til når knappen faktisk er der. Ellers ville et tomt
+   spor stått igjen som luft til høyre i et kort som ikke har plass å gi bort. */
+.current-event-card.has-subject { grid-template-columns: auto minmax(0, 1fr) auto; }
+.next-event-top.has-subject { grid-template-columns: auto minmax(0, 1fr) auto; }
+
+/* Fagknappen tar Ole rett inn i ChatGPT-prosjektet for faget som står i
+   avtalen. Den er en snarvei, ikke kortets hovedsak, så den holder seg innenfor
+   høyden kortet allerede har – men ikke under 34 px, som er det minste man
+   treffer med en tommel på en iPad på veggen. */
+.subject-session { width: 34px; height: 34px; display: grid; flex: 0 0 auto; place-items: center; border: 1px solid rgba(142, 202, 255, .28); border-radius: 11px; background: rgba(142, 202, 255, .12); color: var(--blue); }
+.subject-session:active { background: rgba(142, 202, 255, .22); }
 
 /* Neste avtale, mellom «Akkurat nå» og fokuskortet. Samme høyde som musikkortet. */
 .next-event-card { min-height: var(--media-card); display: grid; grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; gap: 8px; padding: 10px 12px; background: #151b22; }

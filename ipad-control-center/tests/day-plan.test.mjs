@@ -20,6 +20,8 @@ test("tar imot en mal og kaster det som ikke hører hjemme i den", () => {
   assert.deepEqual(template, {
     wakeAnchor: "07:00",
     dayEnd: "23:00",
+    wakeWindow: null,
+    bedWindow: null,
     blocks: [
       { id: "morgen", title: "Morgenrutine", minutes: 30, tone: "sky" },
       { id: "farge", title: "Ukjent tone", minutes: 20, tone: "violet" },

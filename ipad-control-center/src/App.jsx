@@ -8,6 +8,7 @@ import {
   CalendarBlank,
   CaretLeft,
   CaretRight,
+  ChatCircleText,
   Check,
   CloudSun,
   DeviceMobile,
@@ -459,16 +460,45 @@ function NowPlayingCard({ onToast, onConfigure }) {
 // Egen, fast plass for det som faktisk pågår. Når kalenderen ikke har en
 // pågående avtale, blir innholdet stående tomt slik at «Neste aktivitet» ikke
 // feilaktig ser ut som noe Ole skal gjøre allerede nå.
-function CurrentEventCard({ events, now }) {
+// Knappen finnes bare når avtalen faktisk nevner et fag Ole har et
+// ChatGPT-prosjekt til. En «Skole – svakeste fag først»-økt sier ikke hvilket
+// fag det er, og skal ikke tilby en knapp som må gjette seg fram.
+function subjectSession(activity, connected) {
+  const code = activity?.subject;
+  const minutes = activity?.sessionMinutes;
+  if (!code || !Number.isFinite(minutes) || !connected?.includes(code)) return null;
+  return { code, minutes, title: activity.title };
+}
+
+// Fagkoden står allerede i tittelen over knappen, og på en rail som er 200 px
+// bred er hvert tegn den gjentar et tegn tittelen mister. Derfor bare ikonet —
+// koden lever i navnet, for den som ikke ser hva ikonet betyr.
+function SubjectSessionButton({ session, onStart }) {
+  return (
+    <button
+      className="subject-session"
+      type="button"
+      aria-label={`Åpne ${session.code} i ChatGPT med en plan for de neste ${session.minutes} minuttene`}
+      title={`Åpne ${session.code} i ChatGPT med en plan for de neste ${session.minutes} minuttene`}
+      onClick={() => onStart(session)}
+    >
+      <ChatCircleText size={19} weight="duotone" />
+    </button>
+  );
+}
+
+function CurrentEventCard({ events, now, subjects, onStartSubject }) {
   const current = useMemo(() => describeCalendarActivity(events, now).current, [events, now]);
+  const session = subjectSession(current, subjects);
 
   return (
-    <section className={`panel-card current-event-card${current ? ` tone-${calendarTone[current.tone] || "violet"}` : " is-empty"}`} aria-label="Akkurat nå">
+    <section className={`panel-card current-event-card${current ? ` tone-${calendarTone[current.tone] || "violet"}` : " is-empty"}${session ? " has-subject" : ""}`} aria-label="Akkurat nå">
       <span className="current-event-icon"><CalendarBlank size={17} weight="duotone" /></span>
       <span className="current-event-text">
         <span className="current-event-kicker"><span className="eyebrow">Akkurat nå</span>{current && <em>{current.remaining}</em>}</span>
         {current && <strong title={current.title}>{current.title}</strong>}
       </span>
+      {session && <SubjectSessionButton session={session} onStart={onStartSubject} />}
     </section>
   );
 }
@@ -537,7 +567,7 @@ function DroppedList({ dropped }) {
 }
 
 // Neste avtale fra Apple Kalender, i samme høyde som musikkortet i venstre spalte.
-function NextEventCard({ events, connected, now }) {
+function NextEventCard({ events, connected, now, subjects, onStartSubject }) {
   const next = useMemo(() => describeCalendarActivity(events, now).next, [events, now]);
 
   if (!next) {
@@ -549,14 +579,17 @@ function NextEventCard({ events, connected, now }) {
     );
   }
 
+  const session = subjectSession(next, subjects);
+
   return (
     <section className={`panel-card next-event-card tone-${calendarTone[next.tone] || "violet"}`}>
-      <div className="next-event-top">
+      <div className={`next-event-top${session ? " has-subject" : ""}`}>
         <span className="next-event-icon"><CalendarBlank size={19} weight="duotone" /></span>
         <span className="next-event-text">
           <span className="eyebrow">Neste aktivitet</span>
           <strong title={next.title}>{next.title}</strong>
         </span>
+        {session && <SubjectSessionButton session={session} onStart={onStartSubject} />}
       </div>
       <div className="next-event-meta">
         <span>{next.when}</span><strong>{next.countdown}</strong>
@@ -907,6 +940,10 @@ function App() {
   const [date, setDate] = useState(() => new Date());
   const [now, setNow] = useState(() => new Date());
   const [dayRollovers, setDayRollovers] = useState(0);
+  // Fagene som faktisk har et ChatGPT-prosjekt registrert på Mac-en. Panelet
+  // henger på veggen i ukevis, så lista hentes på nytt ved døgnskiftet — legger
+  // Ole inn et fag, dukker knappen opp av seg selv dagen etter.
+  const [connectedSubjects, setConnectedSubjects] = useState([]);
   const [toast, setToast] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem("panel-bridge-url") || "");
@@ -1133,6 +1170,16 @@ function App() {
     const { date: day, events } = dayContext.current;
     stage.scrollTop = Math.round((calendarDayScrollMinute(day, events, new Date()) / DAY_MINUTES) * grid.offsetHeight);
   }, [view, dayRollovers]);
+  // Svarer serveren ikke, blir lista stående tom, og kortene ser ut som før.
+  // Det er riktigere enn en knapp som ikke vet om den fører noe sted.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/subjects")
+      .then((response) => (response.ok ? response.json() : { connected: [] }))
+      .then((result) => { if (!cancelled) setConnectedSubjects(Array.isArray(result?.connected) ? result.connected : []); })
+      .catch(() => { if (!cancelled) setConnectedSubjects([]); });
+    return () => { cancelled = true; };
+  }, [dayRollovers]);
   // Slår Fokus på Mac-en av/på. Med delt fokus følger iPhone og iPad etter.
   async function setFocusMode(enabled, { quiet = false, force = false } = {}) {
     if (enabled === focusModeActive && !force) return true;
@@ -1295,6 +1342,16 @@ function App() {
     } catch (error) {
       setToast(`${failed} (${error.message})`);
     }
+  }
+
+  // Ett trykk skal ta Ole helt fram: Mac-en legger en ferdig prompt på
+  // utklippstavla og åpner fagets ChatGPT-prosjekt. Toasten sier hva som
+  // gjenstår, siden ⌘V er det ene steget panelet ikke kan ta for ham.
+  async function startSubjectSession({ code, minutes, title }) {
+    await runOnMac({ action: "subject-session", code, minutes, title }, {
+      done: () => `${code} er åpnet i ChatGPT — planen for ${minutes} min ligger klar, lim inn med ⌘V`,
+      failed: `Fikk ikke startet ${code}-økta på Mac-en`,
+    });
   }
 
   async function triggerAction(action) {
@@ -1578,8 +1635,8 @@ function App() {
             {macLinkActions.map((action) => <MacLinkAction action={action} onTrigger={triggerAction} key={action.id} />)}
           </section>
 
-          <CurrentEventCard events={calendarEvents} now={now} />
-          <NextEventCard events={calendarEvents} connected={syncCalendar.connected} now={now} />
+          <CurrentEventCard events={calendarEvents} now={now} subjects={connectedSubjects} onStartSubject={startSubjectSession} />
+          <NextEventCard events={calendarEvents} connected={syncCalendar.connected} now={now} subjects={connectedSubjects} onStartSubject={startSubjectSession} />
 
           <section className={`panel-card focus-card ${focusPhase === "break" ? "is-break" : ""}`}>
             <div className="focus-top">

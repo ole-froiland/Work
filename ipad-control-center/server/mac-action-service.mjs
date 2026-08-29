@@ -3,6 +3,8 @@ import { mkdir, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { getSyncCalendar } from "./sync-calendar-service.mjs";
+import { buildSessionPrompt, normalizeSessionRequest, readSubjectProjects } from "./subject-service.mjs";
 
 const runCommand = promisify(execFile);
 const sidecarSource = fileURLToPath(new URL("./sidecar-tool.m", import.meta.url));
@@ -60,6 +62,22 @@ async function openInTerminal(exec, action, command, label) {
     throw new Error(`Fikk ikke åpnet Terminal for ${label} (${firstErrorLine(error, "Terminal svarte ikke")})`);
   }
   return { action, target: "terminal", label, command };
+}
+
+// ChatGPT tar ikke imot en ferdig melding i adressen, så prompten legges på
+// utklippstavla i stedet: ett ⌘V er hele forskjellen fra å skrive den selv.
+// Teksten sendes som argument til skriptet, aldri limt inn i det.
+async function copyToClipboard(exec, text) {
+  try {
+    await exec("osascript", [
+      "-e", "on run {payload}",
+      "-e", "set the clipboard to payload",
+      "-e", "end run",
+      text,
+    ]);
+  } catch (error) {
+    throw new Error(`Fikk ikke lagt teksten på utklippstavla (${firstErrorLine(error, "osascript svarte ikke")})`);
+  }
 }
 
 function normalizeDeviceName(value) {
@@ -144,6 +162,30 @@ const macActions = {
   async "private-accounts"(exec) {
     return openInChrome(exec, "private-accounts", chromeTargets["private-accounts"], "Privat regnskap");
   },
+  // Én knapp skal ta Ole fra «BUS400N om 5 min» til en ChatGPT som allerede vet
+  // hvor lang økta er og hvilke frister som nærmer seg. Utklippstavla settes før
+  // Chrome åpnes, slik at teksten står klar i det vinduet kommer fram.
+  async "subject-session"(exec, payload, deps = {}) {
+    const readProjects = deps.readProjects ?? readSubjectProjects;
+    const readCalendar = deps.readCalendar ?? getSyncCalendar;
+    const { code, minutes, title } = normalizeSessionRequest(payload);
+    const projects = await readProjects();
+    const url = projects[code];
+    if (!url) throw new Error(`${code} har ingen ChatGPT-prosjekt registrert på Mac-en`);
+    // Kalenderen leses her framfor å komme fra nettleseren, slik at fristene i
+    // prompten er de samme som Apple Kalender faktisk har.
+    let events = [];
+    try {
+      ({ events } = await readCalendar());
+    } catch {
+      // En prompt uten fristliste er fortsatt en brukbar prompt. At kalenderen
+      // ikke svarte skal ikke stoppe økta.
+      events = [];
+    }
+    await copyToClipboard(exec, buildSessionPrompt({ code, minutes, title, events }));
+    await openInChrome(exec, "subject-session", url, `${code} i ChatGPT`);
+    return { action: "subject-session", target: "chrome", label: code, minutes };
+  },
   async "calendar-privacy"(exec) {
     await exec("open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"]);
     return { action: "calendar-privacy", target: "settings", label: "Personvern → Kalendere" };
@@ -176,10 +218,10 @@ function isMacAction(action) {
   return typeof action === "string" && Object.hasOwn(macActions, action);
 }
 
-async function runMacAction(action, { exec = runCommand, platform = process.platform, payload } = {}) {
+async function runMacAction(action, { exec = runCommand, platform = process.platform, payload, deps } = {}) {
   if (!isMacAction(action)) throw new Error("Ukjent Mac-handling");
   if (platform !== "darwin") throw new Error("Mac-handlinger krever at panelet kjører på Mac-en");
-  return macActions[action](exec, payload);
+  return macActions[action](exec, payload, deps);
 }
 
 export { isMacAction, runMacAction };

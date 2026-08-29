@@ -6,6 +6,7 @@ import { runMacAction } from "./server/mac-action-service.mjs";
 import { getUsageSnapshot } from "./server/usage-service.mjs";
 import { getAgentSessions } from "./server/agent-session-service.mjs";
 import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
+import { listConnectedSubjects } from "./server/subject-service.mjs";
 import { getDayPlan, markBlockDone, recordNight, recordWake, saveTargetWake } from "./server/day-plan-service.mjs";
 // Reglene for rytmen bor i dashboard.js sammen med resten av utregningene.
 // Telefonen skal hente alarmtidene herfra og ikke ha sin egen kopi av dem.
@@ -210,6 +211,8 @@ function dayPlanApi() {
             const rhythm = describeSleepRhythm({
               nights: plan.history?.nights ?? [],
               wakeAnchor: plan.template?.wakeAnchor ?? null,
+              wakeWindow: plan.template?.wakeWindow ?? null,
+              bedWindow: plan.template?.bedWindow ?? null,
               previousTarget: plan.history?.targetWake ?? null,
               advance,
             });
@@ -220,7 +223,14 @@ function dayPlanApi() {
               ...plan,
               rhythm,
               alarms: rhythm.learning ? [] : alarmTimes(rhythm),
-              schedule: projectAlarms({ rhythm, wakeAnchor: plan.template?.wakeAnchor ?? null, days: 14, from: now }),
+              schedule: projectAlarms({
+                rhythm,
+                wakeAnchor: plan.template?.wakeAnchor ?? null,
+                wakeWindow: plan.template?.wakeWindow ?? null,
+                bedWindow: plan.template?.bedWindow ?? null,
+                days: 14,
+                from: now,
+              }),
             });
             return;
           }
@@ -395,6 +405,28 @@ function panelHelloApi() {
   };
 }
 
+// Panelet skal aldri tilby en knapp som ikke fører noe sted, så nettleseren
+// spør hvilke fag som faktisk har et ChatGPT-prosjekt på Mac-en. Bare kodene
+// svares ut — adressene blir liggende igjen her.
+function subjectsApi() {
+  return {
+    name: "local-subjects-api",
+    configureServer(server) {
+      server.middlewares.use("/api/subjects", async (request, response) => {
+        if (request.method !== "GET") {
+          sendJson(response, 405, { error: "Method not allowed" });
+          return;
+        }
+        try {
+          sendJson(response, 200, { connected: await listConnectedSubjects() });
+        } catch (error) {
+          sendJson(response, 500, { error: error instanceof Error ? error.message : "Ukjent feil" });
+        }
+      });
+    },
+  };
+}
+
 function macActionApi() {
   return {
     name: "local-mac-action-api",
@@ -466,5 +498,5 @@ export default defineConfig({
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), dayPlanApi(), spotifyApi(), panelHelloApi(), macActionApi(), connectionRepairApi(), react()],
+  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), dayPlanApi(), spotifyApi(), panelHelloApi(), subjectsApi(), macActionApi(), connectionRepairApi(), react()],
 });

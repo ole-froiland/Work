@@ -41,3 +41,10 @@ test("dagsplanen er montert som eget endepunkt", () => {
   const names = viteConfig.plugins.flat(Infinity).map((plugin) => plugin?.name);
   assert.ok(names.includes("local-day-plan-api"));
 });
+
+// Nettleseren må kunne spørre hvilke fag som har et prosjekt. Uten endepunktet
+// blir lista tom, og fagknappen dukker aldri opp.
+test("faglista er montert som eget endepunkt", () => {
+  const names = viteConfig.plugins.flat(Infinity).map((plugin) => plugin?.name);
+  assert.ok(names.includes("local-subjects-api"));
+});

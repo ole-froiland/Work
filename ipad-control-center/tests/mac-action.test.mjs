@@ -193,3 +193,68 @@ test("åpner Personvern-ruta for kalendertilgang", async () => {
   });
   assert.deepEqual(calls.at(-1), ["open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"]]);
 });
+
+// Fristene ligger i dager fra nå, ikke på faste datoer: en test som slutter å
+// virke i oktober tester noe annet enn det den ser ut til å teste.
+const inDays = (days) => new Date(Date.now() + days * 86_400_000).toISOString();
+const subjectCalendar = () => ({
+  events: [
+    { title: "📌 BUS400N – obligatorisk innlevering 1 (frist 23:59)", start: inDays(13) },
+    { title: "📌 BUS401E – individual assignment (due 23:59)", start: inDays(17) },
+    { title: "📌 BUS400N – obligatorisk innlevering 2 (frist 23:59)", start: inDays(40) },
+    { title: "🔵 BUS400N – oppgaver / aktiv gjenhenting", start: inDays(11) },
+  ],
+});
+
+const subjectDeps = {
+  readProjects: async () => ({ BUS400N: "https://chatgpt.com/g/g-p-test/project" }),
+  readCalendar: subjectCalendar,
+};
+
+test("legger prompten på utklippstavla før prosjektet åpnes", async () => {
+  const calls = [];
+  const result = await runMacAction("subject-session", {
+    platform: "darwin",
+    payload: { code: "bus400n", minutes: 75, title: "🔵 BUS400N – oppgaver / aktiv gjenhenting" },
+    deps: subjectDeps,
+    exec: async (command, args) => { calls.push([command, args]); return { stdout: "", stderr: "" }; },
+  });
+
+  assert.equal(result.label, "BUS400N");
+  assert.equal(calls.length, 2);
+  // Rekkefølgen er hele poenget: står ikke teksten klar når Chrome kommer fram,
+  // har knappen spart Ole for ingenting.
+  const [clipboard, chrome] = calls;
+  assert.ok(clipboard[1].some((value) => value.includes("set the clipboard to")));
+  assert.ok(chrome[1].includes("https://chatgpt.com/g/g-p-test/project"));
+  const prompt = clipboard[1].at(-1);
+  assert.ok(prompt.includes("75 minutter i BUS400N"));
+  assert.ok(prompt.includes("🔵 BUS400N – oppgaver / aktiv gjenhenting"));
+  assert.ok(prompt.includes("obligatorisk innlevering 1"));
+  // Fristen til et annet fag hører ikke hjemme i denne økta, og en frist som
+  // ligger seks uker fram hjelper ikke på de neste 75 minuttene.
+  assert.ok(!prompt.includes("individual assignment"));
+  assert.ok(!prompt.includes("obligatorisk innlevering 2"));
+  // Bare frister, ikke øktene til samme fag.
+  assert.ok(!prompt.includes("aktiv gjenhenting\n"));
+});
+
+test("åpner ingenting når faget mangler et prosjekt", async () => {
+  const calls = [];
+  await assert.rejects(
+    runMacAction("subject-session", {
+      platform: "darwin",
+      payload: { code: "BUS446", minutes: 45 },
+      deps: subjectDeps,
+      exec: async (...args) => { calls.push(args); return { stdout: "", stderr: "" }; },
+    }),
+    /BUS446 har ingen ChatGPT-prosjekt/,
+  );
+  assert.equal(calls.length, 0);
+});
+
+test("avviser fag og lengder som ikke er Oles", async () => {
+  for (const payload of [{ code: "ETI450", minutes: 45 }, { code: "BUS400N", minutes: 0 }, { code: "BUS400N", minutes: 5000 }]) {
+    await assert.rejects(runMacAction("subject-session", { platform: "darwin", payload, deps: subjectDeps, exec: async () => ({ stdout: "" }) }));
+  }
+});
