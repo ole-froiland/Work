@@ -36,11 +36,14 @@
 Legg `describeSleepRhythm` og `alarmTimes` inn i `import`-lista, og legg til:
 
 ```js
+// En leggetid på kvelden hører til dagen før oppvåkningen; en på natta hører til
+// samme døgn. Uten det skillet ble «la seg 03:00, sto opp 07:00» til 28 timer.
 function natt(dato, leggMin, våknMin) {
   const base = new Date(2026, 7, dato);
+  const leggDag = leggMin !== null && leggMin >= 12 * 60 ? base.getDate() - 1 : base.getDate();
   return {
     date: `2026-08-${String(dato).padStart(2, "0")}`,
-    sleepAt: leggMin === null ? null : new Date(base.getFullYear(), base.getMonth(), base.getDate() - 1, 0, leggMin).toISOString(),
+    sleepAt: leggMin === null ? null : new Date(base.getFullYear(), base.getMonth(), leggDag, 0, leggMin % (24 * 60)).toISOString(),
     wokeAt: new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, våknMin).toISOString(),
   };
 }

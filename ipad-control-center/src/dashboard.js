@@ -956,3 +956,77 @@ export function describeWake(wake, template) {
   }
   return { text: `Du sto opp ${klokke}.${skjøvet}`, tone: "emerald", needsConfirmation: false };
 }
+
+const MIN_NIGHTS = 3;
+const MIN_SLEEP = 6 * 60;
+const MAX_SLEEP = 9 * 60 + 30;
+const FALL_ASLEEP = 15;
+const MAX_DRIFT = 15;
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
+}
+
+function clockText(minute) {
+  const wrapped = ((Math.round(minute) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
+  return `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`;
+}
+
+// Rytmen bygger på Oles egne netter. Den påstår ingenting om hva som er sunt,
+// bare hva han faktisk pleier å gjøre — og trekker det sakte mot tidspunktet
+// han selv har skrevet i dagsmalen.
+export function describeSleepRhythm({ nights = [], wakeAnchor = null, previousTarget = null } = {}) {
+  const usable = (Array.isArray(nights) ? nights : []).filter((night) => Number.isFinite(+new Date(night?.wokeAt ?? "")));
+  if (usable.length < MIN_NIGHTS) {
+    return { learning: true, nightCount: usable.length, sleepNeed: null, targetWake: null, targetBedtime: null };
+  }
+
+  // En natt uten leggetid er fortsatt en natt. Oppvåkningen er sann selv om den
+  // andre enden mangler, så den teller i medianen for oppvåkning og ikke i den
+  // for lengde.
+  const durations = usable.flatMap((night) => {
+    const slept = new Date(night?.sleepAt ?? "");
+    const woke = new Date(night.wokeAt);
+    if (!Number.isFinite(+slept) || +woke <= +slept) return [];
+    return [(+woke - +slept) / 60_000];
+  });
+  const wakeMinutes = usable.map((night) => {
+    const woke = new Date(night.wokeAt);
+    return woke.getHours() * 60 + woke.getMinutes();
+  });
+
+  const sleepNeed = Math.min(MAX_SLEEP, Math.max(MIN_SLEEP, median(durations) ?? MIN_SLEEP));
+  const anchorMinute = clockMinutes(wakeAnchor);
+  const previousMinute = clockMinutes(previousTarget);
+
+  // Uten anker er det ingenting å trekke mot, og målet blir stående der Ole er.
+  let targetMinute = previousMinute ?? median(wakeMinutes);
+  if (anchorMinute !== null && previousMinute !== null) {
+    const gap = anchorMinute - previousMinute;
+    targetMinute = previousMinute + Math.sign(gap) * Math.min(Math.abs(gap), MAX_DRIFT);
+  }
+
+  return {
+    learning: false,
+    nightCount: usable.length,
+    sleepNeed,
+    targetWake: clockText(targetMinute),
+    targetBedtime: clockText(targetMinute - sleepNeed - FALL_ASLEEP),
+  };
+}
+
+export function alarmTimes({ targetBedtime = null, targetWake = null } = {}) {
+  const bed = clockMinutes(targetBedtime);
+  const wake = clockMinutes(targetWake);
+  if (bed === null || wake === null) return [];
+  return [
+    { id: "avrunding", at: clockText(bed - 30), label: "Begynn å runde av" },
+    { id: "leggetid", at: clockText(bed), label: "Legg deg nå" },
+    { id: "snart-opp", at: clockText(wake - 5), label: "Snart opp" },
+    { id: "stå-opp", at: clockText(wake), label: "Stå opp" },
+    { id: "opp-naa", at: clockText(wake + 5), label: "Opp nå" },
+  ];
+}

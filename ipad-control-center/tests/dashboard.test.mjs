@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeWake, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, notePanelAttempt, panelHostCandidates, planDay, planPanelEntry, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
+import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeSleepRhythm, describeWake, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, alarmTimes, notePanelAttempt, panelHostCandidates, planDay, planPanelEntry, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
 
 function fakeStorage(seed = {}) {
   const values = new Map(Object.entries(seed));
@@ -986,4 +986,92 @@ test("en alarm er et presist signal og trenger ingen bekreftelse", () => {
 test("sto Ole opp til normal tid, sies det uten å nevne skyving", () => {
   const presis = describeWake({ wokeAt: tid(7, 0), source: "shortcut" }, malen);
   assert.doesNotMatch(presis.text, /skjøvet/);
+});
+
+// En leggetid på kvelden hører til dagen før oppvåkningen; en på natta hører til
+// samme døgn. Uten det skillet ble «la seg 03:00, sto opp 07:00» til 28 timer.
+function natt(dato, leggMin, våknMin) {
+  const base = new Date(2026, 7, dato);
+  const leggDag = leggMin !== null && leggMin >= 12 * 60 ? base.getDate() - 1 : base.getDate();
+  return {
+    date: `2026-08-${String(dato).padStart(2, "0")}`,
+    sleepAt: leggMin === null ? null : new Date(base.getFullYear(), base.getMonth(), leggDag, 0, leggMin % (24 * 60)).toISOString(),
+    wokeAt: new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, våknMin).toISOString(),
+  };
+}
+
+const netter = [natt(20, 23 * 60, 7 * 60), natt(21, 23 * 60, 7 * 60), natt(22, 23 * 60, 7 * 60)];
+
+test("under tre netter er det ingen rytme å melde", () => {
+  const svar = describeSleepRhythm({ nights: netter.slice(0, 2), wakeAnchor: "07:00" });
+  assert.equal(svar.learning, true);
+  assert.equal(svar.nightCount, 2);
+  assert.equal(svar.targetWake, null);
+  assert.equal(svar.sleepNeed, null);
+});
+
+test("søvnbehovet er medianen, så én skjev natt ikke drar tallet", () => {
+  const skjevt = [...netter, natt(23, 20 * 60, 14 * 60)];
+  const svar = describeSleepRhythm({ nights: skjevt, wakeAnchor: "07:00" });
+  assert.equal(svar.learning, false);
+  assert.equal(svar.sleepNeed, 480);
+});
+
+test("søvnbehovet klemmes i begge ender", () => {
+  const kort = [natt(20, 3 * 60, 7 * 60), natt(21, 3 * 60, 7 * 60), natt(22, 3 * 60, 7 * 60)];
+  assert.equal(describeSleepRhythm({ nights: kort, wakeAnchor: "07:00" }).sleepNeed, 360);
+  const langt = [natt(20, 18 * 60, 10 * 60), natt(21, 18 * 60, 10 * 60), natt(22, 18 * 60, 10 * 60)];
+  assert.equal(describeSleepRhythm({ nights: langt, wakeAnchor: "07:00" }).sleepNeed, 570);
+});
+
+test("uten et forrige mål starter målet der Ole faktisk er", () => {
+  const sent = [natt(20, 24 * 60, 9 * 60), natt(21, 24 * 60, 9 * 60), natt(22, 24 * 60, 9 * 60)];
+  assert.equal(describeSleepRhythm({ nights: sent, wakeAnchor: "07:00" }).targetWake, "09:00");
+});
+
+test("målet flytter seg høyst et kvarter om dagen mot ankeret", () => {
+  const sent = [natt(20, 24 * 60, 9 * 60), natt(21, 24 * 60, 9 * 60), natt(22, 24 * 60, 9 * 60)];
+  const svar = describeSleepRhythm({ nights: sent, wakeAnchor: "07:00", previousTarget: "09:00" });
+  assert.equal(svar.targetWake, "08:45");
+});
+
+test("målet står stille når det allerede er på ankeret", () => {
+  const svar = describeSleepRhythm({ nights: netter, wakeAnchor: "07:00", previousTarget: "07:00" });
+  assert.equal(svar.targetWake, "07:00");
+});
+
+test("målet hopper ikke forbi ankeret på vei mot det", () => {
+  const svar = describeSleepRhythm({ nights: netter, wakeAnchor: "07:00", previousTarget: "07:10" });
+  assert.equal(svar.targetWake, "07:00");
+});
+
+test("leggetiden er målet minus søvnbehovet minus kvarteret det tar å sovne", () => {
+  const svar = describeSleepRhythm({ nights: netter, wakeAnchor: "07:00", previousTarget: "07:00" });
+  assert.equal(svar.sleepNeed, 480);
+  assert.equal(svar.targetBedtime, "22:45");
+});
+
+test("en natt uten leggetid teller ikke i medianen, men natta er der", () => {
+  const hull = [...netter, natt(23, null, 7 * 60)];
+  const svar = describeSleepRhythm({ nights: hull, wakeAnchor: "07:00" });
+  assert.equal(svar.nightCount, 4);
+  assert.equal(svar.sleepNeed, 480);
+});
+
+test("fem alarmer, i rekkefølge, med riktige avstander", () => {
+  const alarmer = alarmTimes({ targetBedtime: "22:45", targetWake: "07:00" });
+  assert.deepEqual(alarmer.map((a) => [a.id, a.at]), [
+    ["avrunding", "22:15"],
+    ["leggetid", "22:45"],
+    ["snart-opp", "06:55"],
+    ["stå-opp", "07:00"],
+    ["opp-naa", "07:05"],
+  ]);
+  assert.ok(alarmer.every((a) => typeof a.label === "string" && a.label.length > 0));
+});
+
+test("alarmene tåler at leggetiden krysser midnatt", () => {
+  const alarmer = alarmTimes({ targetBedtime: "00:10", targetWake: "08:00" });
+  assert.equal(alarmer[0].at, "23:40");
+  assert.equal(alarmer[1].at, "00:10");
 });
