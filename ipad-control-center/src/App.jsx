@@ -48,7 +48,7 @@ import {
   XLogo,
   YoutubeLogo,
 } from "@phosphor-icons/react";
-import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatMinutes, formatResetTime, formatTimer, layoutDayEvents, needsCompanionUpdate, planDay, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
+import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatMinutes, formatResetTime, formatTimer, layoutDayEvents, describeWake, needsCompanionUpdate, planDay, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
 import { createScreenWakeLockController } from "./wake-lock.js";
 
 const staticQuickActions = [
@@ -473,6 +473,40 @@ function CurrentEventCard({ events, now }) {
   );
 }
 
+// Panelet skal aldri stokke om dagen på et gjett uten at det er synlig at
+// gjettet er tatt. Og en plan uten ankre er verre enn ingen plan hvis den
+// presenteres som fullstendig — derfor sier stripa fra når avtalene mangler.
+function WakeBanner({ wake, template, calendarConnected, onCorrect }) {
+  const described = useMemo(() => describeWake(wake, template), [wake, template]);
+  const [draft, setDraft] = useState("");
+  if (!described && calendarConnected) return null;
+  return (
+    <div className={`wake-banner tone-${described?.tone ?? "amber"}`} role="status">
+      <span>
+        {described?.text}
+        {!calendarConnected && " Avtalene mangler, så bolkene er lagt ut uten dem."}
+      </span>
+      {described?.needsConfirmation && (
+        <span className="wake-correct">
+          <label htmlFor="wake-time">Ikke riktig?</label>
+          <input id="wake-time" type="time" value={draft} onChange={(event) => setDraft(event.target.value)} />
+          <button type="button" disabled={!draft} onClick={() => { onCorrect(draft); setDraft(""); }}>Rett</button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DroppedList({ dropped }) {
+  if (!dropped?.length) return null;
+  return (
+    <section className="panel-card dropped-list" aria-label="Dette rakk du ikke">
+      <span className="eyebrow">Dette rakk du ikke i dag</span>
+      <ul>{dropped.map((block) => <li key={block.id}>{block.title}<em>{block.minutes} min</em></li>)}</ul>
+    </section>
+  );
+}
+
 // Neste avtale fra Apple Kalender, i samme høyde som musikkortet i venstre spalte.
 function NextEventCard({ events, connected, now }) {
   const next = useMemo(() => describeCalendarActivity(events, now).next, [events, now]);
@@ -697,6 +731,8 @@ function DayCalendar({ date, events, now, plan = null, onDone }) {
               style={blockStyle(block)}
               key={block.id}
               onClick={() => onDone?.(block.id)}
+              aria-pressed={block.done}
+              aria-label={block.done ? `${block.title} er gjort. Trykk for å angre` : `Hak av ${block.title} som gjort`}
             >
               <span className="event-time">{`${formatEventTime(block.start)}–${formatEventTime(block.end)}`}</span>
               <strong>{block.title}</strong>
@@ -1361,6 +1397,25 @@ function App() {
     }
   }
 
+  async function correctWake(clock) {
+    const [hours, minutes] = clock.split(":").map(Number);
+    const wokeAt = new Date();
+    wokeAt.setHours(hours, minutes, 0, 0);
+    try {
+      const response = await fetch("/api/day-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "wake", source: "manual", wokeAt: wokeAt.toISOString() }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setDayPlan((current) => ({ ...current, wake: result.wake }));
+      setToast("Dagen er lagt ut på nytt");
+    } catch (error) {
+      setToast(`Kunne ikke rette tidspunktet (${error.message})`);
+    }
+  }
+
   async function markDone(id) {
     try {
       const response = await fetch("/api/day-plan", {
@@ -1473,11 +1528,13 @@ function App() {
             </div>
           </div>
           <div className="calendar-date-strip"><CalendarBlank size={19} weight="duotone" /><strong>{syncCalendar.connected ? `${selectedDayEvents.length} arrangement${selectedDayEvents.length === 1 ? "" : "er"}` : "Apple Kalender kobles til"}</strong><span>{syncCalendar.connected ? `${formatMinutes(plannedMinutes)} planlagt${syncCalendar.stale ? " · sist synket" : ""}` : "Venter på Kalender på Mac-en"}</span><button className="calendar-add" type="button" onClick={() => openCalendarComposer()} aria-label="Nytt arrangement"><Plus size={16} weight="bold" /> Ny</button></div>
+          <div className="calendar-banner-slot">{view === "day" && dayPlan.connected && <WakeBanner wake={dayPlan.wake} template={dayPlan.template} calendarConnected={syncCalendar.connected} onCorrect={correctWake} />}</div>
           <div className="calendar-stage" ref={calendarStage} {...calendarSwipe} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropNoteInCalendar(event)}>
             {view === "day" && <DayCalendar date={date} events={calendarEvents} now={now} plan={plannedDay} onDone={markDone} />}
             {view === "week" && <WeekCalendar date={date} events={calendarEvents} />}
             {view === "month" && <MonthCalendar date={date} events={calendarEvents} onSelectDay={openDay} onDropNote={dropNoteInCalendar} />}
           </div>
+          {view === "day" && <DroppedList dropped={plannedDay?.dropped} />}
           <footer className="system-strip">
             <MiniStatus icon={Laptop} label="Sosiale medier" value={hasScreenTimeSource ? formatMinutes(deviceMetrics?.screenTime?.socialMinutes) : companionOutdated ? "Utdatert app" : "Ikke synket"} detail={hasScreenTimeSource ? `I går · uke ${formatMinutes(deviceMetrics?.screenTime?.socialWeeklyAverageMinutes)}` : screenTimeAge} tone="violet" onClick={() => setActiveMetric((current) => current?.id === "screenTime" ? null : { id: "screenTime", icon: Laptop, tone: "violet", anchor: 0 })} />
             <MiniStatus icon={Footprints} label="Skritt · i dag" value={hasStepsSource ? new Intl.NumberFormat("nb-NO").format(deviceMetrics.steps.today) : "Ikke synket"} detail={hasStepsSource ? formatStepComparison(deviceMetrics?.steps?.today, deviceMetrics?.steps?.weeklyAverage) : stepsAge} tone="lime" onClick={() => setActiveMetric((current) => current?.id === "steps" ? null : { id: "steps", icon: Footprints, tone: "lime", anchor: 1 })} />

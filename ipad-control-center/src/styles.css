@@ -226,7 +226,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .agent-chip.is-ended { background: rgba(255,125,134,.14); color: #ff9aa1; }
 @keyframes agent-pulse { 50% { opacity: .55; } }
 
-.calendar-panel { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; border: 2px solid #536171; background: #10151b; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035), 0 12px 30px rgba(0, 0, 0, .24); }
+.calendar-panel { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; border: 2px solid #536171; background: #10151b; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035), 0 12px 30px rgba(0, 0, 0, .24); }
 .calendar-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 14px; }
 .calendar-toolbar h1 { font-size: 26px; text-transform: capitalize; }
 .calendar-title-block { min-width: 0; overflow: hidden; }
@@ -633,3 +633,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 .plan-block.is-done strong {
   text-decoration: line-through;
 }
+
+.wake-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 8px; padding: 8px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); background: color-mix(in srgb, currentColor 12%, #10151b); color: var(--violet); font-size: 12px; }
+.wake-banner.tone-amber { color: var(--orange); }
+.wake-banner.tone-sky { color: var(--blue); }
+.wake-banner.tone-emerald { color: var(--lime); }
+.wake-banner span { color: var(--text); }
+.wake-correct { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.wake-correct label { color: var(--muted); }
+.wake-correct input { padding: 3px 6px; border: 1px solid var(--line-soft); border-radius: 7px; background: #1c2229; color: var(--text); font: inherit; }
+.wake-correct button { padding: 4px 10px; border: 0; border-radius: 7px; background: currentColor; color: #0d1116; font: inherit; font-weight: 700; }
+.wake-correct button:disabled { opacity: .4; }
+
+.dropped-list { margin-top: 8px; padding: 10px 12px; }
+.dropped-list ul { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.dropped-list li { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; }
+.dropped-list li em { flex: 0 0 auto; font-style: normal; }
+
+/* Stripa har sin egen rad i rutenettet, også når den er skjult. Uten en fast
+   plassholder endrer antallet barn seg med visningen, og radmålene forskyver
+   seg slik at stripa havnet oppå kalenderen. */
+.calendar-banner-slot { min-width: 0; }

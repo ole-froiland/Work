@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, notePanelAttempt, panelHostCandidates, planDay, planPanelEntry, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
+import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeWake, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, notePanelAttempt, panelHostCandidates, planDay, planPanelEntry, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, summarizeAgentSessions } from "../src/dashboard.js";
 
 function fakeStorage(seed = {}) {
   const values = new Map(Object.entries(seed));
@@ -960,4 +960,30 @@ test("hakes en bolk av før tiden, rykker resten av dagen fram", () => {
 test("en mal uten bolker gir en tom plan i stedet for å kaste", () => {
   const { placed, dropped, shift } = planDay({ template: { wakeAnchor: "07:00", dayEnd: "23:00", blocks: [] }, day: dagen });
   assert.deepEqual({ placed, dropped, shift }, { placed: [], dropped: [], shift: 0 });
+});
+
+test("sier ingenting når ingen oppvåkning er registrert", () => {
+  assert.equal(describeWake({ wokeAt: null, source: null }, malen), null);
+  assert.equal(describeWake(null, malen), null);
+});
+
+test("ber om bekreftelse på et gjett, men ikke på en rettelse", () => {
+  const gjettet = describeWake({ wokeAt: tid(9, 40), source: "usage" }, malen);
+  assert.equal(gjettet.needsConfirmation, true);
+  assert.match(gjettet.text, /09:40/);
+
+  const rettet = describeWake({ wokeAt: tid(9, 40), source: "manual" }, malen);
+  assert.equal(rettet.needsConfirmation, false);
+});
+
+test("en alarm er et presist signal og trenger ingen bekreftelse", () => {
+  const alarmen = describeWake({ wokeAt: tid(9, 40), source: "shortcut" }, malen);
+  assert.equal(alarmen.needsConfirmation, false);
+  assert.match(alarmen.text, /09:40/);
+  assert.match(alarmen.text, /2 t 40 min/);
+});
+
+test("sto Ole opp til normal tid, sies det uten å nevne skyving", () => {
+  const presis = describeWake({ wokeAt: tid(7, 0), source: "shortcut" }, malen);
+  assert.doesNotMatch(presis.text, /skjøvet/);
 });

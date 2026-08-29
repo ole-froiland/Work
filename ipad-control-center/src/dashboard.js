@@ -937,3 +937,22 @@ export function planDay({ template, wokeAt = null, anchors = [], day = new Date(
 
   return { placed, dropped, shift };
 }
+
+// Et gjett skal se ut som et gjett. En alarm Ole selv slo av, og en rettelse han
+// selv skrev, er derimot fakta og skal ikke mase om bekreftelse.
+export function describeWake(wake, template) {
+  if (!wake?.wokeAt || !wake?.source) return null;
+  const woke = new Date(wake.wokeAt);
+  if (!Number.isFinite(+woke)) return null;
+  const klokke = `${String(woke.getHours()).padStart(2, "0")}:${String(woke.getMinutes()).padStart(2, "0")}`;
+  const anchorMinute = clockMinutes(template?.wakeAnchor);
+  const shift = anchorMinute === null ? 0 : Math.max(0, woke.getHours() * 60 + woke.getMinutes() - anchorMinute);
+  const skjøvet = shift > 0 ? ` Dagen er skjøvet ${formatMinutes(shift)}.` : "";
+  if (wake.source === "usage") {
+    return { text: `Regnet med at du sto opp ${klokke}.${skjøvet}`, tone: "amber", needsConfirmation: true };
+  }
+  if (wake.source === "shortcut") {
+    return { text: `Du sto opp ${klokke}.${skjøvet}`, tone: "sky", needsConfirmation: false };
+  }
+  return { text: `Du sto opp ${klokke}.${skjøvet}`, tone: "emerald", needsConfirmation: false };
+}
