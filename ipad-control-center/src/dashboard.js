@@ -843,3 +843,94 @@ export function buildMetricDetails(type, metrics = {}) {
     ],
   };
 }
+
+// Malen er skrevet i klokkeslett, ikke i datoer, fordi den gjelder alle dager.
+// Alt regnestykke under gjøres derfor i minutter etter midnatt, og oversettes
+// først tilbake til datoer når bolkene skal tegnes.
+export function clockMinutes(value) {
+  const match = /^(\d{2}):(\d{2})$/.exec(typeof value === "string" ? value : "");
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function minuteDate(day, minute) {
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minute);
+}
+
+function minuteOfDay(value) {
+  const date = new Date(value ?? "");
+  return Number.isFinite(+date) ? date.getHours() * 60 + date.getMinutes() : null;
+}
+
+// Skyvingen går bare framover. Symmetri hadde lagt lesingen til 05:30 fordi Ole
+// våknet tidlig én gang, og det er ikke problemet dagsplanen løser.
+export function planDay({ template, wokeAt = null, anchors = [], day = new Date(), done = [] } = {}) {
+  const blocks = Array.isArray(template?.blocks) ? template.blocks : [];
+  const anchorMinute = clockMinutes(template?.wakeAnchor);
+  const endMinute = clockMinutes(template?.dayEnd);
+  if (!blocks.length || anchorMinute === null || endMinute === null) return { placed: [], dropped: [], shift: 0 };
+
+  const wokeMinute = wokeAt ? minuteOfDay(wokeAt) : null;
+  const shift = wokeMinute === null ? 0 : Math.max(0, wokeMinute - anchorMinute);
+
+  // Heldagsavtaler holdes utenfor. De sier ingenting om når på dagen noe skjer,
+  // og ville ellers spist hvert eneste ledige minutt.
+  const busy = (Array.isArray(anchors) ? anchors : [])
+    .flatMap((event) => {
+      if (!event || event.allDay) return [];
+      const start = minuteOfDay(event.start);
+      const end = minuteOfDay(event.end);
+      if (start === null || end === null || end <= start) return [];
+      return [{ start, end }];
+    })
+    .sort((a, b) => a.start - b.start);
+
+  const doneById = new Map((Array.isArray(done) ? done : []).flatMap((entry) => {
+    const at = minuteOfDay(entry?.at);
+    return entry?.id && at !== null ? [[entry.id, at]] : [];
+  }));
+
+  const placed = [];
+  const dropped = [];
+  let cursor = anchorMinute + shift;
+
+  for (const block of blocks) {
+    const minutes = Number(block?.minutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) continue;
+
+    // Det som er gjort er gjort. Avhukede bolker legges der de faktisk skjedde,
+    // slik at en rettelse midt på dagen ikke skriver om formiddagen som har vært.
+    const doneAt = doneById.get(block.id);
+    if (doneAt !== undefined) {
+      placed.push({ ...block, startMinute: doneAt, endMinute: doneAt + minutes, done: true,
+        start: minuteDate(day, doneAt).toISOString(), end: minuteDate(day, doneAt + minutes).toISOString() });
+      cursor = Math.max(cursor, doneAt + minutes);
+      continue;
+    }
+
+    let start = cursor;
+    // Ett hopp per anker holder: ankrene er sortert, og hvert hopp lander på
+    // slutten av det ankeret som var i veien.
+    for (let guard = 0; guard <= busy.length; guard += 1) {
+      const hit = busy.find((slot) => start < slot.end && slot.start < start + minutes);
+      if (!hit) break;
+      start = hit.end;
+    }
+
+    // Markøren står stille når en bolk faller ut, slik at en kortere bolk lenger
+    // ned i malen fortsatt kan få plass i hullet.
+    if (start + minutes > endMinute) {
+      dropped.push(block);
+      continue;
+    }
+
+    placed.push({ ...block, startMinute: start, endMinute: start + minutes, done: false,
+      start: minuteDate(day, start).toISOString(), end: minuteDate(day, start + minutes).toISOString() });
+    cursor = start + minutes;
+  }
+
+  return { placed, dropped, shift };
+}

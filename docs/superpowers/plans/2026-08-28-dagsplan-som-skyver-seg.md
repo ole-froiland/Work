@@ -113,7 +113,7 @@ test("en heldagsavtale er ingen tidsbegrensning og teller ikke som anker", () =>
 });
 
 test("en bolk som ikke får plass før dagen er over havner i dropped", () => {
-  const { placed, dropped } = planDay({ template: malen, wokeAt: tid(22, 40), anchors: [], day: dagen });
+  const { placed, dropped } = planDay({ template: malen, wokeAt: tid(22, 0), anchors: [], day: dagen });
   assert.deepEqual(placed.map((block) => block.id), ["morgen"]);
   assert.deepEqual(dropped.map((block) => block.id), ["lese"]);
 });
