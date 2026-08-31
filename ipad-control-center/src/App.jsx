@@ -1180,6 +1180,33 @@ function App() {
       done: dayPlan.wake?.done ?? [],
     });
   }, [dayPlan.template, dayPlan.wake, selectedDayEvents, date]);
+  // «Akkurat nå» og «Neste aktivitet» leste den uskjøvede kalenderen, mens
+  // rutenettet under viste den skjøvede. Panelet sa da to ting samtidig: kortet
+  // fulgte papiret, rutenettet fulgte Ole. Kortene handler om *nå*, ikke om den
+  // datoen Ole har bladd seg fram til, så dagens plan regnes ut for seg — ellers
+  // ville «Akkurat nå» endre seg av å bla i kalenderen.
+  const todayKey = now.toDateString();
+  const activityEvents = useMemo(() => {
+    if (!dayPlan.template) return calendarEvents;
+    const today = new Date(todayKey);
+    const plan = planCalendarDay({
+      events: eventsOnDay(calendarEvents, today),
+      wokeAt: dayPlan.wake?.wokeAt ?? null,
+      wakeAnchor: dayPlan.template.wakeAnchor,
+      dayEnd: dayPlan.template.dayEnd,
+      day: today,
+      done: dayPlan.wake?.done ?? [],
+    });
+    if (plan.shift <= 0) return calendarEvents;
+    // Bare tidene flyttes. Resten av avtalen blir med som den er, ellers mister
+    // kortet kalendernavnet og fagknappen sitt grunnlag.
+    const original = new Map(calendarEvents.map((event) => [event.id, event]));
+    const rørt = new Set([...plan.placed, ...plan.dropped].map((block) => block.id));
+    const flyttet = plan.placed.map((block) => ({ ...(original.get(block.id) ?? {}), start: block.start, end: block.end }));
+    // Det som ikke fikk plass før dagen er over står i «dette rakk du ikke», og
+    // skal ikke også dukke opp som noe Ole er på vei til.
+    return [...calendarEvents.filter((event) => !rørt.has(event.id)), ...flyttet];
+  }, [dayPlan.template, dayPlan.wake, calendarEvents, todayKey]);
   const plannedMinutes = selectedDayEvents.reduce((total, event) => total + Math.max(0, (+new Date(event.end) - +new Date(event.start)) / 60_000), 0);
   const calendarStage = useRef(null);
   const calendarSwipe = useCalendarSwipe(moveDate);
@@ -1689,8 +1716,8 @@ function App() {
             {macLinkActions.map((action) => <MacLinkAction action={action} onTrigger={triggerAction} key={action.id} />)}
           </section>
 
-          <CurrentEventCard events={calendarEvents} now={now} subjects={connectedSubjects} onStartSubject={startSubjectSession} />
-          <NextEventCard events={calendarEvents} connected={syncCalendar.connected} now={now} subjects={connectedSubjects} onStartSubject={startSubjectSession} />
+          <CurrentEventCard events={activityEvents} now={now} subjects={connectedSubjects} onStartSubject={startSubjectSession} />
+          <NextEventCard events={activityEvents} connected={syncCalendar.connected} now={now} subjects={connectedSubjects} onStartSubject={startSubjectSession} />
 
           <section className={`panel-card focus-card ${focusPhase === "break" ? "is-break" : ""}`}>
             <div className="focus-top">
