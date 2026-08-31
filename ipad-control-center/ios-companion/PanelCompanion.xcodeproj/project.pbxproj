@@ -101,7 +101,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		"TEMP_092A6C04-6008-4B66-A9A1-8224867C9D01" /* .claude */ = {
+		"TEMP_F2D3A705-4A48-4130-A41B-679CBD4DF951" /* .claude */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -164,7 +164,7 @@
 					D578E9B25E369E7C74FB9E9E = {
 						DevelopmentTeam = KK679X38PZ;
 						ProvisioningStyle = Automatic;
-						SystemCapabilities = "[\"com.apple.FamilyControls\": [\"enabled\": 1], \"com.apple.HealthKit\": [\"enabled\": 1]]";
+						SystemCapabilities = "[\"com.apple.HealthKit\": [\"enabled\": 1], \"com.apple.FamilyControls\": [\"enabled\": 1]]";
 					};
 				};
 			};

@@ -23,6 +23,11 @@ struct MetricsPayload: Encodable {
     let steps: Steps?
     let location: Location?
     let sources: [String: Source]
+    // Hvorfor en kilde manglet. Grunnen ble samlet opp og brukt til én linje
+    // inne i appen, og så kastet — så panelet kunne bare si «Ikke synket», og
+    // svaret på hvorfor lå på en telefon ingen tenkte på å åpne. Skjermtiden sto
+    // stille i to døgn med forklaringen i lomma.
+    let problems: [String: String]?
     let deviceName: String
 }
 
@@ -172,7 +177,9 @@ final class MetricsSyncModel: ObservableObject {
             async let pendingSteps = fetchStepMetrics()
             async let pendingLocation = locationProvider.currentLocation()
 
-            var problems: [String] = []
+            // Nøkkel per kilde, ikke én sammenslått setning: panelet viser dem
+            // på hvert sitt kort, og en sammenslått streng kan ikke deles opp igjen.
+            var reasons: [String: String] = [:]
             var steps: (today: Double, weeklyAverage: Double)?
             var location: LocationProvider.Value?
 
@@ -184,14 +191,14 @@ final class MetricsSyncModel: ObservableObject {
                 stepsStatus = "Klar"
             } catch {
                 stepsStatus = "Feilet"
-                problems.append("Skritt: \(error.localizedDescription)")
+                reasons["steps"] = error.localizedDescription
             }
             do {
                 location = try await pendingLocation
                 locationStatus = "Klar"
             } catch {
                 locationStatus = "Feilet"
-                problems.append("Posisjon: \(error.localizedDescription)")
+                reasons["location"] = error.localizedDescription
             }
 
             #if PANEL_USAGE_EXPORT
@@ -201,17 +208,21 @@ final class MetricsSyncModel: ObservableObject {
                 screenTimeStatus = "Klar"
             } catch {
                 screenTimeStatus = "Feilet"
-                problems.append("Skjermtid: \(error.localizedDescription)")
+                reasons["screenTime"] = error.localizedDescription
             }
             #else
             let screenTime: (social: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage])? = nil
             screenTimeStatus = "Krever Xcode 26.4+"
             #endif
 
-            try await upload(screenTime: screenTime, steps: steps, location: location)
+            try await upload(screenTime: screenTime, steps: steps, location: location, problems: reasons)
             // Delvis sendt er ikke det samme som vellykket. Sto feltet tomt her,
             // ville en kilde som svikter hver gang aldri bli nevnt med et ord.
-            errorMessage = problems.isEmpty ? nil : problems.joined(separator: " · ")
+            let etiketter = ["steps": "Skritt", "location": "Posisjon", "screenTime": "Skjermtid"]
+            errorMessage = reasons.isEmpty ? nil : reasons
+                .sorted { $0.key < $1.key }
+                .map { "\(etiketter[$0.key] ?? $0.key): \($0.value)" }
+                .joined(separator: " · ")
         } catch {
             errorMessage = error.localizedDescription
             deliveryFailure = error.localizedDescription
@@ -322,7 +333,8 @@ final class MetricsSyncModel: ObservableObject {
     private func upload(
         screenTime: (social: Double, weeklyAverage: Double, topApps: [MetricsPayload.AppUsage])?,
         steps: (today: Double, weeklyAverage: Double)?,
-        location: LocationProvider.Value?
+        location: LocationProvider.Value?,
+        problems: [String: String]
     ) async throws {
         // Sviktet alle tre, er det ingenting å si. Da skal feilen stå igjen fra
         // kildene i stedet for å bli overskrevet av et vellykket tomt kall.
@@ -348,6 +360,7 @@ final class MetricsSyncModel: ObservableObject {
             steps: steps.map { .init(today: $0.today, weeklyAverage: $0.weeklyAverage) },
             location: location.map { .init(label: $0.label, latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude) },
             sources: sources,
+            problems: problems.isEmpty ? nil : problems,
             deviceName: UIDevice.current.name
         )
         try await PanelEndpoint.send(

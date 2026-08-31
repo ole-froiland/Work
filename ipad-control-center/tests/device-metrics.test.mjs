@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { describeSyncPayload, normalizeDeviceUpdate, weatherDescription } from "../server/device-metrics-service.mjs";
+import { describeSyncPayload, normalizeDeviceUpdate, normalizeProblems, weatherDescription } from "../server/device-metrics-service.mjs";
 
 test("normalizes trusted mobile metrics and preserves missing values", () => {
   const result = normalizeDeviceUpdate({
@@ -105,4 +105,52 @@ test("iPhone-koblingen registrerer datadrevet HealthKit-synk ved oppstart", asyn
   assert.match(model, /enableBackgroundDelivery\(for: stepType, frequency: \.hourly/);
   assert.match(model, /stepsStatus = "Godkjent"\s+startAutomaticSync\(\)/);
   assert.match(app, /didFinishLaunchingWithOptions[\s\S]*MetricsSyncModel\.shared\.startAutomaticSync\(\)/);
+});
+
+const nå = new Date().toISOString();
+const helse = { steps: { today: 100, weeklyAverage: 90 }, sources: { steps: { provider: "HealthKit", observedAt: nå } } };
+
+test("telefonens grunn til at en kilde manglet blir tatt vare på", () => {
+  const neste = normalizeDeviceUpdate({ ...helse, problems: { screenTime: "Gi full tilgang til app- og nettstedbruk." } }, {});
+  assert.equal(neste.problems.screenTime, "Gi full tilgang til app- og nettstedbruk.");
+  // Skrittene kom fram, og da har de ingen feil å vise.
+  assert.equal(neste.problems.steps, null);
+});
+
+test("en kilde som kommer fram igjen mister feilen sin", () => {
+  const før = normalizeDeviceUpdate({ ...helse, problems: { screenTime: "Ingen tilgang" } }, {});
+  const etter = normalizeDeviceUpdate({
+    screenTime: { socialMinutes: 42, socialWeeklyAverageMinutes: 40, topApps: [] },
+    sources: { screenTime: { provider: "DeviceActivity", observedAt: nå } },
+  }, før);
+  assert.equal(etter.problems.screenTime, null);
+  assert.equal(etter.screenTime.socialMinutes, 42);
+});
+
+test("en grunn blir stående til en ny synk sier noe annet", () => {
+  const før = normalizeDeviceUpdate({ ...helse, problems: { screenTime: "Ingen tilgang" } }, {});
+  // Neste synk nevner ikke skjermtid i det hele tatt. Grunnen skal ikke forsvinne
+  // bare fordi telefonen ikke gjentok den.
+  const etter = normalizeDeviceUpdate(helse, før);
+  assert.equal(etter.problems.screenTime, "Ingen tilgang");
+});
+
+test("bare kjente kilder slippes gjennom, og teksten kappes", () => {
+  const p = normalizeProblems({ screenTime: "x".repeat(500), ondsinnet: "slipp meg inn", steps: "   " });
+  assert.deepEqual(Object.keys(p), ["screenTime"]);
+  assert.equal(p.screenTime.length, 200);
+  assert.deepEqual(normalizeProblems(null), {});
+  assert.deepEqual(normalizeProblems("nei"), {});
+});
+
+test("skjermtid fra i går beskriver forgårs, og skal ikke stå som «I går»", async () => {
+  const { getDeviceMetrics, updateDeviceMetrics } = await import("../server/device-metrics-service.mjs");
+  const iGår = new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString();
+  const gammel = normalizeDeviceUpdate({
+    screenTime: { socialMinutes: 142, socialWeeklyAverageMinutes: 180, topApps: [] },
+    sources: { screenTime: { provider: "DeviceActivity", observedAt: iGår } },
+  }, {});
+  // 20 timer gammelt slapp gjennom det gamle 48-timersvinduet.
+  assert.equal(gammel.sources.screenTime.provider, "DeviceActivity");
+  assert.notEqual(new Date(iGår).toDateString(), new Date().toDateString());
 });

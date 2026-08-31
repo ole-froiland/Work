@@ -1159,10 +1159,12 @@ function App() {
     [syncCalendar, syncNotes, deviceMetrics, usage, now],
   );
   const companionOutdated = needsCompanionUpdate(deviceMetrics, now);
-  const screenTimeAge = companionOutdated
-    ? "Installer på nytt"
-    : describeSyncAge(deviceMetrics?.sources?.screenTime, now, "Device Activity · iPhone + iPad");
-  const stepsAge = describeSyncAge(deviceMetrics?.sources?.steps, now, "HealthKit · Apple Helse");
+  // Telefonens egen forklaring vinner over alderen. «Sist synket for 44 timer
+  // siden» sier hva som ikke skjedde; grunnen sier hva Ole må gjøre med det.
+  const screenTimeAge = deviceMetrics?.problems?.screenTime
+    ?? (companionOutdated ? "Installer på nytt" : describeSyncAge(deviceMetrics?.sources?.screenTime, now, "Device Activity · iPhone + iPad"));
+  const stepsAge = deviceMetrics?.problems?.steps
+    ?? describeSyncAge(deviceMetrics?.sources?.steps, now, "HealthKit · Apple Helse");
   // Om posisjonen er fersk nok til å brukes, ikke om telefonen en gang sendte
   // en. Serveren faller tilbake til Mosterøy etter et døgn, og det skal kortet
   // si fra om i stedet for å påstå at været gjelder der Ole står.

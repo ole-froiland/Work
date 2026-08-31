@@ -21,6 +21,17 @@ function normalizeSource(value, expectedProvider) {
   return { provider: expectedProvider, observedAt: observedAt.toISOString() };
 }
 
+// Skjermtiden telefonen sender beskriver *gårsdagen*, regnet fra da den ble
+// hentet. Et tall hentet i går handler altså om forgårs, og «I går» på kortet er
+// da feil med en hel dag. Vinduet var 48 timer, og et 44 timer gammelt tall gled
+// gjennom som ferskt — kortet så helt friskt ut mens det viste noe annet enn det
+// sa. Derfor døgnet, ikke en varighet: tallet er «I går» bare den dagen det ble
+// hentet.
+function observedToday(source, now = new Date()) {
+  const observedAt = new Date(source?.observedAt ?? "");
+  return Number.isFinite(+observedAt) && observedAt.toDateString() === now.toDateString();
+}
+
 function isFresh(source, maximumAge) {
   const observedAt = new Date(source?.observedAt ?? "").getTime();
   return Number.isFinite(observedAt) && Date.now() - observedAt <= maximumAge;
@@ -35,7 +46,21 @@ function normalizeTopApps(value) {
   }).sort((a, b) => b.minutes - a.minutes).slice(0, 5);
 }
 
+// Grunnen til at en kilde manglet, slik telefonen selv oppga den. Uten dette
+// kunne panelet bare si «Ikke synket», og forskjellen på «Helse sa nei»,
+// «tillatelsen er borte» og «telefonen har ikke ringt» var umulig å se — de tre
+// krever helt ulike ting av Ole. Bare kjente nøkler slippes gjennom, og teksten
+// kappes: den kommer fra en telefon og skal ikke kunne fylle kortet.
+export function normalizeProblems(value) {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(["screenTime", "steps", "location"].flatMap((name) => {
+    const reason = typeof value[name] === "string" ? value[name].trim().slice(0, 200) : "";
+    return reason ? [[name, reason]] : [];
+  }));
+}
+
 export function normalizeDeviceUpdate(input = {}, previous = {}) {
+  const reported = normalizeProblems(input.problems);
   const screenTimeSource = normalizeSource(input.sources?.screenTime, "DeviceActivity");
   const stepsSource = normalizeSource(input.sources?.steps, "HealthKit");
   const locationSource = normalizeSource(input.sources?.location, "CoreLocation");
@@ -68,6 +93,14 @@ export function normalizeDeviceUpdate(input = {}, previous = {}) {
       screenTime: screenTimeSource ?? previous.sources?.screenTime ?? null,
       steps: stepsSource ?? previous.sources?.steps ?? null,
       location: locationSource ?? previous.sources?.location ?? null,
+    },
+    // En kilde som kom fram har ingen feil å vise lenger. En som fortsatt
+    // mangler beholder grunnen fra forrige gang hvis denne synken ikke oppga en
+    // ny — telefonen sender bare det den vet akkurat da.
+    problems: {
+      screenTime: screenTimeSource ? null : reported.screenTime ?? previous.problems?.screenTime ?? null,
+      steps: stepsSource ? null : reported.steps ?? previous.problems?.steps ?? null,
+      location: locationSource ? null : reported.location ?? previous.problems?.location ?? null,
     },
     deviceName: typeof input.deviceName === "string" && input.deviceName.trim()
       ? input.deviceName.trim().slice(0, 80)
@@ -148,7 +181,7 @@ export async function updateDeviceMetrics(input) {
 
 export async function getDeviceMetrics() {
   const stored = await readStoredMetrics();
-  const screenTimeFresh = isFresh(stored.sources?.screenTime, 48 * 60 * 60 * 1000);
+  const screenTimeFresh = observedToday(stored.sources?.screenTime);
   const stepsFresh = isFresh(stored.sources?.steps, 12 * 60 * 60 * 1000);
   const locationFresh = isFresh(stored.sources?.location, 24 * 60 * 60 * 1000);
   const location = locationFresh ? stored.location : MOSTEROY;
@@ -166,6 +199,7 @@ export async function getDeviceMetrics() {
     steps: stepsFresh ? stored.steps : { today: null, weeklyAverage: null },
     weather,
     sources: stored.sources ?? {},
+    problems: stored.problems ?? {},
     deviceName: stored.deviceName ?? null,
     syncConnected: screenTimeFresh || stepsFresh || locationFresh,
   };
