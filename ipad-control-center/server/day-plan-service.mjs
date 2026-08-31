@@ -14,7 +14,11 @@ const MAX_NIGHTS = 60;
 const MAX_BLOCKS = 40;
 const MAX_MINUTES = 12 * 60;
 const TONES = new Set(["violet", "emerald", "amber", "sky"]);
-const SOURCES = new Set(["shortcut", "usage", "manual"]);
+// «usage» er et etterlatt navn fra da natta ble lest ut av at appen ble åpnet.
+// Signalet er skrittstempler nå, og heter «steps». Det gamle navnet blir stående
+// her fordi køen på telefonen kan holde nitti netter, og de eldste av dem ble
+// skrevet før navnebyttet — å avvise dem ville kastet netter som er helt gyldige.
+const SOURCES = new Set(["shortcut", "steps", "usage", "manual"]);
 
 function shortText(value, maximum) {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, maximum) : null;

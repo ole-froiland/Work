@@ -783,7 +783,7 @@ function blockStyle(block) {
 
 // Bolkene ligger bak avtalene og er stiplet. En avtale og en bolk er ikke samme
 // slags ting, og skal ikke kunne forveksles på en vegg man ser på i forbifarten.
-function DayCalendar({ date, events, now, plan = null, onDone }) {
+function DayCalendar({ date, events, now, plan = null, done = [], onDone }) {
   const dayEvents = eventsOnDay(events, date);
   const laidOutEvents = layoutDayEvents(dayEvents);
   const showNow = isSameCalendarDay(now, date);
@@ -792,6 +792,11 @@ function DayCalendar({ date, events, now, plan = null, onDone }) {
   // oppå hverandre. Full bredde til begge lot titlene skrive over hverandre, og
   // på en vegg man ser på i forbifarten er to halvlesbare spalter verre enn én.
   const shifted = Boolean(plan && plan.shift > 0 && plan.placed.length > 0);
+  // Avhukingen satt bare på skyggen, og skyggen finnes bare på dager Ole sto opp
+  // seint. På en dag som gikk etter planen fantes det ingenting å hake av i —
+  // altså nettopp de dagene det er noe å hake av for. Den sitter på avtalen nå,
+  // som er den som er der uansett.
+  const doneIds = new Set((Array.isArray(done) ? done : []).flatMap((entry) => (entry?.id ? [entry.id] : [])));
   return (
     <div className={`day-calendar${shifted ? " is-shifted" : ""}`} aria-label="Dagens kalender">
       {DAY_HOURS.map((hour) => (
@@ -821,13 +826,24 @@ function DayCalendar({ date, events, now, plan = null, onDone }) {
         </div>
       )}
       <div className="calendar-events">
-        {laidOutEvents.map(({ event, column, columnCount }) => (
-          <article className={`event-card tone-${calendarTone[event.tone] || "violet"}`} style={eventStyle(event, column, columnCount)} key={event.id}>
-            <span className="event-time">{event.allDay ? "Hele dagen" : `${formatEventTime(event.start)}–${formatEventTime(event.end)}`}</span>
-            <strong>{event.title}</strong>
-            <small>{event.note || event.calendarName || (event.source === "sync" ? "Sync" : event.source)}</small>
-          </article>
-        ))}
+        {laidOutEvents.map(({ event, column, columnCount }) => {
+          const erGjort = doneIds.has(event.id);
+          return (
+            <button
+              type="button"
+              className={`event-card tone-${calendarTone[event.tone] || "violet"}${erGjort ? " is-done" : ""}`}
+              style={eventStyle(event, column, columnCount)}
+              key={event.id}
+              onClick={() => onDone?.(event.id)}
+              aria-pressed={erGjort}
+              aria-label={erGjort ? `${event.title} er gjort. Trykk for å angre` : `Hak av ${event.title} som gjort`}
+            >
+              <span className="event-time">{event.allDay ? "Hele dagen" : `${formatEventTime(event.start)}–${formatEventTime(event.end)}`}</span>
+              <strong>{event.title}</strong>
+              <small>{event.note || event.calendarName || (event.source === "sync" ? "Sync" : event.source)}</small>
+            </button>
+          );
+        })}
       </div>
       {showNow && <div className="now-line" style={{ top: `${nowTop}%` }} aria-label={`Nå klokken ${formatEventTime(now)}`}><span />{formatEventTime(now)}</div>}
     </div>
@@ -1654,7 +1670,7 @@ function App() {
           <div className="calendar-date-strip"><CalendarBlank size={19} weight="duotone" /><strong>{syncCalendar.connected ? `${selectedDayEvents.length} arrangement${selectedDayEvents.length === 1 ? "" : "er"}` : "Apple Kalender kobles til"}</strong><span>{syncCalendar.connected ? `${formatMinutes(plannedMinutes)} planlagt${syncCalendar.stale ? " · sist synket" : ""}` : "Venter på Kalender på Mac-en"}</span><button className="calendar-add" type="button" onClick={() => openCalendarComposer()} aria-label="Nytt arrangement"><Plus size={16} weight="bold" /> Ny</button></div>
           <div className="calendar-banner-slot">{view === "day" && dayPlan.connected && <WakeBanner wake={dayPlan.wake} template={dayPlan.template} calendarConnected={syncCalendar.connected} onCorrect={correctWake} />}</div>
           <div className="calendar-stage" ref={calendarStage} {...calendarSwipe} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropNoteInCalendar(event)}>
-            {view === "day" && <DayCalendar date={date} events={calendarEvents} now={now} plan={plannedDay} onDone={markDone} />}
+            {view === "day" && <DayCalendar date={date} events={calendarEvents} now={now} plan={plannedDay} done={dayPlan.wake?.done ?? []} onDone={markDone} />}
             {view === "week" && <WeekCalendar date={date} events={calendarEvents} />}
             {view === "month" && <MonthCalendar date={date} events={calendarEvents} onSelectDay={openDay} onDropNote={dropNoteInCalendar} />}
           </div>

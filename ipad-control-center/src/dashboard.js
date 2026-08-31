@@ -941,7 +941,9 @@ export function describeWake(wake, template) {
   const anchorMinute = clockMinutes(template?.wakeAnchor);
   const shift = anchorMinute === null ? 0 : Math.max(0, woke.getHours() * 60 + woke.getMinutes() - anchorMinute);
   const skjøvet = shift > 0 ? ` Dagen er skjøvet ${formatMinutes(shift)}.` : "";
-  if (wake.source === "usage") {
+  // Begge navn på det samme: telefoner som ikke er oppdatert ennå sender
+  // fortsatt «usage», og en natt derfra er like mye et gjett som en fra «steps».
+  if (wake.source === "steps" || wake.source === "usage") {
     return { text: `Regnet med at du sto opp ${klokke}.${skjøvet}`, tone: "amber", needsConfirmation: true };
   }
   if (wake.source === "shortcut") {

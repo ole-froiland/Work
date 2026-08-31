@@ -289,7 +289,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
    svelger det klikkene som skulle nådd bolkene under. */
 .calendar-events { position: absolute; inset: 0 0 0 43px; pointer-events: none; }
 .event-card { pointer-events: auto; }
-.event-card { position: absolute; left: 0; right: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center; padding: 8px 11px; border-left: 3px solid currentColor; border-radius: 0 9px 9px 0; background: #1c2229; overflow: hidden; }
+/* Kortet er en knapp nå, ikke en <article>: avhukingen må finnes på dager som
+   gikk etter planen også, og der er avtalen det eneste som er tegnet. `border: 0`
+   og `font: inherit` er det som holder utseendet nøyaktig som før — uten dem
+   tegner nettleseren sin egen knapperamme rundt hvert eneste arrangement. */
+.event-card { position: absolute; left: 0; right: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center; padding: 8px 11px; appearance: none; border: 0; border-left: 3px solid currentColor; border-radius: 0 9px 9px 0; background: #1c2229; overflow: hidden; font: inherit; text-align: left; cursor: pointer; }
+.event-card.is-done { opacity: 0.45; }
+.event-card.is-done strong { text-decoration: line-through; }
 .event-card strong { color: var(--text); font-size: 12px; }
 .event-card small, .event-time { color: var(--muted); font-size: 11px; }
 .event-time { position: absolute; top: 7px; right: 9px; }

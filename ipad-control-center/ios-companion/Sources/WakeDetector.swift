@@ -111,7 +111,7 @@ final class WakeDetector {
             // inn i historikken, og panelet avviser en oppvåkning som ikke er
             // fra i dag — derfor to ulike kall.
             var body: [String: Any] = date == today
-                ? ["kind": "wake", "source": "usage", "wokeAt": wokeAt]
+                ? ["kind": "wake", "source": "steps", "wokeAt": wokeAt]
                 : ["kind": "night", "date": date, "wokeAt": wokeAt]
             if let sleepAt = entry["sleepAt"] { body["sleepAt"] = sleepAt }
             if entry["ignoredBedtime"] == "1" { body["ignoredBedtime"] = true }
