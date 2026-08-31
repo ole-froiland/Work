@@ -30,7 +30,12 @@ NAVN="$(ts status --json | /usr/bin/python3 -c 'import json,sys; print(json.load
 # En feil her kan også være noe helt annet enn manglende sertifikater — nettet,
 # en utlogget node. Da skal skriptet vise hva som faktisk sto der, ikke sende
 # Ole til en bryter som allerede er på.
-if ! CERT_FEIL="$(ts cert --cert-file /dev/null --key-file /dev/null "$NAVN" 2>&1)"; then
+# `tailscale cert` nekter å skrive til /dev/null, så prøven går til en mappe som
+# ryddes bort etterpå. Sertifikatet blir uansett liggende i tailscaled — det er
+# der `serve` henter det fra.
+PROVE="$(mktemp -d)"
+trap 'rm -rf "$PROVE"' EXIT
+if ! CERT_FEIL="$(ts cert --cert-file "$PROVE/cert.pem" --key-file "$PROVE/key.pem" "$NAVN" 2>&1)"; then
   if ! printf '%s' "$CERT_FEIL" | grep -qi "does not support getting TLS certs\|HTTPS.*not enabled"; then
     echo "Fikk ikke hentet sertifikat, og det er ikke fordi HTTPS er avslått:" >&2
     printf '%s\n' "$CERT_FEIL" >&2
@@ -56,12 +61,16 @@ Panelet svarer nå på:
 
   https://${NAVN}
 
-Åpne den på iPhonen én gang, så huskes den. Står den gamle adressen lagret,
-send den nye med:
+Åpne den på iPhonen og legg den til på Hjem-skjermen. Det gamle ikonet peker på
+http-adressen og må byttes ut — det er adressen ikonet ble laget fra som gjelder,
+ikke den som er husket i Safari.
 
-  https://${NAVN}/?host=https://${NAVN}
+Bruker du Netlify-adressen, settes den nye verten der (og bare der — panelet selv
+leser ikke ?host=):
 
-Utklipp-knappen får da ett trykk begge veier av seg selv.
+  https://ole-work-panel.netlify.app/?host=https://${NAVN}
+
+Utklipp-knappen får ett trykk begge veier av seg selv når adressen er https.
 
 Slå av igjen med:  tailscale --socket=$SOCKET serve reset
 TEKST

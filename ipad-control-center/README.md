@@ -249,6 +249,17 @@ mangler, og skiller det fra andre feil så det ikke sender noen til en bryter so
 allerede er på. Dette er `tailscale serve`, ikke `funnel` — panelet blir ikke
 tilgjengelig utenfor tailnettet.
 
+Oppsettet er kjørt, og `tailscale serve` husker det på tvers av omstart. Slå det
+av igjen med `tailscale --socket=~/.tailscale/tailscaled.sock serve reset`.
+
+Adressen svarer aldri fra Mac-en selv — userspace-tailscaled ruter ikke Mac-ens
+egen trafikk inn i tailnettet, så navnet slår ikke engang opp der. Skal proxyen
+sjekkes herfra, må den sjekkes slik Tailscale sender videre:
+
+```bash
+curl -sS -H "Host: ole-mac-panel.tail161d1e.ts.net" http://127.0.0.1:4173/api/day-plan
+```
+
 Etter det svarer panelet på `https://ole-mac-panel.tail161d1e.ts.net`, uten
 portnummer: Tailscale lytter på 443 og panelet selv på 4173.
 `normalizePanelHost` trer derfor ikke panelporten på en https-adresse — det ville
