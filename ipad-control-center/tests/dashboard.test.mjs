@@ -1248,3 +1248,12 @@ test("tiden i senga regnes av tallene som faktisk vises", () => {
   assert.equal(svar.timeInBed, ((opp - legg) + 24 * 60) % (24 * 60));
   assert.ok(svar.timeInBed >= svar.sleepNeed, "man ligger aldri kortere enn man sover");
 });
+
+// Utklippstavla i nettleseren finnes bare i secure context. Den ene veien dit
+// er https gjennom Tailscales proxy, som lytter på 443 — ikke på 4173.
+test("en https-adresse får ikke panelporten tredd på seg", () => {
+  assert.equal(normalizePanelHost("https://ole-mac-panel.tail161d1e.ts.net"), "https://ole-mac-panel.tail161d1e.ts.net");
+  assert.equal(normalizePanelHost("https://ole-mac-panel.tail161d1e.ts.net:8443"), "https://ole-mac-panel.tail161d1e.ts.net:8443");
+  // http er fortsatt panelet selv, og der er porten en del av adressen.
+  assert.equal(normalizePanelHost("ole-sin-macbook-air.local"), "http://ole-sin-macbook-air.local:4173");
+});

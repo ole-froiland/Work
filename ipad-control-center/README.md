@@ -234,10 +234,27 @@ felt. Uten utklippstavle-API-et kopieres bildet ved å holde det inne, og tekste
 med knappen under — den bruker `document.execCommand("copy")`, som er avviklet,
 men er det eneste som virker utenfor secure context.
 
-Skal ett trykk holde igjen, må panelet serveres over https. Tailscale kan gi et
-ekte sertifikat for `.ts.net`-navnet (`tailscale serve`), og da dukker
-utklippstavle-veiene opp av seg selv — `clipboardSupport()` i
-`src/clipboard-bridge.js` slår dem på når API-et finnes.
+Skal ett trykk holde begge veier, må panelet serveres over https. Tailscale kan
+terminere TLS med et ekte Let's Encrypt-sertifikat for `.ts.net`-navnet og sende
+trafikken videre til panelet på loopback:
+
+```bash
+./macos/panel-https.sh
+```
+
+Skriptet gjør alt som kan gjøres herfra. Det ene steget som ikke kan, er
+sertifikatet: HTTPS må slås på for hele tailnettet under **HTTPS Certificates**
+på <https://login.tailscale.com/admin/dns>. Skriptet sier fra når den bryteren
+mangler, og skiller det fra andre feil så det ikke sender noen til en bryter som
+allerede er på. Dette er `tailscale serve`, ikke `funnel` — panelet blir ikke
+tilgjengelig utenfor tailnettet.
+
+Etter det svarer panelet på `https://ole-mac-panel.tail161d1e.ts.net`, uten
+portnummer: Tailscale lytter på 443 og panelet selv på 4173.
+`normalizePanelHost` trer derfor ikke panelporten på en https-adresse — det ville
+gjort den ene adressen som gir secure context til den ene som ikke svarer.
+`clipboardSupport()` slår på utklippstavle-veiene av seg selv når API-et dukker
+opp, uten kodeendring.
 
 Endepunktet er `/api/clipboard`: `GET` leser Mac-ens tavle, `POST` skriver til
 den med `{"kind":"text","text":…}` eller `{"kind":"image","dataUrl":"data:image/png;base64,…"}`.

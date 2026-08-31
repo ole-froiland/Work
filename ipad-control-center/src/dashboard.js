@@ -70,7 +70,11 @@ export function normalizePanelHost(value) {
     return null;
   }
   if (!isPrivatePanelHostname(url.hostname)) return null;
-  if (!url.port) url.port = PANEL_PORT;
+  // Panelet kjører på 4173 over http. En https-adresse går derimot gjennom
+  // Tailscales egen proxy på 443, og der ville en påtvunget 4173 pekt på en
+  // port ingen lytter på — altså gjort den ene adressen som gir secure context
+  // til den ene som ikke svarer.
+  if (!url.port && url.protocol === "http:") url.port = PANEL_PORT;
   return `${url.protocol}//${url.host}`;
 }
 
