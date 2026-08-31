@@ -49,8 +49,11 @@ import {
   XLogo,
   YoutubeLogo,
 } from "@phosphor-icons/react";
-import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatMinutes, formatResetTime, formatTimer, layoutDayEvents, describeWake, needsCompanionUpdate, planCalendarDay, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
+import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, eventsOnDay, followCalendarDay, formatMinutes, formatResetTime, formatTimer, layoutDayEvents, describeWake, needsCompanionUpdate, planCalendarDay, readUsageResponse, shiftCalendarDate, subjectSession, summarizeAgentSessions } from "./dashboard.js";
 import { createScreenWakeLockController } from "./wake-lock.js";
+import { usePolledResource } from "./panel-data.js";
+import { callMacAction } from "./mac-action.js";
+import { useSpotify } from "./spotify-client.js";
 
 const staticQuickActions = [
   { id: "focus", label: "Fokus", detail: "Slå fokus av og på overalt", icon: MoonStars, tone: "violet" },
@@ -260,107 +263,7 @@ function deviceIconFor(type) {
 // Kortet styrer Spotify Connect, så knappene treffer enheten som faktisk
 // spiller – iPhone, Mac eller iPad – og ikke bare Spotify på Mac-en.
 function NowPlayingCard({ onToast, onConfigure }) {
-  const [player, setPlayer] = useState(null);
-  const [readAt, setReadAt] = useState(() => Date.now());
-  const [clock, setClock] = useState(() => Date.now());
-  const [devices, setDevices] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  const authorized = Boolean(player?.authorized);
-  const playing = Boolean(player?.playing);
-  const pollMs = !authorized ? 30_000 : playing ? 5_000 : 15_000;
-
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      try {
-        const response = await fetch("/api/spotify", { cache: "no-store" });
-        const snapshot = await response.json();
-        if (!active) return;
-        setPlayer(snapshot);
-        setReadAt(Date.now());
-        setClock(Date.now());
-      } catch (error) {
-        if (active) setPlayer({ ok: false, configured: true, authorized: false, error: `Fikk ikke kontakt med panelet (${error.message})` });
-      }
-    }
-    load();
-    const interval = window.setInterval(load, pollMs);
-    return () => { active = false; window.clearInterval(interval); };
-  }, [pollMs]);
-
-  // Sporet går videre mellom hentingene, så framdriften telles lokalt.
-  useEffect(() => {
-    if (!playing) return undefined;
-    const timer = window.setInterval(() => setClock(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [playing]);
-
-  async function send(command, payload = {}) {
-    setBusy(true);
-    try {
-      const response = await fetch("/api/spotify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command, ...payload }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-      return result;
-    } catch (error) {
-      onToast(error.message);
-      return null;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function refresh() {
-    try {
-      const response = await fetch("/api/spotify", { cache: "no-store" });
-      setPlayer(await response.json());
-      setReadAt(Date.now());
-      setClock(Date.now());
-    } catch {
-      // Neste automatiske henting rydder opp.
-    }
-  }
-
-  // Spotify bruker et halvsekund på å bekrefte en kommando, så visningen
-  // oppdateres lokalt først og hentes på nytt like etter.
-  async function control(command, optimistic) {
-    if (optimistic) setPlayer((current) => (current ? { ...current, ...optimistic } : current));
-    const result = await send(command);
-    window.setTimeout(refresh, result ? 600 : 0);
-  }
-
-  async function openDevices() {
-    setBusy(true);
-    try {
-      const response = await fetch("/api/spotify?devices=1", { cache: "no-store" });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-      setDevices(result.devices);
-    } catch (error) {
-      onToast(error.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function pickDevice(device) {
-    setDevices(null);
-    const result = await send("transfer", { deviceId: device.id });
-    if (result) {
-      onToast(`Spiller på ${device.name}`);
-      window.setTimeout(refresh, 900);
-    }
-  }
-
-  async function connect() {
-    const result = await send("authorize");
-    if (result) onToast("Fullfør Spotify-innloggingen i nettleseren på Mac-en");
-  }
+  const { player, track, devices, busy, playing, duration, progressPercent, closeDevices, control, openDevices, pickDevice, connect } = useSpotify({ onToast });
 
   if (!player) {
     return (
@@ -387,10 +290,6 @@ function NowPlayingCard({ onToast, onConfigure }) {
     );
   }
 
-  const track = player.track;
-  const duration = track?.durationMs ?? 0;
-  const elapsed = playing ? Math.max(0, clock - readAt) : 0;
-  const progress = duration > 0 ? Math.min(duration, (player.progressMs ?? 0) + elapsed) : 0;
   const DeviceIcon = deviceIconFor(player.device?.type);
 
   return (
@@ -405,8 +304,8 @@ function NowPlayingCard({ onToast, onConfigure }) {
         </span>
       </div>
 
-      <div className="now-playing-progress" role="progressbar" aria-label="Avspilt del av sporet" aria-valuemin={0} aria-valuemax={100} aria-valuenow={duration > 0 ? Math.round((progress / duration) * 100) : 0}>
-        <span style={{ width: duration > 0 ? `${(progress / duration) * 100}%` : "0%" }} />
+      <div className="now-playing-progress" role="progressbar" aria-label="Avspilt del av sporet" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progressPercent)}>
+        <span style={{ width: duration > 0 ? `${progressPercent}%` : "0%" }} />
       </div>
 
       <div className="now-playing-controls">
@@ -428,11 +327,11 @@ function NowPlayingCard({ onToast, onConfigure }) {
       </div>
 
       {devices && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDevices(null); }}>
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDevices(); }}>
           <section className="bridge-modal device-picker" role="dialog" aria-modal="true" aria-labelledby="deviceTitle">
             <div className="modal-title">
               <div><span className="eyebrow">Spotify Connect</span><h2 id="deviceTitle">Spill på</h2></div>
-              <button type="button" onClick={() => setDevices(null)} aria-label="Lukk"><X /></button>
+              <button type="button" onClick={closeDevices} aria-label="Lukk"><X /></button>
             </div>
             {devices.length > 0 ? (
               <ul className="device-list">
@@ -468,16 +367,6 @@ function NowPlayingCard({ onToast, onConfigure }) {
 // Egen, fast plass for det som faktisk pågår. Når kalenderen ikke har en
 // pågående avtale, blir innholdet stående tomt slik at «Neste aktivitet» ikke
 // feilaktig ser ut som noe Ole skal gjøre allerede nå.
-// Knappen finnes bare når avtalen faktisk nevner et fag Ole har et
-// ChatGPT-prosjekt til. En «Skole – svakeste fag først»-økt sier ikke hvilket
-// fag det er, og skal ikke tilby en knapp som må gjette seg fram.
-function subjectSession(activity, connected) {
-  const code = activity?.subject;
-  const minutes = activity?.sessionMinutes;
-  if (!code || !Number.isFinite(minutes) || !connected?.includes(code)) return null;
-  return { code, minutes, title: activity.title };
-}
-
 // Fagkoden står allerede i tittelen over knappen, og på en rail som er 200 px
 // bred er hvert tegn den gjentar et tegn tittelen mister. Derfor bare ikonet —
 // koden lever i navnet, for den som ikke ser hva ikonet betyr.
@@ -756,10 +645,6 @@ function formatEventTime(value) {
   return new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
-function eventsOnDay(events, date) {
-  return events.filter((event) => eventOccursOnDay(event, date));
-}
-
 // Døgnet er 24 timer høyt og rulles loddrett. Før dekket rutenettet bare
 // 08–18, og alt utenfor ble klemt inn i kanten i stedet for å vises der det er.
 const DAY_HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
@@ -937,38 +822,6 @@ function useCalendarSwipe(onSwipe) {
 // `refreshUrl` skiller det manuelle trykket fra takten: kalenderen ber Mac-en
 // lese Apple Kalender på nytt der, i stedet for å få det siste svaret servert om
 // igjen.
-function usePolledResource(url, { interval, initial = null, parse, onError, refreshUrl = url }) {
-  const [value, setValue] = useState(initial);
-  const settings = useRef({ parse, onError });
-  settings.current = { parse, onError };
-
-  const load = useCallback(async (alive = () => true, target = url) => {
-    const { parse: read, onError: fail } = settings.current;
-    try {
-      const response = await fetch(target, { cache: "no-store" });
-      const snapshot = read ? await read(response) : await readJsonResponse(response);
-      if (alive()) setValue(snapshot);
-    } catch (error) {
-      if (alive() && fail) setValue((current) => fail(current, error));
-    }
-  }, [url]);
-
-  useEffect(() => {
-    let active = true;
-    const alive = () => active;
-    load(alive);
-    const timer = window.setInterval(() => load(alive), interval);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [load, interval]);
-
-  return [value, useCallback(() => load(undefined, refreshUrl), [load, refreshUrl]), setValue];
-}
-
-async function readJsonResponse(response) {
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
-}
-
 function App() {
   const [view, setView] = useState("day");
   const [date, setDate] = useState(() => new Date());
@@ -1248,13 +1101,7 @@ function App() {
   async function setFocusMode(enabled, { quiet = false, force = false } = {}) {
     if (enabled === focusModeActive && !force) return true;
     try {
-      const response = await fetch("/api/mac-action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "focus-mode", enabled }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      await callMacAction({ action: "focus-mode", enabled });
       setFocusModeActive(enabled);
       if (!quiet) setToast(enabled ? "Fokus er på på alle enhetene dine" : "Fokus er slått av");
       return true;
@@ -1380,13 +1227,7 @@ function App() {
   // i stedet for i en toast, siden det er raden Ole ser på.
   async function runRepairFollowUp(action) {
     try {
-      const response = await fetch("/api/mac-action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      await callMacAction({ action });
       return followUpMessages[action] ?? "Åpnet på Mac-en";
     } catch (error) {
       return `Fikk det ikke åpnet på Mac-en (${error.message})`;
@@ -1395,14 +1236,7 @@ function App() {
 
   async function runOnMac(body, { done, failed }) {
     try {
-      const response = await fetch("/api/mac-action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
-      setToast(done(result));
+      setToast(done(await callMacAction(body)));
     } catch (error) {
       setToast(`${failed} (${error.message})`);
     }

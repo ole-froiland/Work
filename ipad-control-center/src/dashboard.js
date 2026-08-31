@@ -186,6 +186,54 @@ export function planPanelEntry({ location = {}, storage = null, session = null, 
   return { mode: "chooser", candidates, failedUrl: null };
 }
 
+export const PANEL_LAYOUT_KEY = "panelLayout";
+// Grensen ligger under iPad-ens korteste side (768 px), slik at en iPad i
+// portrett aldri havner i mobilvisningen. Den er en telefon-grense, ikke en
+// «smal skjerm»-grense.
+export const MOBILE_MAX_EDGE = 500;
+
+function normalizeLayout(value) {
+  const name = String(value ?? "").trim().toLowerCase();
+  if (name === "mobil" || name === "mobile" || name === "phone") return "mobil";
+  if (name === "ipad" || name === "panel" || name === "desktop") return "ipad";
+  return null;
+}
+
+// Hvilken av de to flatene som skal tegnes. Panelet er bygget for en iPad i
+// landskap; telefonen i festet ved siden av Mac-en er en annen skjerm med et
+// annet spørsmål, og skal ikke få den samme flaten presset ned i 375 px.
+//
+// `pointer: coarse` er det som holder et smalt nettleservindu på Mac-en utenfor:
+// bredden alene sier ingenting om hva slags enhet man sitter med, og et panel
+// som bytter utseende av at vinduet dras smalere er et panel som gjetter.
+export function chooseLayout({ location = {}, storage = null, viewport = {} } = {}) {
+  const asked = normalizeLayout(new URLSearchParams(location.search ?? "").get("layout"));
+  if (asked) {
+    try {
+      storage?.setItem(PANEL_LAYOUT_KEY, asked);
+    } catch {
+      // Privat vindu eller blokkert lagring: valget gjelder da bare dette besøket.
+    }
+    return asked;
+  }
+
+  const remembered = normalizeLayout(safeRead(storage, PANEL_LAYOUT_KEY));
+  if (remembered) return remembered;
+
+  const { width, height, coarse = false } = viewport;
+  if (!coarse) return "ipad";
+  const shortEdge = Math.min(Number(width), Number(height));
+  return Number.isFinite(shortEdge) && shortEdge <= MOBILE_MAX_EDGE ? "mobil" : "ipad";
+}
+
+function safeRead(storage, key) {
+  try {
+    return storage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Henger et hopp, lever siden fortsatt, og da er det ingen grunn til å spørre om
 // noe siden kan prøve selv: neste adresse i lista tas automatisk. Det er dette
 // som gjør at en iPad som har husket .local og drar på mobildata finner veien
@@ -741,6 +789,21 @@ function formatRemaining(milliseconds) {
   const days = Math.floor(hours / 24);
   const restHours = hours % 24;
   return restHours ? `${days} d ${restHours} t igjen` : `${days} d igjen`;
+}
+
+export function eventsOnDay(events, date) {
+  return (Array.isArray(events) ? events : []).filter((event) => eventOccursOnDay(event, date));
+}
+
+// Knappen finnes bare når avtalen faktisk nevner et fag Ole har et
+// ChatGPT-prosjekt til. En «Skole – svakeste fag først»-økt sier ikke hvilket
+// fag det er, og skal ikke tilby en knapp som må gjette seg fram. Regelen ligger
+// her og ikke i visningen, slik at iPad-en og mobilen ikke kan få hvert sitt svar.
+export function subjectSession(activity, connected) {
+  const code = activity?.subject;
+  const minutes = activity?.sessionMinutes;
+  if (!code || !Number.isFinite(minutes) || !connected?.includes(code)) return null;
+  return { code, minutes, title: activity.title };
 }
 
 // Aktivitetskortet skal først svare på «hva holder jeg på med nå?», men uten

@@ -166,6 +166,51 @@ ferske verdier, viser de hvor lenge siden mobilen sist sendte.
 
 Verdiene valideres sammen med kilde og observasjonstid før de lagres lokalt i `~/Library/Caches/ipad-control-center/device-metrics.json`. Panelet avviser nettleserverdier, ukjente leverandører og data som er eldre enn ett døgn. Felt som mangler, beholder sist synkroniserte verdi, men vises ikke når kilden er utdatert.
 
+## Mobilpanelet
+
+Telefonen står i et feste ved siden av Mac-en og får sin egen flate. Panelet er
+tegnet for en iPad i landskap, og den samme flaten presset ned i 375 px blir
+ikke et mobilpanel: kolonnene stables, teksten krymper, og et døgn i timerutenett
+blir uleselig.
+
+Valget tas av `chooseLayout` i `src/dashboard.js`, etter at Netlify-hoppet er
+gjort — telefonen går samme vei til Mac-en som iPad-en, og på mobildata er
+tailnett-navnet det eneste som svarer. Mobilvisningen brukes når skjermens
+korteste side er 500 px eller mindre **og** pekeren er grov. Grensen ligger under
+iPad-ens korteste side (768 px), så en iPad i portrett havner aldri der, og
+`pointer: coarse` holder et smalt nettleservindu på Mac-en utenfor.
+
+Valget kan overstyres og huskes under `panelLayout`:
+
+    http://ole-sin-macbook-air.local:4173/?layout=mobil
+    http://ole-sin-macbook-air.local:4173/?layout=ipad
+
+Tre sider, med faner nederst og sveip mellom dem. Sveipet begynner 24 px inn fra
+skjermkanten: der ute eier Safari gesten, og en side som kjemper om den taper.
+Valgt side huskes i `sessionStorage`, så et panel som står i festet kommer
+tilbake der det sto.
+
+- **Nå** — klokke, «Akkurat nå» og «Neste» med fagknapp, Spotify med cover og
+  enhetsvelger, fokusøkt med nedtelling, og knappene Fokus, Skjerm, Skole og
+  Våken.
+- **Dagen** — dagens avtaler som loddrett liste med avhuking, den skjøvede
+  planen og det som falt ut. Piler for i går og i morgen.
+- **Status** — AI-bruk, agent-øktene, skritt, sosial tid, søvn, vær og
+  tilkoblingsradene med ett-trykks reparasjon.
+
+Datalaget finnes bare én gang. `usePolledResource` ligger i `src/panel-data.js`,
+Spotify Connect-logikken i `src/spotify-client.js` og Mac-kallet i
+`src/mac-action.js`; begge visningene bruker de samme. Utseendet er derimot helt
+adskilt: `src/mobile.css` arver bare fargene fra `styles.css`, som ikke røres.
+
+«Skjerm våken» på mobilen bruker samme Wake Lock som iPad-panelet, men er av som
+standard og henger ikke sammen med Fokus — en telefon som lyser i festet uten
+lader er tom før kvelden. Bryteren huskes under `panel-mobile-awake`.
+Fokusøktens innstillinger deles derimot med iPad-panelet.
+
+Mobilpanelet er like avhengig av at Mac-en er våken som iPad-panelet. Med lokket
+lukket viser det ingenting, og sier det.
+
 ## Hurtigknapper
 
 Fire ikonknapper øverst i venstre kolonne. To av dem kjøres direkte på Mac-en som serverer panelet, slik at de virker likt fra iPad og Mac:

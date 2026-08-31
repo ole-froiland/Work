@@ -1,8 +1,9 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.jsx";
+import { MobilePanel } from "./MobilePanel.jsx";
 import { PanelEntry } from "./PanelEntry.jsx";
-import { createPanelOpener, isPanelReachable, LOOPBACK_PANEL_URL, nextPanelCandidate, planPanelEntry } from "./dashboard.js";
+import { chooseLayout, createPanelOpener, isPanelReachable, LOOPBACK_PANEL_URL, nextPanelCandidate, planPanelEntry } from "./dashboard.js";
 import "./styles.css";
 
 const root = createRoot(document.getElementById("root"));
@@ -41,12 +42,29 @@ const openPanel = createPanelOpener({
   },
 });
 
-if (plan.mode === "app") {
+// Panelet er tegnet for en iPad i landskap. Telefonen i festet ved siden av
+// Mac-en er en annen skjerm med et annet spørsmål, og får sin egen flate i
+// stedet for den samme presset ned i 375 px. Valget tas etter hoppet: begge
+// enhetene går samme vei fram til Mac-en.
+function renderPanel() {
+  const layout = chooseLayout({
+    location: window.location,
+    storage: window.localStorage,
+    viewport: {
+      width: window.screen?.width ?? window.innerWidth,
+      height: window.screen?.height ?? window.innerHeight,
+      coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
+    },
+  });
   root.render(
     <React.StrictMode>
-      <App />
+      {layout === "mobil" ? <MobilePanel /> : <App />}
     </React.StrictMode>,
   );
+}
+
+if (plan.mode === "app") {
+  renderPanel();
 } else if (plan.mode === "redirect") {
   // Adressen er valgt før og huskes. Skjermen tegnes så siden ikke står svart
   // mens nettleseren jobber med hoppet.
