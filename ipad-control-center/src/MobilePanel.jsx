@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowClockwise,
+  ArrowSquareIn,
+  ArrowSquareOut,
   Check,
+  ClipboardText,
   Clock,
   CloudSun,
   FolderOpen,
@@ -41,6 +44,7 @@ import {
 import { usePolledResource } from "./panel-data.js";
 import { callMacAction } from "./mac-action.js";
 import { useSpotify } from "./spotify-client.js";
+import { describeMacClipboard, fetchMacClipboard, readPhoneClipboard, sendToMac, writePhoneClipboard } from "./clipboard-bridge.js";
 import { createScreenWakeLockController } from "./wake-lock.js";
 import "./mobile.css";
 
@@ -282,6 +286,84 @@ function FocusCard({ state, onStart, onPause, onSkip, onStop, onActivity, onSett
   );
 }
 
+// Skjermbildet er hele grunnen til at knappen finnes: Ole tar det på telefonen,
+// trykker Kopier, og vil lime det inn på Mac-en. Arket henter Mac-ens utklipp
+// med én gang det åpnes, slik at «Legg på telefonen» kan skrive uten et `await`
+// foran seg — Safari avviser en skriving som ikke skjer i selve trykket.
+function ClipboardSheet({ onClose, onToast }) {
+  const [mac, setMac] = useState(null);
+  const [macError, setMacError] = useState("");
+  const [busy, setBusy] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetchMacClipboard()
+      .then((snapshot) => { if (active) setMac(snapshot); })
+      .catch((error) => { if (active) { setMac({ kind: "empty" }); setMacError(error.message); } });
+    return () => { active = false; };
+  }, []);
+
+  async function send() {
+    setBusy("send");
+    try {
+      const payload = await readPhoneClipboard();
+      const result = await sendToMac(payload);
+      onToast(result.kind === "image" ? "Bildet ligger på Mac-ens utklippstavle" : "Teksten ligger på Mac-ens utklippstavle");
+      onClose();
+    } catch (error) {
+      onToast(error.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function hent() {
+    setBusy("hent");
+    // Ingen `await` før skrivingen: gesten må fortsatt være i live.
+    writePhoneClipboard(mac)
+      .then(() => { onToast(mac.kind === "image" ? "Bildet ligger på telefonens utklippstavle" : "Teksten ligger på telefonens utklippstavle"); onClose(); })
+      .catch((error) => onToast(error.message))
+      .finally(() => setBusy(""));
+  }
+
+  return (
+    <div className="m-sheet-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="m-sheet" role="dialog" aria-modal="true" aria-label="Utklippstavle">
+        <h3>Utklippstavle</h3>
+        <ul>
+          <li>
+            <button type="button" onClick={send} disabled={busy === "send"}>
+              <span className="m-sheet-row">
+                <ArrowSquareOut size={20} weight="fill" />
+                <span>
+                  <strong>{busy === "send" ? "Sender …" : "Send til Mac-en"}</strong>
+                  <small>Tar det som ligger på telefonen — skjermbilde eller tekst</small>
+                </span>
+              </span>
+            </button>
+          </li>
+          <li>
+            <button type="button" onClick={hent} disabled={busy === "hent" || !mac || mac.kind === "empty"}>
+              <span className="m-sheet-row">
+                <ArrowSquareIn size={20} weight="fill" />
+                <span>
+                  <strong>{busy === "hent" ? "Henter …" : "Legg på telefonen"}</strong>
+                  <small>{macError || describeMacClipboard(mac)}</small>
+                </span>
+              </span>
+            </button>
+          </li>
+        </ul>
+        <p className="m-sheet-note">
+          Safari spør om lov før panelet får lese utklippstavla. Trykk «Lim inn» i
+          boksen som kommer. Innholdet går bare til Mac-en.
+        </p>
+        <button className="m-wide-button" type="button" onClick={onClose}>Lukk</button>
+      </section>
+    </div>
+  );
+}
+
 function ActionRow({ actions }) {
   return (
     <div className="m-actions">
@@ -469,6 +551,7 @@ export function MobilePanel() {
   const [agentSessions, setAgentSessions] = useState(null);
   const [focusModeActive, setFocusModeActive] = useState(false);
   const [screenAwake, setScreenAwake] = useState(false);
+  const [clipboardOpen, setClipboardOpen] = useState(false);
   const wakeLock = useRef(null);
 
   const [usage] = usePolledResource("/api/usage", {
@@ -713,6 +796,7 @@ export function MobilePanel() {
         failed: "Kunne ikke starte en skoleøkt på Mac-en",
       }),
     },
+    { id: "clipboard", label: "Utklipp", icon: ClipboardText, tone: "violet", onPress: () => setClipboardOpen(true) },
     { id: "awake", label: "Våken", icon: Sun, tone: "lime", toggle: true, active: screenAwake, onPress: toggleScreenAwake },
   ];
 
@@ -772,6 +856,8 @@ export function MobilePanel() {
           </>
         )}
       </main>
+
+      {clipboardOpen && <ClipboardSheet onClose={() => setClipboardOpen(false)} onToast={setToast} />}
 
       {toast && <div className="m-toast" role="status">{toast}</div>}
 

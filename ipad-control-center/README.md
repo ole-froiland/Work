@@ -204,6 +204,44 @@ lengdene åpnes med tannhjulet ved siden av. Rulling står igjen som
 sikkerhetsventil — en side som kan dras noen piksler er bedre enn en side som
 klipper bort bunnen i stillhet — men i vanlig drift skal ventilen ikke brukes.
 
+### Utklippstavle mellom telefonen og Mac-en
+
+Universal Clipboard gjør det samme når den virker, men den krever Handoff,
+Bluetooth og samme Apple-ID i begge ender — og sier ingenting når en av delene
+mangler. Et skjermbilde som ikke kom fram ser da nøyaktig ut som et skjermbilde
+man aldri kopierte. Sjekk **Systeminnstillinger → Generelt → AirDrop og Handoff**
+på Mac-en og **Innstillinger → Generelt → AirPlay og Handoff** på iPhonen først;
+er bryteren av, er den hele forklaringen.
+
+Utklipp-knappen på Nå-siden går over den samme broen som resten av panelet, og
+sier fra når den ikke kommer fram. Arket har begge retninger:
+
+- **Send til Mac-en** leser telefonens utklippstavle — skjermbilde eller tekst —
+  og legger det på Mac-ens. Safari viser sin egen «Lim inn»-boks først; det er
+  et krav fra nettleseren og kan ikke hoppes over.
+- **Legg på telefonen** tar det som ligger på Mac-en. Raden sier hva det er før
+  du trykker.
+
+Endepunktet er `/api/clipboard`: `GET` leser Mac-ens tavle, `POST` skriver til
+den med `{"kind":"text","text":…}` eller `{"kind":"image","dataUrl":"data:image/png;base64,…"}`.
+Bare PNG og JPEG tas imot, JPEG gjøres om til PNG med `sips` siden macOS-tavla
+vil ha PNG, og grensen er 12 MB — et skjermbilde fra en iPhone 17 Pro Max ligger
+rundt 3 MB.
+
+Tekst går til `pbcopy` over stdin, ikke gjennom AppleScript. `set the clipboard
+to (read … as «class utf8»)` la teksten på tavla i Mac Roman: en em-dash kom ut
+som ett byte i stedet for tre, og «—» ble til «Ñ». Stdin har ingen
+tegnsettoversettelse og ingen grense på argumentlista. Bilder går gjennom en fil
+og aldri som argument — av samme grunn, og fordi et utklipp er innhold vi ikke
+kjenner.
+
+Safari har to krav som styrer formen på arket: lesing må skje i et trykk og
+viser sin egen bekreftelse, og skriving må kalles i trykket uten et `await`
+foran seg. Derfor hentes Mac-ens utklipp når arket åpnes, ikke når knappen
+trykkes.
+
+Utklippet går til Mac-ens egen tavle og ingen andre steder.
+
 Datalaget finnes bare én gang. `usePolledResource` ligger i `src/panel-data.js`,
 Spotify Connect-logikken i `src/spotify-client.js` og Mac-kallet i
 `src/mac-action.js`; begge visningene bruker de samme. Utseendet er derimot helt

@@ -48,3 +48,10 @@ test("faglista er montert som eget endepunkt", () => {
   const names = viteConfig.plugins.flat(Infinity).map((plugin) => plugin?.name);
   assert.ok(names.includes("local-subjects-api"));
 });
+
+// Uten dette endepunktet har Utklipp-knappen ingen andre ende, og et skjermbilde
+// fra telefonen kommer aldri fram til Mac-en.
+test("utklippstavla er montert som eget endepunkt", () => {
+  const names = viteConfig.plugins.flat(Infinity).map((plugin) => plugin?.name);
+  assert.ok(names.includes("local-clipboard-api"));
+});

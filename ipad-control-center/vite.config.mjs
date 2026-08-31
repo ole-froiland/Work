@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { isRepairableConnection, repairConnection } from "./server/connection-repair-service.mjs";
 import { describeSyncPayload, getDeviceMetrics, updateDeviceMetrics } from "./server/device-metrics-service.mjs";
 import { runMacAction } from "./server/mac-action-service.mjs";
+import { MAX_CLIPBOARD_BYTES, normalizeClipboardPayload, readMacClipboard, writeMacClipboard } from "./server/clipboard-service.mjs";
 import { getUsageSnapshot } from "./server/usage-service.mjs";
 import { getAgentSessions } from "./server/agent-session-service.mjs";
 import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
@@ -447,6 +448,42 @@ function macActionApi() {
   };
 }
 
+// Universal Clipboard krever Handoff, Bluetooth og samme Apple-ID, og gir ingen
+// beskjed når en av delene mangler — den bare gjør ingenting. Denne veien går
+// over den samme broen som resten av panelet, og sier fra når den ikke virker.
+// Utklippet går til Mac-ens egen utklippstavle og ingen andre steder.
+function clipboardApi() {
+  return {
+    name: "local-clipboard-api",
+    configureServer(server) {
+      server.middlewares.use("/api/clipboard", async (request, response) => {
+        if (request.method === "GET") {
+          try {
+            sendJson(response, 200, await readMacClipboard());
+          } catch (error) {
+            sendJson(response, 500, { ok: false, kind: "empty", error: error instanceof Error ? error.message : "Ukjent feil" });
+          }
+          return;
+        }
+        if (request.method !== "POST") {
+          sendJson(response, 405, { error: "Method not allowed" });
+          return;
+        }
+        try {
+          // Et skjermbilde er langt over den vanlige grensen på 32 kB, så
+          // kroppen får sin egen. Grensen er tjenestens, ikke endepunktets,
+          // slik at de to ikke kan komme ut av takt.
+          const body = await readJsonBody(request, MAX_CLIPBOARD_BYTES + 1_048_576);
+          const result = await writeMacClipboard(normalizeClipboardPayload(body));
+          sendJson(response, 200, { ok: true, ...result });
+        } catch (error) {
+          sendJson(response, 400, { ok: false, error: error instanceof Error ? error.message : "Ukjent feil" });
+        }
+      });
+    },
+  };
+}
+
 function connectionRepairApi() {
   return {
     name: "local-connection-repair-api",
@@ -498,5 +535,5 @@ export default defineConfig({
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), dayPlanApi(), spotifyApi(), panelHelloApi(), subjectsApi(), macActionApi(), connectionRepairApi(), react()],
+  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), dayPlanApi(), spotifyApi(), panelHelloApi(), subjectsApi(), macActionApi(), clipboardApi(), connectionRepairApi(), react()],
 });
