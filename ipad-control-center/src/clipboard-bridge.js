@@ -10,6 +10,62 @@
 
 const bildetyper = ["image/png", "image/jpeg"];
 
+// Utklippstavle-API-et finnes bare i «secure context»: https, eller localhost.
+// Panelet serveres over http på .local og .ts.net, og der er `navigator.clipboard`
+// ikke bare avvist — den finnes ikke. Derfor må arket vite dette før det tegner
+// seg, og tilby veien som faktisk virker i stedet for en knapp som ikke kan.
+export function clipboardSupport({ nav = globalThis.navigator, secure = globalThis.isSecureContext } = {}) {
+  return {
+    secure: Boolean(secure),
+    canRead: typeof nav?.clipboard?.read === "function" || typeof nav?.clipboard?.readText === "function",
+    canWrite: typeof nav?.clipboard?.write === "function" || typeof nav?.clipboard?.writeText === "function",
+  };
+}
+
+// Bildet fra bildevelgeren er ikke alltid PNG eller JPEG — iOS kan levere HEIC.
+// Serveren tar bare de to, så alt annet tegnes om via canvas. Går ikke det,
+// sendes originalen og serveren får si nei med sin egen begrunnelse.
+export async function fileToDataUrl(file, { createImage } = {}) {
+  if (!file) throw new Error("Ingen fil valgt");
+  const dataUrl = await readAsDataUrl(file);
+  if (bildetyper.includes(file.type)) return { kind: "image", dataUrl };
+  try {
+    return { kind: "image", dataUrl: await reEncodeAsPng(dataUrl, createImage) };
+  } catch {
+    return { kind: "image", dataUrl };
+  }
+}
+
+function reEncodeAsPng(dataUrl, createImage = () => new Image()) {
+  return new Promise((resolve, reject) => {
+    const image = createImage();
+    image.onerror = () => reject(new Error("Fikk ikke lest bildet"));
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext("2d").drawImage(image, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    image.src = dataUrl;
+  });
+}
+
+// Den gamle veien til utklippstavla. `execCommand` er avviklet, men den er det
+// eneste som virker utenfor secure context, og Safari støtter den fortsatt.
+// Uten den ville «Legg på telefonen» vært en knapp uten noe å gjøre.
+export function copyBySelection(field, { exec } = {}) {
+  if (!field) return false;
+  field.focus();
+  field.setSelectionRange(0, field.value.length);
+  const run = exec ?? ((command) => document.execCommand(command));
+  try {
+    return Boolean(run("copy"));
+  } catch {
+    return false;
+  }
+}
+
 function readAsDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

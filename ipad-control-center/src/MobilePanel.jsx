@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Footprints,
   GraduationCap,
+  ImageSquare,
   Laptop,
   MonitorArrowUp,
   MoonStars,
@@ -44,7 +45,7 @@ import {
 import { usePolledResource } from "./panel-data.js";
 import { callMacAction } from "./mac-action.js";
 import { useSpotify } from "./spotify-client.js";
-import { describeMacClipboard, fetchMacClipboard, readPhoneClipboard, sendToMac, writePhoneClipboard } from "./clipboard-bridge.js";
+import { clipboardSupport, copyBySelection, fetchMacClipboard, fileToDataUrl, readPhoneClipboard, sendToMac, writePhoneClipboard } from "./clipboard-bridge.js";
 import { createScreenWakeLockController } from "./wake-lock.js";
 import "./mobile.css";
 
@@ -286,14 +287,26 @@ function FocusCard({ state, onStart, onPause, onSkip, onStop, onActivity, onSett
   );
 }
 
-// Skjermbildet er hele grunnen til at knappen finnes: Ole tar det på telefonen,
-// trykker Kopier, og vil lime det inn på Mac-en. Arket henter Mac-ens utklipp
-// med én gang det åpnes, slik at «Legg på telefonen» kan skrive uten et `await`
-// foran seg — Safari avviser en skriving som ikke skjer i selve trykket.
+// Skjermbildet er hele grunnen til at knappen finnes: Ole tar det på telefonen
+// og vil ha det inn på Mac-en.
+//
+// Utklippstavle-API-et er ikke tilgjengelig her. Panelet serveres over http på
+// .local og .ts.net, og der er `navigator.clipboard` fraværende — ikke avvist,
+// men borte. Første utgave av dette kortet ble bare prøvd på localhost, som er
+// den ene adressen der API-et finnes uansett, og knappen kunne derfor ikke
+// virke noe sted den faktisk brukes.
+//
+// Veiene under trenger ingen secure context. Bildevelgeren er dessuten kortere
+// enn den opprinnelige tanken: et skjermbilde ligger i Bilder av seg selv, så
+// «trykk Kopier» er et steg som ikke trengs.
 function ClipboardSheet({ onClose, onToast }) {
   const [mac, setMac] = useState(null);
   const [macError, setMacError] = useState("");
   const [busy, setBusy] = useState("");
+  const [utkast, setUtkast] = useState("");
+  const støtte = useMemo(() => clipboardSupport(), []);
+  const filvelger = useRef(null);
+  const macTekst = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -303,12 +316,11 @@ function ClipboardSheet({ onClose, onToast }) {
     return () => { active = false; };
   }, []);
 
-  async function send() {
-    setBusy("send");
+  async function send(payload, hva) {
+    setBusy(hva);
     try {
-      const payload = await readPhoneClipboard();
-      const result = await sendToMac(payload);
-      onToast(result.kind === "image" ? "Bildet ligger på Mac-ens utklippstavle" : "Teksten ligger på Mac-ens utklippstavle");
+      await sendToMac(payload);
+      onToast(payload.kind === "image" ? "Bildet ligger på Mac-ens utklippstavle" : "Teksten ligger på Mac-ens utklippstavle");
       onClose();
     } catch (error) {
       onToast(error.message);
@@ -317,7 +329,30 @@ function ClipboardSheet({ onClose, onToast }) {
     }
   }
 
-  function hent() {
+  async function sendFraUtklippstavla() {
+    setBusy("clipboard");
+    try {
+      await send(await readPhoneClipboard(), "clipboard");
+    } catch (error) {
+      onToast(error.message);
+      setBusy("");
+    }
+  }
+
+  async function sendValgtBilde(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setBusy("bilde");
+    try {
+      await send(await fileToDataUrl(file), "bilde");
+    } catch (error) {
+      onToast(error.message);
+      setBusy("");
+    }
+  }
+
+  function hentTilTelefonen() {
     setBusy("hent");
     // Ingen `await` før skrivingen: gesten må fortsatt være i live.
     writePhoneClipboard(mac)
@@ -326,38 +361,69 @@ function ClipboardSheet({ onClose, onToast }) {
       .finally(() => setBusy(""));
   }
 
+  function kopierMacTekst() {
+    onToast(copyBySelection(macTekst.current)
+      ? "Teksten er kopiert"
+      : "Hold inne feltet og velg Kopier");
+  }
+
   return (
     <div className="m-sheet-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="m-sheet" role="dialog" aria-modal="true" aria-label="Utklippstavle">
-        <h3>Utklippstavle</h3>
-        <ul>
-          <li>
-            <button type="button" onClick={send} disabled={busy === "send"}>
-              <span className="m-sheet-row">
-                <ArrowSquareOut size={20} weight="fill" />
-                <span>
-                  <strong>{busy === "send" ? "Sender …" : "Send til Mac-en"}</strong>
-                  <small>Tar det som ligger på telefonen — skjermbilde eller tekst</small>
-                </span>
-              </span>
+        <h3>Til Mac-en</h3>
+
+        <button className="m-wide-button is-primary" type="button" onClick={() => filvelger.current?.click()} disabled={busy === "bilde"}>
+          <ImageSquare size={20} weight="fill" /> {busy === "bilde" ? "Sender bildet …" : "Send et bilde"}
+        </button>
+        <input ref={filvelger} className="m-hidden-input" type="file" accept="image/*" onChange={sendValgtBilde} />
+        <p className="m-sheet-note">Skjermbilder ligger i Bilder av seg selv — du trenger ikke trykke Kopier først.</p>
+
+        {støtte.canRead ? (
+          <button className="m-wide-button" type="button" onClick={sendFraUtklippstavla} disabled={busy === "clipboard"}>
+            <ArrowSquareOut size={19} weight="fill" /> {busy === "clipboard" ? "Sender …" : "Send det som er kopiert"}
+          </button>
+        ) : (
+          <>
+            <textarea
+              className="m-input m-textarea"
+              value={utkast}
+              onChange={(event) => setUtkast(event.target.value)}
+              placeholder="Hold inne her og velg Lim inn"
+              aria-label="Tekst som skal sendes til Mac-en"
+              rows={2}
+            />
+            <button className="m-wide-button" type="button" onClick={() => send({ kind: "text", text: utkast }, "tekst")} disabled={!utkast.trim() || busy === "tekst"}>
+              <ArrowSquareOut size={19} weight="fill" /> {busy === "tekst" ? "Sender …" : "Send teksten"}
             </button>
-          </li>
-          <li>
-            <button type="button" onClick={hent} disabled={busy === "hent" || !mac || mac.kind === "empty"}>
-              <span className="m-sheet-row">
-                <ArrowSquareIn size={20} weight="fill" />
-                <span>
-                  <strong>{busy === "hent" ? "Henter …" : "Legg på telefonen"}</strong>
-                  <small>{macError || describeMacClipboard(mac)}</small>
-                </span>
-              </span>
+          </>
+        )}
+
+        <h3 className="m-sheet-split">Fra Mac-en</h3>
+        {!mac && <p className="m-empty">Henter …</p>}
+        {mac?.kind === "empty" && <p className="m-empty">{macError || "Ingenting på Mac-ens utklippstavle"}</p>}
+
+        {mac?.kind === "image" && (
+          <>
+            <img className="m-clip-preview" src={mac.dataUrl} alt="Det som ligger på Mac-ens utklippstavle" />
+            {støtte.canWrite ? (
+              <button className="m-wide-button" type="button" onClick={hentTilTelefonen} disabled={busy === "hent"}>
+                <ArrowSquareIn size={19} weight="fill" /> Legg på telefonen
+              </button>
+            ) : (
+              <p className="m-sheet-note">Hold inne bildet og velg Kopier eller «Legg til i Bilder».</p>
+            )}
+          </>
+        )}
+
+        {mac?.kind === "text" && (
+          <>
+            <textarea className="m-input m-textarea" ref={macTekst} value={mac.text} readOnly rows={3} aria-label="Tekst fra Mac-ens utklippstavle" />
+            <button className="m-wide-button" type="button" onClick={støtte.canWrite ? hentTilTelefonen : kopierMacTekst} disabled={busy === "hent"}>
+              <ArrowSquareIn size={19} weight="fill" /> {busy === "hent" ? "Henter …" : "Kopier til telefonen"}
             </button>
-          </li>
-        </ul>
-        <p className="m-sheet-note">
-          Safari spør om lov før panelet får lese utklippstavla. Trykk «Lim inn» i
-          boksen som kommer. Innholdet går bare til Mac-en.
-        </p>
+          </>
+        )}
+
         <button className="m-wide-button" type="button" onClick={onClose}>Lukk</button>
       </section>
     </div>

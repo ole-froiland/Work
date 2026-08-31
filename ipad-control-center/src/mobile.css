@@ -187,3 +187,10 @@
 .m-sheet-row > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .m-sheet-row small { line-height: 1.4; }
 .m-sheet-note { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.5; }
+
+/* Filvelgeren er systemets, ikke vår. Den skal utløses av knappen over, ikke
+   tegnes som en grå «Velg fil»-kontroll ved siden av den. */
+.m-hidden-input { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.m-textarea { min-height: 62px; padding: 10px 13px; line-height: 1.45; resize: none; font-family: inherit; }
+.m-sheet-split { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.m-clip-preview { width: 100%; max-height: 180px; object-fit: contain; border: 1px solid var(--line-soft); border-radius: 13px; background: var(--panel-raised); }

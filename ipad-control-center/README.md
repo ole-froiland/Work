@@ -213,14 +213,31 @@ man aldri kopierte. Sjekk **Systeminnstillinger → Generelt → AirDrop og Hand
 på Mac-en og **Innstillinger → Generelt → AirPlay og Handoff** på iPhonen først;
 er bryteren av, er den hele forklaringen.
 
-Utklipp-knappen på Nå-siden går over den samme broen som resten av panelet, og
-sier fra når den ikke kommer fram. Arket har begge retninger:
+**Nettleserens utklippstavle finnes ikke her.** `navigator.clipboard` krever
+secure context — https, eller `localhost`. Panelet serveres over http på
+`.local` og `.ts.net`, og der er API-et ikke avvist, men helt fraværende
+(`isSecureContext === false`). Første utgave av Utklipp-knappen leste derfra og
+ble bare prøvd på `localhost`, som er den ene adressen der API-et finnes
+uansett — så knappen kunne ikke virke noen steder den faktisk brukes. Veiene
+under trenger ingen secure context.
 
-- **Send til Mac-en** leser telefonens utklippstavle — skjermbilde eller tekst —
-  og legger det på Mac-ens. Safari viser sin egen «Lim inn»-boks først; det er
-  et krav fra nettleseren og kan ikke hoppes over.
-- **Legg på telefonen** tar det som ligger på Mac-en. Raden sier hva det er før
-  du trykker.
+Til Mac-en:
+
+- **Send et bilde** åpner iOS-bildevelgeren. Et skjermbilde ligger i Bilder av
+  seg selv, så «trykk Kopier» er et steg som ikke trengs. Leverer velgeren HEIC,
+  tegnes bildet om til PNG i nettleseren før det sendes.
+- **Send teksten** tar det som limes inn i feltet over knappen. Hold inne feltet
+  og velg Lim inn.
+
+Fra Mac-en viser arket hva som ligger der: et bilde tegnes, tekst står i et
+felt. Uten utklippstavle-API-et kopieres bildet ved å holde det inne, og teksten
+med knappen under — den bruker `document.execCommand("copy")`, som er avviklet,
+men er det eneste som virker utenfor secure context.
+
+Skal ett trykk holde igjen, må panelet serveres over https. Tailscale kan gi et
+ekte sertifikat for `.ts.net`-navnet (`tailscale serve`), og da dukker
+utklippstavle-veiene opp av seg selv — `clipboardSupport()` i
+`src/clipboard-bridge.js` slår dem på når API-et finnes.
 
 Endepunktet er `/api/clipboard`: `GET` leser Mac-ens tavle, `POST` skriver til
 den med `{"kind":"text","text":…}` eller `{"kind":"image","dataUrl":"data:image/png;base64,…"}`.
@@ -234,11 +251,6 @@ som ett byte i stedet for tre, og «—» ble til «Ñ». Stdin har ingen
 tegnsettoversettelse og ingen grense på argumentlista. Bilder går gjennom en fil
 og aldri som argument — av samme grunn, og fordi et utklipp er innhold vi ikke
 kjenner.
-
-Safari har to krav som styrer formen på arket: lesing må skje i et trykk og
-viser sin egen bekreftelse, og skriving må kalles i trykket uten et `await`
-foran seg. Derfor hentes Mac-ens utklipp når arket åpnes, ikke når knappen
-trykkes.
 
 Utklippet går til Mac-ens egen tavle og ingen andre steder.
 

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { MAX_CLIPBOARD_BYTES, normalizeClipboardPayload, readMacClipboard, writeMacClipboard } from "../server/clipboard-service.mjs";
-import { describeMacClipboard, writePhoneClipboard } from "../src/clipboard-bridge.js";
+import { clipboardSupport, copyBySelection, describeMacClipboard, writePhoneClipboard } from "../src/clipboard-bridge.js";
 
 const ettPiksels = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
@@ -134,4 +134,31 @@ test("uten bildestøtte sier raden det, i stedet for å feile stille", async () 
     writePhoneClipboard({ kind: "image", dataUrl: "data:image/png;base64,AAAA" }, { clipboard: { writeText: async () => {} }, ClipboardItemImpl: null }),
     /bare ta imot tekst/,
   );
+});
+
+// Dette er feilen som gjorde at knappen ikke virket i det hele tatt: panelet
+// serveres over http på .local og .ts.net, og der finnes ikke `navigator.clipboard`.
+// Første utgave ble bare prøvd på localhost, som er den ene adressen der API-et
+// finnes uansett — og der kunne feilen ikke oppstå.
+test("uten secure context finnes ikke utklippstavla, og arket må vite det", () => {
+  assert.deepEqual(clipboardSupport({ nav: {}, secure: false }), { secure: false, canRead: false, canWrite: false });
+  assert.deepEqual(
+    clipboardSupport({ nav: { clipboard: { read: () => {}, write: () => {} } }, secure: true }),
+    { secure: true, canRead: true, canWrite: true },
+  );
+  // Eldre Safari har bare tekstveien. Da er lesing mulig, men ikke bilder.
+  assert.deepEqual(
+    clipboardSupport({ nav: { clipboard: { readText: () => {}, writeText: () => {} } }, secure: true }),
+    { secure: true, canRead: true, canWrite: true },
+  );
+});
+
+test("den gamle kopieringsveien merker hele feltet før den kopierer", () => {
+  const merket = [];
+  const felt = { value: "tekst fra Mac-en", focus() {}, setSelectionRange: (a, b) => merket.push([a, b]) };
+  assert.equal(copyBySelection(felt, { exec: () => true }), true);
+  assert.deepEqual(merket, [[0, 16]]);
+  assert.equal(copyBySelection(felt, { exec: () => false }), false);
+  assert.equal(copyBySelection(felt, { exec: () => { throw new Error("nei"); } }), false);
+  assert.equal(copyBySelection(null), false);
 });
