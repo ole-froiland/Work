@@ -5,8 +5,8 @@
    Ingenting her går under 13 px, og ingen trykkflate under 44 px. */
 
 .m-shell {
-  --m-gap: 9px;
-  --m-radius: 18px;
+  --m-gap: 14px;
+  --m-radius: 20px;
   height: 100dvh;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -33,12 +33,27 @@
 /* Kortene skal ikke klemmes sammen for å gi plass til hverandre. Passer alt,
    står de i sin naturlige høyde; gjør det ikke, er det siden som gir etter. */
 .m-pages > * { flex: 0 0 auto; }
+/* `auto` som basis, ikke 0: innholdet er fortsatt gulvet, og bare det som er
+   til overs fordeles — 3 deler til avtalene, 2 til musikken. Med basis 0 ville
+   kortene fått høyde etter forholdstallet alene og klemt teksten. */
+.m-activity { flex: 2 0 auto; }
+/* Startknappen tar sin del av plassen i stedet for å la alt samle seg i
+   avtalefeltet. En stor trykkflate er dessuten det denne telefonen står der
+   for — den skal treffes uten at man ser ned på den. */
+.m-music { flex: 1 0 auto; justify-content: center; gap: 14px; }
+.m-focus { flex: 1 0 auto; justify-content: center; }
+.m-focus-start { flex: 1; max-height: 74px; }
+.m-pages.is-ai .m-usage-card, .m-pages.is-ai .m-agent-card,
+.m-pages.is-status .m-metrics-card, .m-pages.is-status .m-connection-card { flex: 1 0 auto; }
+.m-pages.is-ai .m-usage-card { justify-content: space-between; }
+.m-pages.is-status .m-metrics-card .m-metrics { flex: 1; justify-content: space-between; }
 
-.m-clock { display: flex; flex-direction: column; gap: 2px; padding: 4px 4px 0; }
-.m-clock strong { font-size: 38px; font-weight: 600; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
-.m-clock span { color: var(--muted); font-size: 14px; }
 
-.m-card { display: flex; flex-direction: column; gap: 9px; padding: 13px; border: 1px solid var(--line-soft); border-radius: var(--m-radius); background: var(--panel); }
+.m-clock { display: flex; flex-direction: column; gap: 3px; padding: 2px 4px 4px; }
+.m-clock strong { font-size: 50px; font-weight: 600; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.m-clock span { color: var(--muted); font-size: 15px; font-weight: 500; }
+
+.m-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line-soft); border-radius: var(--m-radius); background: var(--panel); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 1px 2px rgba(0, 0, 0, .3); }
 .m-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .m-card-head h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 
@@ -47,21 +62,30 @@
 
 /* Akkurat nå og Neste deler kortet. Skillestreken gjør at de leses som to svar
    og ikke som én lang setning. */
-.m-activity { gap: 0; padding: 0; }
-.m-activity-slot { display: flex; flex-direction: column; gap: 3px; padding: 11px 13px; }
+.m-activity { gap: 0; padding: 0; overflow: hidden; }
+.m-activity-slot { position: relative; flex: 1 0 auto; display: flex; flex-direction: column; gap: 3px; justify-content: center; padding: 13px 14px 13px 18px; }
+.m-activity-slot::before { content: ""; position: absolute; top: 12px; bottom: 12px; left: 0; width: 3px; border-radius: 0 3px 3px 0; background: currentColor; }
+.m-activity-slot.is-empty { flex: 1 0 auto; }
+.m-activity-slot.is-empty::before { background: var(--line-soft); }
+.m-activity-slot .m-eyebrow, .m-activity-slot .m-activity-meta, .m-activity-slot .m-empty { color: var(--muted); }
+.m-activity-slot .m-eyebrow { color: var(--dim); }
 .m-activity-slot + .m-activity-slot { border-top: 1px solid var(--line-soft); }
-.m-activity-title { font-size: 18px; font-weight: 650; line-height: 1.22; letter-spacing: -.01em; }
+.m-activity-title { color: inherit; font-size: 19px; font-weight: 650; line-height: 1.24; letter-spacing: -.01em; }
 .m-activity-meta { color: var(--muted); font-size: 14px; }
 
 .tone-violet { color: var(--violet); }
 .tone-lime { color: var(--lime); }
 .tone-orange { color: var(--orange); }
 .tone-blue { color: var(--blue); }
+.tone-amber { color: #ffcf70; }
+.tone-emerald { color: #7fe0a8; }
+.tone-sky { color: #7cc9ff; }
+.tone-slate { color: #9aa5b1; }
 
 .m-subject { min-height: 44px; margin-top: 3px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border: 0; border-radius: 13px; background: var(--violet); color: #251d48; font-size: 15px; font-weight: 650; cursor: pointer; }
 
-.m-music-top { display: flex; align-items: center; gap: 12px; }
-.m-art { width: 54px; height: 54px; flex: 0 0 54px; display: grid; place-items: center; overflow: hidden; border-radius: 13px; background: var(--panel-raised); color: var(--muted); }
+.m-music-top { display: flex; align-items: center; gap: 13px; }
+.m-art { width: 62px; height: 62px; flex: 0 0 62px; display: grid; place-items: center; overflow: hidden; border-radius: 13px; background: var(--panel-raised); color: var(--muted); }
 .m-art img { width: 100%; height: 100%; object-fit: cover; }
 .m-music-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .m-music-text strong { overflow: hidden; font-size: 17px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
@@ -74,7 +98,7 @@
 .m-music-controls button { min-height: 46px; display: grid; place-items: center; border: 0; border-radius: 14px; background: var(--panel-raised); color: var(--text); cursor: pointer; }
 .m-music-controls button.is-primary { background: var(--lime); color: var(--lime-ink); }
 .m-music-controls button:disabled { opacity: .5; }
-.m-device { min-width: 0; overflow: hidden; padding: 0 12px; color: var(--muted); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.m-device { min-width: 0; overflow: hidden; padding: 0 12px; border: 1px solid var(--line-soft) !important; color: var(--muted); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 
 .m-focus.is-break { border-color: var(--violet); }
 .m-timer { font-size: 46px; font-weight: 600; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -90,7 +114,7 @@
 .m-wide-button.is-primary { background: var(--lime); color: var(--lime-ink); }
 
 .m-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.m-action { min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0 2px; border: 1px solid var(--line-soft); border-radius: 15px; background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+.m-action { min-height: 70px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0 2px; border: 1px solid var(--line-soft); border-radius: 15px; background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
 .m-action > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Av og på skal kunne ses uten å lese: slått på er full farge, slått av er
    kortets egen bakgrunn. */

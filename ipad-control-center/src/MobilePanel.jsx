@@ -133,11 +133,11 @@ function ActivityCard({ activity, subjects, onStartSubject }) {
   const { current, next } = activity;
   return (
     <Card className="m-activity">
-      <div className="m-activity-slot">
+      <div className={`m-activity-slot ${current ? `tone-${current.tone}` : "is-empty"}`}>
         <span className="m-eyebrow">Akkurat nå</span>
         {current ? (
           <>
-            <strong className={`m-activity-title tone-${current.tone}`}>{current.title}</strong>
+            <strong className="m-activity-title">{current.title}</strong>
             <span className="m-activity-meta">{current.when} · {current.remaining}</span>
             <SubjectButton session={subjectSession(current, subjects)} onStart={onStartSubject} />
           </>
@@ -145,11 +145,11 @@ function ActivityCard({ activity, subjects, onStartSubject }) {
           <span className="m-empty">Ingenting pågår</span>
         )}
       </div>
-      <div className="m-activity-slot">
+      <div className={`m-activity-slot ${next ? `tone-${next.tone}` : "is-empty"}`}>
         <span className="m-eyebrow">Neste</span>
         {next ? (
           <>
-            <strong className={`m-activity-title tone-${next.tone}`}>{next.title}</strong>
+            <strong className="m-activity-title">{next.title}</strong>
             <span className="m-activity-meta">{next.when} · {next.countdown}</span>
             <SubjectButton session={subjectSession(next, subjects)} onStart={onStartSubject} />
           </>
@@ -500,7 +500,7 @@ function AgentsCard({ snapshot, now }) {
   }, [snapshot, now]);
 
   return (
-    <Card title="Oppgaver">
+    <Card className="m-agent-card" title="Oppgaver">
       {!summary.sessions.length && <p className="m-empty">{summary.headline}</p>}
       <ul className="m-agent-list">
         {summary.sessions.map((session) => (
@@ -528,7 +528,7 @@ function MetricsCard({ metrics, rhythm, now }) {
   const stepsDetail = metrics?.problems?.steps ?? describeSyncAge(metrics?.sources?.steps, now, "HealthKit · Apple Helse");
 
   return (
-    <Card title="Kropp og vær">
+    <Card className="m-metrics-card" title="Kropp og vær">
       <ul className="m-metrics">
         <li>
           <span className="m-metric-icon tone-violet"><Laptop size={19} weight="fill" /></span>
@@ -586,7 +586,7 @@ function ConnectionCard({ checks, onRepair }) {
   }
 
   return (
-    <Card title="Tilkobling">
+    <Card className="m-connection-card" title="Tilkobling">
       <ul className="m-connections">
         {checks.map((check) => {
           const result = results[check.id];
@@ -868,7 +868,7 @@ export function MobilePanel() {
 
   return (
     <div className="m-shell" {...swipe}>
-      <main className="m-pages">
+      <main className={`m-pages is-${page}`}>
         {page === "na" && (
           <>
             <header className="m-clock">
