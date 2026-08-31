@@ -633,6 +633,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   min-height: 22px;
 }
 
+/* Skjøvet dag: kalenderen beholder venstre spalte, der den ligger på linje med
+   klokkeslettene, og skyggen får sin egen til høyre. Begge på full bredde skrev
+   titlene oppå hverandre — og AGENTS.md sier at overlapp i dagsvisningen skal
+   ligge side ved side, ikke tegnes oppå. */
+.day-calendar.is-shifted .calendar-events { right: 52%; }
+.day-calendar.is-shifted .plan-block { left: 50%; right: 0; }
+
 /* Tonene må settes på .plan-block selv. Klassene .tone-* i denne fila er alltid
    scopet til en forelder, så en bolk uten disse reglene arver bare tekstfargen
    og alle sju bolkene blir like. */

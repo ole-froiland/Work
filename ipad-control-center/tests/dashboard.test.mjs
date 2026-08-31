@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeSleepRhythm, describeWake, windowGap, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, alarmTimes, notePanelAttempt, panelHostCandidates, planDay, planPanelEntry, projectAlarms, pushForLateNight, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, subjectForTitle, summarizeAgentSessions } from "../src/dashboard.js";
+import { createPanelOpener, nextPanelCandidate, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, clockMinutes, describeCalendarActivity, describeNextEvent, describeSleepRhythm, describeWake, windowGap, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatAppName, formatCountdown, formatMinutes, formatResetTime, formatTimer, isPanelReachable, isSocialApp, LAN_PANEL_URL, layoutDayEvents, LOCAL_PANEL_URL, LOOPBACK_PANEL_URL, needsCompanionUpdate, normalizePanelHost, alarmTimes, notePanelAttempt, panelHostCandidates, planCalendarDay, planPanelEntry, projectAlarms, pushForLateNight, readUsageResponse, resolvePanelRedirect, shiftCalendarDate, socialAppIconKey, subjectForTitle, summarizeAgentSessions } from "../src/dashboard.js";
 
 function fakeStorage(seed = {}) {
   const values = new Map(Object.entries(seed));
@@ -869,6 +869,14 @@ const malen = {
 };
 const dagen = new Date(2026, 7, 28);
 
+// Kalenderen er planen. To økter med et bevisst kvarter imellom, slik Oles egen
+// dag ser ut: 09:00–10:00 og 10:15–11:15.
+const rytmen = { wakeAnchor: "07:00", dayEnd: "23:00" };
+const dagensØkter = [
+  { id: "a", title: "BUS400N – én leveranse ferdig", tone: "violet", start: new Date(2026, 7, 28, 9, 0).toISOString(), end: new Date(2026, 7, 28, 10, 0).toISOString() },
+  { id: "b", title: "Scope – viktigste resultat", tone: "emerald", start: new Date(2026, 7, 28, 10, 15).toISOString(), end: new Date(2026, 7, 28, 11, 15).toISOString() },
+];
+
 function tid(timer, minutter = 0) {
   return new Date(2026, 7, 28, timer, minutter).toISOString();
 }
@@ -882,87 +890,66 @@ test("leser klokkeslett, og avviser det som ikke er et", () => {
   assert.equal(clockMinutes(undefined), null);
 });
 
-test("uten oppvåkning legges malen ut fra sitt eget ankertidspunkt", () => {
-  const { placed, dropped, shift } = planDay({ template: malen, wokeAt: null, anchors: [], day: dagen });
+test("uten oppvåkning står kalenderdagen der den står", () => {
+  const { placed, dropped, shift } = planCalendarDay({ events: dagensØkter, wokeAt: null, ...rytmen, day: dagen });
   assert.equal(shift, 0);
   assert.deepEqual(dropped, []);
   assert.deepEqual(placed.map((block) => [block.id, block.startMinute, block.endMinute]), [
-    ["morgen", 420, 450],
-    ["lese", 450, 540],
+    ["a", 540, 600],
+    ["b", 615, 675],
   ]);
 });
 
-test("står Ole opp tidligere enn malen, skyves ingenting bakover", () => {
-  const { placed, shift } = planDay({ template: malen, wokeAt: tid(5, 30), anchors: [], day: dagen });
+test("står Ole opp tidligere enn ankeret, skyves ingenting bakover", () => {
+  const { placed, shift } = planCalendarDay({ events: dagensØkter, wokeAt: tid(5, 30), ...rytmen, day: dagen });
   assert.equal(shift, 0);
-  assert.equal(placed[0].startMinute, 420);
+  assert.equal(placed[0].startMinute, 540);
 });
 
-test("alle bolker skyves like langt når det ikke finnes ankre", () => {
-  const { placed, shift } = planDay({ template: malen, wokeAt: tid(9, 40), anchors: [], day: dagen });
+test("hele dagen skyves like langt, og pausene mellom øktene overlever", () => {
+  const { placed, shift } = planCalendarDay({ events: dagensØkter, wokeAt: tid(9, 40), ...rytmen, day: dagen });
   assert.equal(shift, 160);
   assert.deepEqual(placed.map((block) => [block.id, block.startMinute, block.endMinute]), [
-    ["morgen", 580, 610],
-    ["lese", 610, 700],
+    ["a", 700, 760],
+    ["b", 775, 835],
   ]);
+  // Kvarteret mellom dem er valgt med vilje og skal ikke spises av skyvingen.
+  assert.equal(placed[1].startMinute - placed[0].endMinute, 15);
 });
 
-test("en bolk som treffer et anker legges etter ankeret, ikke oppå", () => {
-  const forelesning = { id: "f1", title: "Forelesning", start: tid(10, 0), end: tid(12, 0) };
-  const { placed } = planDay({ template: malen, wokeAt: tid(9, 40), anchors: [forelesning], day: dagen });
-  assert.deepEqual(placed.map((block) => [block.id, block.startMinute, block.endMinute]), [
-    ["morgen", 720, 750],
-    ["lese", 750, 840],
-  ]);
-});
-
-test("en heldagsavtale er ingen tidsbegrensning og teller ikke som anker", () => {
+test("en heldagsavtale har ingen tid å bli skjøvet fra", () => {
   const bursdag = { id: "b1", title: "Bursdag", allDay: true, start: tid(0, 0), end: tid(23, 59) };
-  const { placed } = planDay({ template: malen, wokeAt: tid(9, 40), anchors: [bursdag], day: dagen });
-  assert.equal(placed.length, 2);
-  assert.equal(placed[0].startMinute, 580);
+  const { placed } = planCalendarDay({ events: [...dagensØkter, bursdag], wokeAt: tid(9, 40), ...rytmen, day: dagen });
+  assert.deepEqual(placed.map((block) => block.id), ["a", "b"]);
 });
 
-test("en bolk som ikke får plass før dagen er over havner i dropped", () => {
-  const { placed, dropped } = planDay({ template: malen, wokeAt: tid(22, 0), anchors: [], day: dagen });
-  assert.deepEqual(placed.map((block) => block.id), ["morgen"]);
-  assert.deepEqual(dropped.map((block) => block.id), ["lese"]);
+test("en økt som skyves forbi dagens slutt havner i dropped", () => {
+  const { placed, dropped } = planCalendarDay({ events: dagensØkter, wokeAt: tid(19, 0), ...rytmen, day: dagen });
+  assert.deepEqual(placed.map((block) => block.id), ["a"]);
+  assert.deepEqual(dropped.map((block) => block.id), ["b"]);
 });
 
-test("en kort bolk etter en droppet bolk får fortsatt plass", () => {
-  const template = {
-    ...malen,
-    blocks: [
-      { id: "lang", title: "Lang", minutes: 120 },
-      { id: "kort", title: "Kort", minutes: 15 },
-    ],
-  };
-  const { placed, dropped } = planDay({ template, wokeAt: tid(22, 0), anchors: [], day: dagen });
-  assert.deepEqual(dropped.map((block) => block.id), ["lang"]);
-  assert.deepEqual(placed.map((block) => [block.id, block.startMinute]), [["kort", 1320]]);
+test("kalenderen leses i tidsrekkefølge, ikke i den rekkefølgen den kom", () => {
+  const { placed } = planCalendarDay({ events: [dagensØkter[1], dagensØkter[0]], wokeAt: tid(9, 40), ...rytmen, day: dagen });
+  assert.deepEqual(placed.map((block) => block.id), ["a", "b"]);
 });
 
-test("en avhuket bolk varer til den ble huket av, og resten flyter derfra", () => {
-  const done = [{ id: "morgen", at: tid(10, 5) }];
-  const { placed } = planDay({ template: malen, wokeAt: tid(9, 40), anchors: [], day: dagen, done });
-  assert.deepEqual(placed.map((block) => [block.id, block.startMinute, block.endMinute, block.done]), [
-    ["morgen", 580, 605, true],
-    ["lese", 605, 695, false],
+test("en avhuket økt blir stående der den er, og resten av dagen står stille", () => {
+  const done = [{ id: "a", at: tid(10, 5) }];
+  const { placed } = planCalendarDay({ events: dagensØkter, wokeAt: tid(9, 40), ...rytmen, day: dagen, done });
+  assert.deepEqual(placed.map((block) => [block.id, block.startMinute, block.done]), [
+    ["a", 700, true],
+    ["b", 775, false],
   ]);
 });
 
-test("hakes en bolk av før tiden, rykker resten av dagen fram", () => {
-  const done = [{ id: "morgen", at: tid(9, 50) }];
-  const { placed } = planDay({ template: malen, wokeAt: tid(9, 40), anchors: [], day: dagen, done });
-  assert.deepEqual(placed.map((block) => [block.id, block.startMinute, block.endMinute]), [
-    ["morgen", 580, 590],
-    ["lese", 590, 680],
-  ]);
-});
-
-test("en mal uten bolker gir en tom plan i stedet for å kaste", () => {
-  const { placed, dropped, shift } = planDay({ template: { wakeAnchor: "07:00", dayEnd: "23:00", blocks: [] }, day: dagen });
+test("en dag uten avtaler gir en tom plan i stedet for å kaste", () => {
+  const { placed, dropped, shift } = planCalendarDay({ events: [], ...rytmen, day: dagen });
   assert.deepEqual({ placed, dropped, shift }, { placed: [], dropped: [], shift: 0 });
+});
+
+test("uten anker eller dagsslutt sier planen ingenting", () => {
+  assert.deepEqual(planCalendarDay({ events: dagensØkter, wokeAt: tid(9, 40), day: dagen }), { placed: [], dropped: [], shift: 0 });
 });
 
 test("sier ingenting når ingen oppvåkning er registrert", () => {

@@ -878,77 +878,57 @@ function minuteOfDay(value) {
   return Number.isFinite(+date) ? date.getHours() * 60 + date.getMinutes() : null;
 }
 
-// Skyvingen går bare framover. Symmetri hadde lagt lesingen til 05:30 fordi Ole
-// våknet tidlig én gang, og det er ikke problemet dagsplanen løser.
-export function planDay({ template, wokeAt = null, anchors = [], day = new Date(), done = [] } = {}) {
-  const blocks = Array.isArray(template?.blocks) ? template.blocks : [];
-  const anchorMinute = clockMinutes(template?.wakeAnchor);
-  const endMinute = clockMinutes(template?.dayEnd);
-  if (!blocks.length || anchorMinute === null || endMinute === null) return { placed: [], dropped: [], shift: 0 };
+// Dagen er kalenderen, ikke en mal ved siden av den.
+//
+// Før lå det to planer for samme døgn: Apple Kalender med Oles egne økter, og et
+// generisk sett bolker som ble lagt ut fra oppvåkningen. De var uenige om når
+// dagen begynte, og resultatet var to lunsjer og to lesetider i samme rutenett.
+// Ole har ingen forelesninger — alt som står i kalenderen er selvstudium han
+// selv har lagt opp, og som derfor kan flyttes. Da er det den som er planen, og
+// den eneste jobben som er igjen er å si hvor den lander når morgenen glapp.
+//
+// Skyvingen går bare framover. Symmetri hadde flyttet dagen til 05:30 fordi Ole
+// våknet tidlig én gang, og det er ikke problemet dette løser.
+//
+// Hele dagen flyttes like mye. Pausene mellom øktene er valgt med vilje, og en
+// modell som la øktene ende mot ende ville spist dem uten å si fra.
+export function planCalendarDay({ events = [], wokeAt = null, wakeAnchor = null, dayEnd = null, day = new Date(), done = [] } = {}) {
+  const anchorMinute = clockMinutes(wakeAnchor);
+  const endMinute = clockMinutes(dayEnd);
+  if (anchorMinute === null || endMinute === null) return { placed: [], dropped: [], shift: 0 };
 
   const wokeMinute = wokeAt ? minuteOfDay(wokeAt) : null;
   const shift = wokeMinute === null ? 0 : Math.max(0, wokeMinute - anchorMinute);
-
-  // Heldagsavtaler holdes utenfor. De sier ingenting om når på dagen noe skjer,
-  // og ville ellers spist hvert eneste ledige minutt.
-  const busy = (Array.isArray(anchors) ? anchors : [])
-    .flatMap((event) => {
-      if (!event || event.allDay) return [];
-      const start = minuteOfDay(event.start);
-      const end = minuteOfDay(event.end);
-      if (start === null || end === null || end <= start) return [];
-      return [{ start, end }];
-    })
-    .sort((a, b) => a.start - b.start);
-
-  const doneById = new Map((Array.isArray(done) ? done : []).flatMap((entry) => {
-    const at = minuteOfDay(entry?.at);
-    return entry?.id && at !== null ? [[entry.id, at]] : [];
-  }));
+  const doneIds = new Set((Array.isArray(done) ? done : []).flatMap((entry) => (entry?.id ? [entry.id] : [])));
 
   const placed = [];
   const dropped = [];
-  let cursor = anchorMinute + shift;
+  for (const event of Array.isArray(events) ? events : []) {
+    // Heldagsavtaler sier ingenting om når på dagen noe skjer, og har derfor
+    // heller ingenting å bli skjøvet fra.
+    if (!event || event.allDay) continue;
+    const start = minuteOfDay(event.start);
+    const end = minuteOfDay(event.end);
+    if (start === null || end === null || end <= start) continue;
 
-  for (const block of blocks) {
-    const minutes = Number(block?.minutes);
-    if (!Number.isFinite(minutes) || minutes <= 0) continue;
-
-    const doneAt = doneById.get(block.id);
-    let start = cursor;
-    // Ett hopp per anker holder: ankrene er sortert, og hvert hopp lander på
-    // slutten av det ankeret som var i veien.
-    for (let guard = 0; guard <= busy.length; guard += 1) {
-      const hit = busy.find((slot) => start < slot.end && slot.start < start + minutes);
-      if (!hit) break;
-      start = hit.end;
-    }
-
-    // En avhuket bolk varte fra der den sto til den ble huket av. Da retter
-    // planen seg hele dagen og ikke bare om morgenen: haker Ole av tidlig,
-    // rykker resten fram, og blir han forsinket, skyves resten. Bolken flyttes
-    // aldri bakover til avhukingstidspunktet — det la den oppå den som lå der.
-    if (doneAt !== undefined) {
-      const end = Math.max(start + 1, doneAt);
-      placed.push({ ...block, startMinute: start, endMinute: end, done: true,
-        start: minuteDate(day, start).toISOString(), end: minuteDate(day, end).toISOString() });
-      cursor = end;
-      continue;
-    }
-
-    // Markøren står stille når en bolk faller ut, slik at en kortere bolk lenger
-    // ned i malen fortsatt kan få plass i hullet.
-    if (start + minutes > endMinute) {
+    const block = { id: event.id, title: event.title, tone: event.tone, minutes: end - start };
+    // Det som ikke lenger rekker å bli ferdig før dagen er over, skal stå
+    // oppført som noe som falt ut — ikke tegnes inn i natta som om det gikk.
+    if (end + shift > endMinute) {
       dropped.push(block);
       continue;
     }
-
-    placed.push({ ...block, startMinute: start, endMinute: start + minutes, done: false,
-      start: minuteDate(day, start).toISOString(), end: minuteDate(day, start + minutes).toISOString() });
-    cursor = start + minutes;
+    placed.push({
+      ...block,
+      startMinute: start + shift,
+      endMinute: end + shift,
+      done: doneIds.has(event.id),
+      start: minuteDate(day, start + shift).toISOString(),
+      end: minuteDate(day, end + shift).toISOString(),
+    });
   }
 
-  return { placed, dropped, shift };
+  return { placed: placed.sort((a, b) => a.startMinute - b.startMinute), dropped, shift };
 }
 
 // Et gjett skal se ut som et gjett. En alarm Ole selv slo av, og en rettelse han

@@ -49,7 +49,7 @@ import {
   XLogo,
   YoutubeLogo,
 } from "@phosphor-icons/react";
-import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatMinutes, formatResetTime, formatTimer, layoutDayEvents, describeWake, needsCompanionUpdate, planDay, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
+import { DAY_MINUTES, buildMetricDetails, buildMonthDays, buildStatusChecks, calendarDayScrollMinute, describeCalendarActivity, describeRepair, describeSyncAge, eventOccursOnDay, followCalendarDay, formatMinutes, formatResetTime, formatTimer, layoutDayEvents, describeWake, needsCompanionUpdate, planCalendarDay, readUsageResponse, shiftCalendarDate, summarizeAgentSessions } from "./dashboard.js";
 import { createScreenWakeLockController } from "./wake-lock.js";
 
 const staticQuickActions = [
@@ -788,15 +788,22 @@ function DayCalendar({ date, events, now, plan = null, onDone }) {
   const laidOutEvents = layoutDayEvents(dayEvents);
   const showNow = isSameCalendarDay(now, date);
   const nowTop = ((now.getHours() * 60 + now.getMinutes()) / DAY_MINUTES) * 100;
+  // Er dagen skjøvet, deler de to lagene flaten mellom seg i stedet for å ligge
+  // oppå hverandre. Full bredde til begge lot titlene skrive over hverandre, og
+  // på en vegg man ser på i forbifarten er to halvlesbare spalter verre enn én.
+  const shifted = Boolean(plan && plan.shift > 0 && plan.placed.length > 0);
   return (
-    <div className="day-calendar" aria-label="Dagens kalender">
+    <div className={`day-calendar${shifted ? " is-shifted" : ""}`} aria-label="Dagens kalender">
       {DAY_HOURS.map((hour) => (
         <div className="time-row" key={hour}>
           <time>{hour}:00</time><span />
         </div>
       ))}
-      {plan && plan.placed.length > 0 && (
-        <div className="calendar-blocks" aria-label="Dagens bolker">
+      {/* Skyggen tegnes bare når dagen faktisk har flyttet på seg. Står den der
+          uansett, ligger den nøyaktig bak avtalekortene og sier ingenting — og
+          da er vi tilbake til to plan for samme dag, bare usynlig. */}
+      {shifted && (
+        <div className="calendar-blocks" aria-label="Dagen slik den faktisk lander">
           {plan.placed.map((block) => (
             <button
               type="button"
@@ -1148,10 +1155,11 @@ function App() {
   const selectedDayEvents = eventsOnDay(calendarEvents, date);
   const plannedDay = useMemo(() => {
     if (!dayPlan.template) return null;
-    return planDay({
-      template: dayPlan.template,
+    return planCalendarDay({
+      events: selectedDayEvents,
       wokeAt: dayPlan.wake?.wokeAt ?? null,
-      anchors: selectedDayEvents,
+      wakeAnchor: dayPlan.template.wakeAnchor,
+      dayEnd: dayPlan.template.dayEnd,
       day: date,
       done: dayPlan.wake?.done ?? [],
     });
