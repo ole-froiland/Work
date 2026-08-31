@@ -66,18 +66,35 @@ struct SyncView: View {
                     Text("Tailnett-navnet, som svarer likt på skolen, på hotspot og på mobildata. Krever at Tailscale er installert og innlogget på telefonen.")
                 }
 
-                Section("Status") {
+                Section {
                     if let lastSync = model.lastSync {
-                        LabeledContent("Sist synket", value: lastSync.formatted(date: .abbreviated, time: .shortened))
+                        LabeledContent("Sist kom fram", value: lastSync.formatted(date: .abbreviated, time: .shortened))
+                    } else {
+                        LabeledContent("Sist kom fram", value: "Aldri")
                     }
-                    // Hvilken av de to som faktisk kom fram. Uten denne raden ser
-                    // «virker» og «virker bare hjemme» helt like ut herfra.
+                    // Siste forsøk står ved siden av siste suksess, ikke i stedet
+                    // for. «Prøvde 14:03, fikk ikke kontakt» og «kom fram 11:15»
+                    // er to forskjellige svar, og slås de sammen blir begge
+                    // ubrukelige — det er nettopp forskjellen mellom dem som sier
+                    // om det er telefonen eller Mac-en som ikke gjør jobben sin.
+                    if let attempt = model.lastAttempt, !attempt.succeeded {
+                        LabeledContent("Sist forsøkt", value: attempt.at.formatted(date: .abbreviated, time: .shortened))
+                        if let failure = attempt.failure {
+                            Text(failure).foregroundStyle(.red).font(.footnote)
+                        }
+                    }
+                    // Hvilken av de to adressene som faktisk kom fram. Uten denne
+                    // raden ser «virker» og «virker bare hjemme» helt like ut.
                     if let deliveredTo = model.deliveredTo {
                         LabeledContent("Levert til", value: deliveredTo)
                     }
                     if let error = model.errorMessage {
-                        Text(error).foregroundStyle(.red)
+                        Text(error).foregroundStyle(.orange).font(.footnote)
                     }
+                } header: {
+                    Text("Status")
+                } footer: {
+                    Text("«Sist forsøkt» uten «kom fram» betyr at Mac-en ikke svarte — som regel at lokket var lukket.")
                 }
 
                 Button {

@@ -13,6 +13,7 @@
 		2263B5B4FDE8DE9F91AEBC0C /* SyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DB8D89EEDDDDB32E7FE9C6B /* SyncView.swift */; };
 		29B2C7BE9C423849B16A9165 /* WakeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1784149B81019906F7A66AA /* WakeDetector.swift */; };
 		2E3470A3BEEE8AB32B2116CD /* pling.caf in Resources */ = {isa = PBXBuildFile; fileRef = 3189D511A4D03F9B76C49245 /* pling.caf */; };
+		95FA17CDC204E96C07735D34 /* SyncJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1848E24BDDC1B1D0292FDE05 /* SyncJournal.swift */; };
 		A6872E43C7A5C2595E075EA1 /* SocialApps.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF367E00C6A569F789462E37 /* SocialApps.swift */; };
 		B6D894DA6B56CEC91FFB4376 /* PanelEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD55B1B2C01F751DF97B6C9 /* PanelEndpoint.swift */; };
 		B9C47769C54B835B6BC970A6 /* MetricsSyncModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D671052259C864180C513CEA /* MetricsSyncModel.swift */; };
@@ -31,6 +32,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1848E24BDDC1B1D0292FDE05 /* SyncJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncJournal.swift; sourceTree = "<group>"; };
 		1FD55B1B2C01F751DF97B6C9 /* PanelEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelEndpoint.swift; sourceTree = "<group>"; };
 		2525514BB8E0EE10AED1AF16 /* PanelCompanionUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PanelCompanionUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3189D511A4D03F9B76C49245 /* pling.caf */ = {isa = PBXFileReference; path = pling.caf; sourceTree = "<group>"; };
@@ -65,6 +67,7 @@
 				1FD55B1B2C01F751DF97B6C9 /* PanelEndpoint.swift */,
 				DA725DC9CD9250B649EE1E37 /* SleepAlarms.swift */,
 				DF367E00C6A569F789462E37 /* SocialApps.swift */,
+				1848E24BDDC1B1D0292FDE05 /* SyncJournal.swift */,
 				6DB8D89EEDDDDB32E7FE9C6B /* SyncView.swift */,
 				F1784149B81019906F7A66AA /* WakeDetector.swift */,
 			);
@@ -98,7 +101,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		"TEMP_7543D206-5CE1-4A62-8A35-1C154FF53FEC" /* .claude */ = {
+		"TEMP_092A6C04-6008-4B66-A9A1-8224867C9D01" /* .claude */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -216,6 +219,7 @@
 				B6D894DA6B56CEC91FFB4376 /* PanelEndpoint.swift in Sources */,
 				E221B7E2F834BCCA3BB46BEA /* SleepAlarms.swift in Sources */,
 				A6872E43C7A5C2595E075EA1 /* SocialApps.swift in Sources */,
+				95FA17CDC204E96C07735D34 /* SyncJournal.swift in Sources */,
 				2263B5B4FDE8DE9F91AEBC0C /* SyncView.swift in Sources */,
 				29B2C7BE9C423849B16A9165 /* WakeDetector.swift in Sources */,
 			);

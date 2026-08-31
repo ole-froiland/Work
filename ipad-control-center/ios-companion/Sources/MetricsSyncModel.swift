@@ -41,7 +41,10 @@ final class MetricsSyncModel: ObservableObject {
     @Published private(set) var screenTimeStatus = "Ikke godkjent"
     @Published private(set) var stepsStatus = "Ikke godkjent"
     @Published private(set) var locationStatus = "Ikke godkjent"
-    @Published private(set) var lastSync: Date?
+    // Lest fra disk, ikke fra minnet. Appen blir relansert i bakgrunnen og dør
+    // igjen; sto disse bare i minnet, var de tomme hver gang Ole faktisk så etter.
+    @Published private(set) var lastSync = SyncJournal.lastSuccess?.at
+    @Published private(set) var lastAttempt = SyncJournal.lastAttempt
     @Published private(set) var errorMessage: String?
     @Published private(set) var isSyncing = false
     @Published private(set) var backgroundDeliveryStatus = "Ikke slått på ennå"
@@ -60,6 +63,7 @@ final class MetricsSyncModel: ObservableObject {
     private let locationProvider = LocationProvider()
     private var stepsObserverQuery: HKObserverQuery?
     private var syncStartedAt: Date?
+    private var deliveryFailure: String?
     private var syncGeneration = 0
 
     // BGAppRefresh er bare et ønske til iOS og kan bli utsatt lenge. Skritt har
@@ -124,9 +128,15 @@ final class MetricsSyncModel: ObservableObject {
         }
         syncGeneration += 1
         let generation = syncGeneration
+        // «Noe kom fram» og «alt gikk bra» er to spørsmål. En kilde som svikter
+        // mens resten leveres er ikke en feilet levering, og skal ikke få
+        // journalen til å påstå at panelet ikke har hørt fra telefonen.
+        deliveryFailure = nil
         isSyncing = true
         syncStartedAt = .now
-        errorMessage = nil
+        // Feilmeldingen sto tidligere `nil` her. Det slettet forrige utfall før
+        // det nye fantes, så et blikk i appen var nok til å viske ut grunnen til
+        // at panelet sto stille. Den blir stående til denne kjøringen har et svar.
         // Neste bakgrunnskjøring må planlegges uansett utfall. Lå kallet bare på
         // suksessgrenen, døde kjeden for godt første gang en synk feilet — for
         // eksempel når telefonen var utenfor hjemmenettet og .local-adressen
@@ -141,6 +151,11 @@ final class MetricsSyncModel: ObservableObject {
                 // «levert til hjemmenettet» også etter at hjemmenettet sluttet
                 // å svare. Den skal si hva som gjelder nå.
                 deliveredTo = PanelEndpoint.lastGoodHost
+                // Utfallet skrives når kjøringen er ferdig, ikke når den starter.
+                // Det er det eneste tidspunktet det finnes et utfall å skrive.
+                SyncJournal.record(failure: deliveryFailure, host: deliveredTo)
+                lastAttempt = SyncJournal.lastAttempt
+                lastSync = SyncJournal.lastSuccess?.at
             }
             scheduleBackgroundRefresh(after: errorMessage == nil ? Self.retryNormal : Self.retrySoon)
         }
@@ -194,12 +209,12 @@ final class MetricsSyncModel: ObservableObject {
             #endif
 
             try await upload(screenTime: screenTime, steps: steps, location: location)
-            lastSync = .now
             // Delvis sendt er ikke det samme som vellykket. Sto feltet tomt her,
             // ville en kilde som svikter hver gang aldri bli nevnt med et ord.
             errorMessage = problems.isEmpty ? nil : problems.joined(separator: " · ")
         } catch {
             errorMessage = error.localizedDescription
+            deliveryFailure = error.localizedDescription
         }
     }
 
