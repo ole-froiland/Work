@@ -9,6 +9,8 @@ test("kjenner bare hvitelistede handlinger", () => {
   assert.equal(isMacAction("nhh-subjects"), true);
   assert.equal(isMacAction("link-site"), true);
   assert.equal(isMacAction("private-accounts"), true);
+  assert.equal(isMacAction("school-session"), true);
+  assert.equal(isMacAction("open-agent-session"), true);
   assert.equal(isMacAction("rm"), false);
   assert.equal(isMacAction(undefined), false);
 });
@@ -211,7 +213,7 @@ const subjectDeps = {
   readCalendar: subjectCalendar,
 };
 
-test("legger prompten på utklippstavla før prosjektet åpnes", async () => {
+test("erstatter en gammel usendt prompt etter at prosjektet er lastet", async () => {
   const calls = [];
   const result = await runMacAction("subject-session", {
     platform: "darwin",
@@ -227,6 +229,14 @@ test("legger prompten på utklippstavla før prosjektet åpnes", async () => {
   const [clipboard, chrome] = calls;
   assert.ok(clipboard[1].some((value) => value.includes("set the clipboard to")));
   assert.ok(chrome[1].includes("https://chatgpt.com/g/g-p-test/project"));
+  assert.ok(chrome[1].includes("set URL of tab chosenTabIndex of chosenWindow to target"));
+  assert.ok(chrome[1].includes('if currentUrl starts with "https://chatgpt.com/" or currentUrl starts with "https://chat.openai.com/" then'));
+  assert.ok(chrome[1].includes("open location target"), "en ny fane er bare reserve når ingen ChatGPT-fane finnes");
+  assert.ok(chrome[1].includes("if loading of tab chosenTabIndex of chosenWindow is false then exit repeat"));
+  const selectAll = chrome[1].indexOf('tell application "System Events" to keystroke "a" using command down');
+  const paste = chrome[1].indexOf('tell application "System Events" to keystroke "v" using command down');
+  assert.ok(selectAll >= 0, "gammel tekst må markeres før den nye prompten limes inn");
+  assert.ok(selectAll < paste, "⌘A må kjøres før ⌘V");
   const prompt = clipboard[1].at(-1);
   assert.ok(prompt.includes("75 minutter i BUS400N"));
   assert.ok(prompt.includes("🔵 BUS400N – oppgaver / aktiv gjenhenting"));
@@ -253,8 +263,97 @@ test("åpner ingenting når faget mangler et prosjekt", async () => {
   assert.equal(calls.length, 0);
 });
 
+test("starter en åpen skoleøkt uten å kreve minutter", async () => {
+  const calls = [];
+  const result = await runMacAction("subject-session", {
+    platform: "darwin",
+    payload: { code: "BUS400N" },
+    deps: subjectDeps,
+    exec: async (command, args) => { calls.push([command, args]); return { stdout: "", stderr: "" }; },
+  });
+
+  assert.equal(result.minutes, null);
+  assert.ok(calls[0][1].at(-1).includes("Bruk filene, tidligere samtaler og resten av konteksten"));
+  assert.equal(calls[1][1].at(-1), "https://chatgpt.com/g/g-p-test/project");
+});
+
+test("skoleknappen velger og registrerer faget med minst nylig arbeid", async () => {
+  const calls = [];
+  const recorded = [];
+  const result = await runMacAction("school-session", {
+    platform: "darwin",
+    deps: {
+      readProjects: async () => ({
+        BUS400N: "https://chatgpt.com/g/g-p-one/project",
+        BUS401E: "https://chatgpt.com/g/g-p-two/project",
+      }),
+      readCalendar: async () => ({ events: [{
+        title: "🔵 BUS400N – oppgaver",
+        start: new Date(Date.now() - 7_200_000).toISOString(),
+        end: new Date(Date.now() - 3_600_000).toISOString(),
+      }] }),
+      readHistory: async () => [],
+      recordSession: async (code) => { recorded.push(code); },
+    },
+    exec: async (command, args) => { calls.push([command, args]); return { stdout: "", stderr: "" }; },
+  });
+
+  assert.equal(result.label, "BUS401E");
+  assert.deepEqual(recorded, ["BUS401E"]);
+  assert.equal(calls[1][1].at(-1), "https://chatgpt.com/g/g-p-two/project");
+  assert.ok(calls[1][1].includes("set active tab index of chosenWindow to chosenTabIndex"));
+  assert.ok(calls[1][1].includes('tell application "System Events" to keystroke "v" using command down'));
+});
+
+test("skoleknappen åpner ingenting når ingen fag er koblet opp", async () => {
+  const calls = [];
+  await assert.rejects(
+    runMacAction("school-session", {
+      platform: "darwin",
+      deps: {
+        readProjects: async () => ({}),
+        readCalendar: async () => ({ events: [] }),
+        readHistory: async () => [],
+      },
+      exec: async (...args) => { calls.push(args); return { stdout: "", stderr: "" }; },
+    }),
+    /Ingen fag har et ChatGPT-prosjekt/,
+  );
+  assert.equal(calls.length, 0);
+});
+
 test("avviser fag og lengder som ikke er Oles", async () => {
   for (const payload of [{ code: "ETI450", minutes: 45 }, { code: "BUS400N", minutes: 0 }, { code: "BUS400N", minutes: 5000 }]) {
     await assert.rejects(runMacAction("subject-session", { platform: "darwin", payload, deps: subjectDeps, exec: async () => ({ stdout: "" }) }));
   }
+});
+
+
+test("åpner en økt i appen som eier den", async () => {
+  const calls = [];
+  const result = await runMacAction("open-agent-session", {
+    platform: "darwin",
+    payload: { provider: "codex", id: "01a0531d-e3f6-7620-a1bc-79632c4a1a08" },
+    exec: async (command, args) => { calls.push([command, args]); return { stdout: "", stderr: "" }; },
+  });
+  assert.deepEqual(calls, [["open", ["codex://threads/01a0531d-e3f6-7620-a1bc-79632c4a1a08"]]]);
+  assert.deepEqual(result, { action: "open-agent-session", target: "codex", label: "ChatGPT" });
+});
+
+test("sier fra når appen ikke svarer på adressen", async () => {
+  await assert.rejects(
+    () => runMacAction("open-agent-session", {
+      platform: "darwin",
+      payload: { provider: "codex", id: "01a0531d-e3f6-7620-a1bc-79632c4a1a08" },
+      exec: async () => { throw new Error("LSOpenURLsWithRole() failed"); },
+    }),
+    /Fikk ikke åpnet økta i ChatGPT/,
+  );
+});
+
+test("bygger ingen adresse av en ukjent økt", async () => {
+  await assert.rejects(
+    () => runMacAction("open-agent-session", { platform: "darwin", payload: { provider: "codex", id: "noe-annet" }, exec: async () => ({ stdout: "", stderr: "" }) }),
+    /Ukjent oppgave/,
+  );
 });

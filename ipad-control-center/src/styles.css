@@ -216,22 +216,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
 /* Hver økt er en egen flate. Uten den flyter navn, tilstand og tid sammen til
    én grå masse, og kortet blir umulig å lese på et blikk fra andre siden av
    rommet – som er hele grunnen til at det henger der. */
-.agent-list li { width: 100%; min-width: 0; gap: 10px; padding: 9px 11px; border-radius: 14px; background: #1b222b; }
+.agent-list li { width: 100%; min-width: 0; border-radius: 14px; background: #1b222b; }
+/* Hele raden er knappen, ikke bare teksten: den skal treffes med tommelen fra
+   sofaen. Flaten under er uendret, så knappen tar bare over luften og rekkene. */
+.agent-open { width: 100%; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 0; border-radius: inherit; background: none; text-align: left; cursor: pointer; transition: filter 140ms ease; }
+.agent-open:active { filter: brightness(1.22); }
 .agent-list li.is-working { background: #1e2a1c; }
 .agent-list li.is-ended { background: #211d1d; }
-.agent-summary { margin: -9px 0 11px; color: var(--muted); font-size: 13px; }
+.agent-summary { margin: -9px 0 11px; color: var(--muted); font-size: 12px; }
 .agent-list .app-logo { width: 32px; height: 32px; border-radius: 11px; background: #262e38; }
 .agent-list li.is-working .app-logo { background: #2a3626; }
 .agent-row { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 3px; }
-.agent-row strong { overflow: hidden; font-size: 14px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-.agent-folder { max-width: 72px; display: flex; flex: 0 0 auto; align-items: center; gap: 4px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.agent-row strong { overflow: hidden; font-size: 12.5px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+/* Rekkefølgen i raden er også en rangering. Blir det trangt, er mappenavnet
+   det eneste som tåler å bli kortet – «jobber nå» og hvor lenge siden må stå
+   hele, ellers svarer ikke raden på det den er der for. */
+.agent-folder { max-width: 88px; display: flex; flex: 0 1 auto; min-width: 0; align-items: center; gap: 4px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .agent-folder svg { flex: 0 0 auto; color: var(--violet); }
 .agent-row-meta { min-width: 0; display: flex; align-items: center; gap: 6px; }
-.agent-row-meta small { min-width: 0; font-size: 13px; }
-.agent-row-meta > small:last-child { flex: 1 1 auto; }
+.agent-row-meta small { min-width: 0; font-size: 11px; }
+.agent-row-meta > small:last-child { flex: 0 0 auto; }
 /* Merkelappen er det øyet finner først, så tilstanden skal ligge i fargen. */
-.agent-chip { flex: 0 0 auto; padding: 2px 7px; border-radius: 7px; background: #2b3540; color: var(--muted); font-size: 11px; font-style: normal; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-.agent-chip.is-working { background: rgba(216,255,98,.16); color: var(--lime); animation: agent-pulse 1.9s ease-in-out infinite; }
+.agent-chip { flex: 0 0 auto; padding: 2px 6px; border-radius: 6px; background: #2b3540; color: var(--muted); font-size: 9.5px; font-style: normal; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+/* Resten av raden er blitt mindre; «jobber nå» skal ikke bli det med. Den er
+   det ene ordet som må treffe fra sofaen, så den blir stående størst av
+   merkelappene. */
+.agent-chip.is-working { background: rgba(216,255,98,.16); color: var(--lime); font-size: 10.5px; animation: agent-pulse 1.9s ease-in-out infinite; }
 .agent-chip.is-input { background: rgba(142,202,255,.14); color: var(--blue); }
 .agent-chip.is-done { background: #2b3540; color: var(--muted); }
 .agent-chip.is-ended { background: rgba(255,125,134,.14); color: #ff9aa1; }
@@ -507,7 +517,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outl
   .agent-card .agent-list { gap: 5px; }
   /* Trangere flate, samme skriftstørrelse: teksten skal ikke krympe når kortet
      gjør det, det er den man leser fra sofaen. */
-  .agent-card .agent-list li { padding: 5px 9px; border-radius: 12px; }
+  .agent-card .agent-list li { border-radius: 12px; }
+  .agent-card .agent-open { padding: 5px 9px; }
   .agent-card .agent-row { gap: 2px; }
   .agent-card .app-logo { width: 27px; height: 27px; border-radius: 9px; }
   /* Teksten under navnet er hele svaret på «hva gjør den nå», så den blir

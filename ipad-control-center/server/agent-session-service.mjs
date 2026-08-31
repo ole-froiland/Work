@@ -256,7 +256,7 @@ export function parseRecords(text) {
   return records;
 }
 
-async function listRecentLogs(directory, cutoffMs) {
+async function listRecentLogs(directory, cutoffMs, suffix = ".jsonl") {
   let entries;
   try {
     entries = await readdir(directory, { withFileTypes: true });
@@ -267,8 +267,8 @@ async function listRecentLogs(directory, cutoffMs) {
   const files = [];
   for (const entry of entries) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...await listRecentLogs(path, cutoffMs));
-    else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+    if (entry.isDirectory()) files.push(...await listRecentLogs(path, cutoffMs, suffix));
+    else if (entry.isFile() && entry.name.endsWith(suffix)) {
       const details = await stat(path);
       if (details.mtimeMs >= cutoffMs) files.push({ path, mtimeMs: details.mtimeMs });
     }
@@ -382,4 +382,48 @@ export async function getAgentSessions({ now = Date.now() } = {}) {
     error: claude.error ?? codex.error,
     sessions,
   };
+}
+
+// Kortet viser hva som kjører; ett trykk skal ta Ole helt inn i akkurat den
+// samtalen. Begge appene tar imot en adresse for det, men bare Claude bruker en
+// annen id enn CLI-en: appen gir hver økt sin egen «local_…»-id og skriver
+// CLI-ens id ved siden av den i sin egen øktfil. Den fila er broen mellom
+// kortet og appen, og vi leser bare starten av den – begge id-ene står øverst.
+//
+// Adressen peker rett på øktas egen side i appen. «claude://resume» ville også
+// funnet fram, men den adopterer økta på nytt: den skriver om samtaleloggen og
+// legger igjen en dublett i appen. Det skal ikke skje av at man trykker på et
+// kort, så vi går via siden økta allerede har.
+const CLAUDE_DESKTOP_SESSIONS = join(homedir(), "Library", "Application Support", "Claude", "claude-code-sessions");
+const DESKTOP_HEAD_BYTES = 8 * 1024;
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isSessionId(value) {
+  return typeof value === "string" && SESSION_ID.test(value);
+}
+
+export async function findClaudeDesktopSession(sessionId, { directory = CLAUDE_DESKTOP_SESSIONS, readFileHead = readHead } = {}) {
+  if (!isSessionId(sessionId)) return null;
+  const files = (await listRecentLogs(directory, 0, ".json")).sort((first, second) => second.mtimeMs - first.mtimeMs);
+  const marker = new RegExp(`"cliSessionId"\\s*:\\s*"${sessionId}"`, "i");
+  for (const { path } of files) {
+    const name = basename(path, ".json");
+    if (!name.startsWith("local_")) continue;
+    if (marker.test(await readFileHead(path, DESKTOP_HEAD_BYTES))) return name;
+  }
+  return null;
+}
+
+// Adressen bygges her, på Mac-en, av en id nettleseren allerede har sendt oss –
+// aldri av tekst nettleseren har funnet på. Derfor sjekkes id-en mot formen før
+// den får bli en del av adressen.
+export async function resolveAgentSessionLink(request, { findDesktopSession = findClaudeDesktopSession } = {}) {
+  const provider = request?.provider;
+  const id = request?.id;
+  if (provider !== "claude" && provider !== "codex") throw new Error("Ukjent oppgave");
+  if (!isSessionId(id)) throw new Error("Ukjent oppgave");
+  if (provider === "codex") return { provider, app: "ChatGPT", url: `codex://threads/${id}` };
+  const desktopId = await findDesktopSession(id);
+  if (!desktopId) throw new Error("Claude-appen kjenner ikke denne økta — den ble startet utenfor appen");
+  return { provider, app: "Claude", url: `claude://claude.ai/epitaxy/${desktopId}` };
 }

@@ -9,6 +9,7 @@ import {
   parseRecords,
   readHead,
   readTitleFromHead,
+  resolveAgentSessionLink,
   resolveSessionState,
   selectVisibleSessions,
   summarizeClaudeSession,
@@ -241,4 +242,50 @@ test("finds the name of a session whose log has grown past the tail window", asy
   // Navnet leses én gang i kvarteret, ikke ved hver oppdatering.
   await rm(path);
   assert.equal(await readTitleFromHead(path, Date.now()), "Lang økt");
+});
+
+
+test("sends a Codex session straight to its thread in ChatGPT", async () => {
+  const link = await resolveAgentSessionLink({ provider: "codex", id: "01a0531d-e3f6-7620-a1bc-79632c4a1a08" });
+  assert.deepEqual(link, { provider: "codex", app: "ChatGPT", url: "codex://threads/01a0531d-e3f6-7620-a1bc-79632c4a1a08" });
+});
+
+test("looks up the id Claude's own app uses for a CLI session", async () => {
+  const link = await resolveAgentSessionLink(
+    { provider: "claude", id: "b67c812e-3245-4e92-bda7-a5700b54a234" },
+    { findDesktopSession: async () => "local_6e80bb27-24d4-4fad-a809-32649c66d0c2" },
+  );
+  assert.deepEqual(link, {
+    provider: "claude",
+    app: "Claude",
+    url: "claude://claude.ai/epitaxy/local_6e80bb27-24d4-4fad-a809-32649c66d0c2",
+  });
+});
+
+test("says so rather than guessing when the Claude app has never seen the session", async () => {
+  await assert.rejects(
+    () => resolveAgentSessionLink({ provider: "claude", id: "b67c812e-3245-4e92-bda7-a5700b54a234" }, { findDesktopSession: async () => null }),
+    /kjenner ikke denne økta/,
+  );
+});
+
+test("only builds an address from something shaped like a session id", async () => {
+  await assert.rejects(() => resolveAgentSessionLink({ provider: "codex", id: "../../etc" }), /Ukjent oppgave/);
+  await assert.rejects(() => resolveAgentSessionLink({ provider: "chatgpt", id: "b67c812e-3245-4e92-bda7-a5700b54a234" }), /Ukjent oppgave/);
+});
+
+test("finds the app session file that carries the CLI id", async (t) => {
+  const { mkdtemp, mkdir, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { findClaudeDesktopSession } = await import("../server/agent-session-service.mjs");
+  const directory = await mkdtemp(join(tmpdir(), "panel-desktop-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const nested = join(directory, "account", "workspace");
+  await mkdir(nested, { recursive: true });
+  await writeFile(join(nested, "local_aaaaaaaa-0000-0000-0000-000000000001.json"), JSON.stringify({ cliSessionId: "11111111-2222-3333-4444-555555555555" }));
+  await writeFile(join(nested, "local_bbbbbbbb-0000-0000-0000-000000000002.json"), JSON.stringify({ cliSessionId: "66666666-7777-8888-9999-000000000000" }));
+
+  assert.equal(await findClaudeDesktopSession("66666666-7777-8888-9999-000000000000", { directory }), "local_bbbbbbbb-0000-0000-0000-000000000002");
+  assert.equal(await findClaudeDesktopSession("99999999-9999-9999-9999-999999999999", { directory }), null);
 });

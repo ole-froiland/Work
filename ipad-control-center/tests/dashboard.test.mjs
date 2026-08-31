@@ -663,10 +663,12 @@ test("answers whether Claude is working, and on how many tasks", () => {
 
   assert.equal(summary.headline, "Claude jobber med 2 oppgaver");
   assert.equal(summary.activeCount, 2);
-  assert.equal(summary.sessions[0].detail, "Endrer filer · nå");
-  assert.equal(summary.sessions[1].detail, "Kjører kommandoer · 2 min siden");
+  // Detaljen sier bare når, uansett tilstand. Hva økta driver med står ikke i
+  // raden lenger; merkelappen sier om den jobber, og mappa hvor.
+  assert.equal(summary.sessions[0].detail, "nå");
+  assert.equal(summary.sessions[0].label, "Jobber nå");
+  assert.equal(summary.sessions[1].detail, "2 min siden");
   assert.equal(summary.sessions[2].project, "test12");
-  // Raden har allerede merkelappen «Ferdig». Detaljen sier bare når.
   assert.equal(summary.sessions[2].detail, "1 time siden");
   assert.equal(summary.sessions[2].label, "Ferdig");
 });
@@ -732,14 +734,15 @@ test("shows the panel error instead of pretending nothing runs", () => {
   assert.equal(summary.headline, "Åpne panelet på Mac-en");
 });
 
-test("names the underagent when Claude delegates a task", () => {
+test("keeps the row to when it last moved, however busy the session is", () => {
   const now = new Date("2026-08-21T12:00:00.000Z");
   const summary = summarizeAgentSessions({
     ok: true,
     sessions: [{ id: "a", provider: "claude", state: "working", title: "Stor jobb", activity: "Kjører en underagent", subagent: true, lastActivityAt: "2026-08-21T11:59:00.000Z" }],
   }, now);
 
-  assert.equal(summary.sessions[0].detail, "Underagent jobber · 1 min siden");
+  assert.equal(summary.sessions[0].detail, "1 min siden");
+  assert.equal(summary.sessions[0].label, "Jobber nå");
 });
 
 test("labels each session with the state word the card shows", () => {
@@ -753,7 +756,7 @@ test("labels each session with the state word the card shows", () => {
     ],
   }, now);
 
-  assert.deepEqual(summary.sessions.map((session) => session.label), ["Jobber", "Avsluttet", "Trenger svar"]);
+  assert.deepEqual(summary.sessions.map((session) => session.label), ["Jobber nå", "Avsluttet", "Trenger svar"]);
   assert.equal(summary.count, 3);
   assert.equal(summary.activeCount, 1);
 });

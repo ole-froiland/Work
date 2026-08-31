@@ -59,7 +59,7 @@ const staticQuickActions = [
 ];
 
 const macLinkActions = [
-  { id: "sync-projects", label: "Prosjekter", detail: "Åpne Sync-prosjekter i Chrome på Mac-en", icon: FolderOpen, tone: "violet" },
+  { id: "school", label: "Skole", detail: "Velger et fag automatisk og starter en liten økt", icon: GraduationCap, tone: "violet" },
   { id: "nhh-subjects", label: "NHH-fag", detail: "Åpne fagoversikten i Chrome på Mac-en", icon: GraduationCap, tone: "blue" },
   { id: "link-site", label: "Linksiden", detail: "Åpne lenkesamlingen i Chrome på Mac-en", icon: LinkSimple, tone: "lime" },
   { id: "private-accounts", label: "Privat regnskap", detail: "Åpne privat regnskap i Chrome på Mac-en", icon: Wallet, tone: "orange" },
@@ -195,10 +195,14 @@ function MacLinkAction({ action, onTrigger }) {
   );
 }
 
+function appNameFor(provider) {
+  return provider === "codex" ? "ChatGPT" : "Claude";
+}
+
 // Kortet leser bare det Claude og Codex selv har skrevet i samtaleloggene sine:
 // hvilke økter som er i gang, hva de holder på med, og hva som er ferdig. Uten
 // logger står det eksplisitt at ingenting kjører – vi gjetter aldri.
-function AgentActivityCard({ snapshot, now }) {
+function AgentActivityCard({ snapshot, now, onOpen }) {
   // Panelklokka tikker hvert halvminutt, mens kortet hentes hvert tiende sekund.
   // Alderen måles derfor mot det ferskeste av de to, ellers ville en økt som
   // nettopp skrev en linje kunne se eldre ut enn den er.
@@ -210,28 +214,32 @@ function AgentActivityCard({ snapshot, now }) {
   return (
     <section className="panel-card agent-card">
       <div className="section-heading">
-        <div><span className="eyebrow">Kjører nå</span><h2>Oppgaver</h2></div>
+        <h2>Oppgaver</h2>
         <span className="count-badge">{summary.count}</span>
       </div>
-      <p className="agent-summary">{summary.headline}</p>
+      {/* Radene sier selv hva som jobber. Sammendraget er derfor bare til når
+          det ikke står noen rader å lese: mens vi henter, når lesingen feilet,
+          og når det faktisk ikke er noe å vise. */}
+      {!summary.sessions.length && <p className="agent-summary">{summary.headline}</p>}
       <ul className="agent-list">
         {summary.sessions.map((session) => (
           <li className={`is-${session.tone}`} key={session.id}>
-            <span className={`app-logo ${session.provider === "codex" ? "code" : "claude"}`}>
-              {session.provider === "codex" ? <CodexLogo size={17} /> : <ClaudeLogo size={17} />}
-            </span>
-            <span className="agent-row">
-              <strong title={`${session.title} · ${session.project}`}>{session.title}</strong>
-              <span className="agent-row-meta">
-                <small className="agent-folder"><FolderOpen size={13} weight="fill" />{session.project || "Ukjent mappe"}</small>
-                {session.tone !== "done" && <i className={`agent-chip is-${session.tone}`}>{session.label}</i>}
-                <small>{session.detail}</small>
+            <button className="agent-open" type="button" onClick={() => onOpen(session)} aria-label={`Åpne ${session.title} i ${appNameFor(session.provider)} på Mac-en`}>
+              <span className={`app-logo ${session.provider === "codex" ? "code" : "claude"}`}>
+                {session.provider === "codex" ? <CodexLogo size={17} /> : <ClaudeLogo size={17} />}
               </span>
-            </span>
+              <span className="agent-row">
+                <strong title={`${session.title} · ${session.project}`}>{session.title}</strong>
+                <span className="agent-row-meta">
+                  <small className="agent-folder"><FolderOpen size={11} weight="fill" />{session.project || "Ukjent mappe"}</small>
+                  {session.tone !== "done" && <i className={`agent-chip is-${session.tone}`}>{session.label}</i>}
+                  <small>{session.detail}</small>
+                </span>
+              </span>
+            </button>
           </li>
         ))}
       </ul>
-      {summary.empty && <p className="notes-empty">Ingen Claude- eller Codex-økter å vise</p>}
     </section>
   );
 }
@@ -1347,18 +1355,37 @@ function App() {
     }
   }
 
-  // Ett trykk skal ta Ole helt fram: Mac-en legger en ferdig prompt på
-  // utklippstavla og åpner fagets ChatGPT-prosjekt. Toasten sier hva som
-  // gjenstår, siden ⌘V er det ene steget panelet ikke kan ta for ham.
+  // Kortet forteller at noe kjører; trykket skal svare på «vis meg det». Mac-en
+  // eier både øktene og appene, så den finner adressen og åpner riktig app.
+  async function openAgentSession(session) {
+    const app = appNameFor(session.provider);
+    await runOnMac({ action: "open-agent-session", provider: session.provider, id: session.id }, {
+      done: () => `«${session.title}» åpnes i ${app} på Mac-en`,
+      failed: `Fikk ikke åpnet «${session.title}» i ${app}`,
+    });
+  }
+
+  // Ett trykk skal ta Ole helt fram: Mac-en åpner fagets ChatGPT-prosjekt og
+  // fyller inn den ferdige prompten. Send-knappen blir stående urørt, slik at
+  // Ole kan se over starten før samtalen begynner.
   async function startSubjectSession({ code, minutes, title }) {
     await runOnMac({ action: "subject-session", code, minutes, title }, {
-      done: () => `${code} er åpnet i ChatGPT — planen for ${minutes} min ligger klar, lim inn med ⌘V`,
+      done: () => minutes
+        ? `${code} er åpnet i ChatGPT — planen for ${minutes} min er fylt inn`
+        : `${code} er åpnet i ChatGPT — en liten startoppgave er fylt inn`,
       failed: `Fikk ikke startet ${code}-økta på Mac-en`,
     });
   }
 
   async function triggerAction(action) {
     window.dispatchEvent(new CustomEvent("mac-action", { detail: { action: action.id } }));
+    if (action.id === "school") {
+      await runOnMac({ action: "school-session" }, {
+        done: (result) => `${result.label} ble valgt — en liten startoppgave er fylt inn i ChatGPT`,
+        failed: "Kunne ikke starte en skoleøkt på Mac-en",
+      });
+      return;
+    }
     if (action.id === "fullscreen") {
       await toggleFullscreen();
       return;
@@ -1597,7 +1624,7 @@ function App() {
             <UsageProvider name="Claude" icon={ClaudeLogo} tone="claude" data={usage?.claude} now={now} />
           </section>
 
-          <AgentActivityCard snapshot={agentSessions} now={now} />
+          <AgentActivityCard snapshot={agentSessions} now={now} onOpen={openAgentSession} />
         </aside>
 
         <section className="calendar-panel panel-card">

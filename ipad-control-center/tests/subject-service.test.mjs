@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildSessionPrompt, listConnectedSubjects, normalizeSessionRequest, readSubjectProjects } from "../server/subject-service.mjs";
+import { buildSessionPrompt, listConnectedSubjects, normalizeSessionRequest, readSubjectProjects, selectBalancedSubject } from "../server/subject-service.mjs";
 
 async function withProjectFile(contents, run) {
   const directory = await mkdtemp(join(tmpdir(), "panel-subjects-"));
@@ -61,6 +61,41 @@ test("prompten sier hva økta er, hvor lang den er og hva som haster", () => {
 test("sier fra når faget ikke har frister i vinduet", () => {
   const prompt = buildSessionPrompt({ code: "BUS446", minutes: 45, title: null, events: deadlines, now });
   assert.ok(prompt.includes("Kalenderen har ingen BUS446-frister de neste tre ukene."));
+});
+
+test("lar prosjektet selv vurdere en liten skoleøkt fra sin eksisterende kontekst", () => {
+  const prompt = buildSessionPrompt({ code: "BUS446", minutes: null, title: null, events: deadlines, now });
+  assert.match(prompt, /^Jeg vil ta en liten økt i BUS446\./);
+  assert.ok(prompt.includes("filene, tidligere samtaler og resten av konteksten"));
+  assert.ok(prompt.includes("hvor jeg ligger an, hva jeg bør kunne, og hva som kommer framover"));
+  assert.ok(prompt.includes("Test meg aktivt"));
+  assert.ok(!prompt.includes("minutter"));
+  assert.ok(!prompt.includes("Frister i"));
+  assert.ok(!prompt.includes("Kalenderen"));
+  assert.deepEqual(normalizeSessionRequest({ code: "bus446" }), { code: "BUS446", minutes: null, title: null });
+});
+
+test("velger faget med minst arbeid de siste to ukene", () => {
+  const recent = (daysAgo, hours, code) => ({
+    title: `🔵 ${code} – arbeid`,
+    start: new Date(+now - daysAgo * 86_400_000).toISOString(),
+    end: new Date(+now - daysAgo * 86_400_000 + hours * 3_600_000).toISOString(),
+  });
+  const selected = selectBalancedSubject({
+    codes: ["BUS400N", "BUS401E", "BUS446"],
+    events: [recent(2, 2, "BUS400N"), recent(3, 1, "BUS401E")],
+    now,
+  });
+  assert.equal(selected, "BUS446");
+});
+
+test("roterer jevnt når fagene ellers står likt", () => {
+  const history = [
+    { code: "BUS400N", startedAt: new Date(+now - 3_600_000).toISOString() },
+    { code: "BUS401E", startedAt: new Date(+now - 7_200_000).toISOString() },
+  ];
+  assert.equal(selectBalancedSubject({ codes: ["BUS400N", "BUS401E", "BUS446"], history, now }), "BUS446");
+  assert.equal(selectBalancedSubject({ codes: ["BUS400N", "BUS401E"], history, now }), "BUS401E");
 });
 
 test("avviser fag panelet ikke kjenner og lengder som ikke er en økt", () => {

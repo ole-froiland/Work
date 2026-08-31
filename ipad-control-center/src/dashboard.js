@@ -569,24 +569,18 @@ export function formatAgentAge(value, now = new Date()) {
 }
 
 const AGENT_STATES = {
-  working: { label: "Jobber", tone: "working" },
+  working: { label: "Jobber nå", tone: "working" },
   stalled: { label: "Avsluttet", tone: "ended" },
   needs_input: { label: "Trenger svar", tone: "input" },
   done: { label: "Ferdig", tone: "done" },
 };
 
-// Merkelappen sier tilstanden, mens mappa og aktiviteten står hver for seg.
-// Dermed forsvinner ikke mappen når en økt jobber, og «ferdig» blandes ikke
-// sammen med en tur som stoppet før den rakk å svare.
+// Raden svarer på fire ting og ikke flere: hvilken app, hvilken mappe, om den
+// jobber nå, og hvor lenge siden. Hva økta driver med i akkurat dette sekundet
+// – «Tenker», «Leser filer» – skiftet for fort til å kunne leses på et blikk
+// fra andre siden av rommet, og det tok plassen fra de fire som betyr noe.
 export function describeAgentSession(session, now = new Date()) {
   const state = AGENT_STATES[session?.state] ?? { label: "Ukjent", tone: "done" };
-  const age = formatAgentAge(session?.lastActivityAt, now);
-  // Merkelappen sier allerede tilstanden. Detaljen skal si det merkelappen ikke
-  // sier — hva økta driver med, og hvor lenge siden. «FERDIG» ved siden av
-  // «Fullført» er det samme ordet to ganger, og det stjal plassen fra tittelen.
-  const detail = session?.state === "working"
-    ? `${session.subagent ? "Underagent jobber" : session.activity ?? "Tenker"} · ${age}`
-    : age;
   return {
     id: session?.id,
     provider: session?.provider,
@@ -594,7 +588,7 @@ export function describeAgentSession(session, now = new Date()) {
     project: session?.project || "",
     label: state.label,
     tone: state.tone,
-    detail,
+    detail: formatAgentAge(session?.lastActivityAt, now),
   };
 }
 

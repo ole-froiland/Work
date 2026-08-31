@@ -3,8 +3,9 @@ import { mkdir, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { resolveAgentSessionLink } from "./agent-session-service.mjs";
 import { getSyncCalendar } from "./sync-calendar-service.mjs";
-import { buildSessionPrompt, normalizeSessionRequest, readSubjectProjects } from "./subject-service.mjs";
+import { buildSessionPrompt, normalizeSessionRequest, readSubjectHistory, readSubjectProjects, recordSubjectSession, selectBalancedSubject } from "./subject-service.mjs";
 
 const runCommand = promisify(execFile);
 const sidecarSource = fileURLToPath(new URL("./sidecar-tool.m", import.meta.url));
@@ -34,6 +35,72 @@ async function openInChrome(exec, action, url, label) {
       "-e", "open location target",
       "-e", "activate",
       "-e", "end tell",
+      "-e", "end run",
+      url,
+    ]);
+  } catch (error) {
+    throw new Error(`Fikk ikke åpnet ${label} i Chrome (${firstErrorLine(error, "Chrome svarte ikke")})`);
+  }
+  return { action, target: "chrome", label };
+}
+
+// Fagene deler én ChatGPT-fane. Finn først akkurat dette prosjektet, deretter
+// en hvilken som helst ChatGPT-fane som kan byttes til prosjektet. Bare når
+// Chrome ikke har noen ChatGPT-fane fra før, opprettes en ny. Når prosjektet
+// er klart, erstattes eventuell gammel tekst med den nye prompten uten at den
+// sendes.
+async function openProjectInChrome(exec, action, url, label) {
+  try {
+    await exec("osascript", [
+      "-e", "on run {target}",
+      "-e", 'tell application "Google Chrome"',
+      "-e", "set chosenWindow to missing value",
+      "-e", "set chosenTabIndex to 0",
+      "-e", "repeat with candidateWindow in windows",
+      "-e", "if chosenWindow is missing value then",
+      "-e", "repeat with tabIndex from 1 to count of tabs of candidateWindow",
+      "-e", "set currentUrl to URL of tab tabIndex of candidateWindow",
+      "-e", "if currentUrl starts with target then",
+      "-e", "set chosenWindow to candidateWindow",
+      "-e", "set chosenTabIndex to tabIndex",
+      "-e", "exit repeat",
+      "-e", "end if",
+      "-e", "end repeat",
+      "-e", "end if",
+      "-e", "end repeat",
+      "-e", "if chosenWindow is missing value then",
+      "-e", "repeat with candidateWindow in windows",
+      "-e", "if chosenWindow is missing value then",
+      "-e", "repeat with tabIndex from 1 to count of tabs of candidateWindow",
+      "-e", "set currentUrl to URL of tab tabIndex of candidateWindow",
+      "-e", 'if currentUrl starts with "https://chatgpt.com/" or currentUrl starts with "https://chat.openai.com/" then',
+      "-e", "set chosenWindow to candidateWindow",
+      "-e", "set chosenTabIndex to tabIndex",
+      "-e", "exit repeat",
+      "-e", "end if",
+      "-e", "end repeat",
+      "-e", "end if",
+      "-e", "end repeat",
+      "-e", "end if",
+      "-e", "if chosenWindow is missing value then",
+      "-e", "open location target",
+      "-e", "set chosenWindow to front window",
+      "-e", "set chosenTabIndex to active tab index of chosenWindow",
+      "-e", "else",
+      "-e", "set URL of tab chosenTabIndex of chosenWindow to target",
+      "-e", "set active tab index of chosenWindow to chosenTabIndex",
+      "-e", "set index of chosenWindow to 1",
+      "-e", "end if",
+      "-e", "activate",
+      "-e", "repeat with loadAttempt from 1 to 50",
+      "-e", "if loading of tab chosenTabIndex of chosenWindow is false then exit repeat",
+      "-e", "delay 0.1",
+      "-e", "end repeat",
+      "-e", "delay 1",
+      "-e", "end tell",
+      "-e", 'tell application "System Events" to keystroke "a" using command down',
+      "-e", "delay 0.1",
+      "-e", 'tell application "System Events" to keystroke "v" using command down',
       "-e", "end run",
       url,
     ]);
@@ -183,8 +250,46 @@ const macActions = {
       events = [];
     }
     await copyToClipboard(exec, buildSessionPrompt({ code, minutes, title, events }));
-    await openInChrome(exec, "subject-session", url, `${code} i ChatGPT`);
+    await openProjectInChrome(exec, "subject-session", url, `${code} i ChatGPT`);
     return { action: "subject-session", target: "chrome", label: code, minutes };
+  },
+  // Den manuelle Skole-knappen velger det minst brukte faget i det siste og
+  // roterer ved likhet. Alt avgjøres på Mac-en, som har både kalender og lokal
+  // valghistorikk; nettleseren trenger aldri å se grunnlaget.
+  async "school-session"(exec, _payload, deps = {}) {
+    const readProjects = deps.readProjects ?? readSubjectProjects;
+    const readCalendar = deps.readCalendar ?? getSyncCalendar;
+    const readHistory = deps.readHistory ?? readSubjectHistory;
+    const recordSession = deps.recordSession ?? recordSubjectSession;
+    const projects = await readProjects();
+    let events = [];
+    try {
+      ({ events = [] } = await readCalendar());
+    } catch {
+      // Lokal valghistorikk gir fortsatt jevn rotasjon når Kalender-raden
+      // allerede viser at Apple Kalender ikke kunne leses.
+      events = [];
+    }
+    const history = await readHistory();
+    const code = selectBalancedSubject({ codes: Object.keys(projects), events, history });
+    if (!code) throw new Error("Ingen fag har et ChatGPT-prosjekt registrert på Mac-en");
+    await copyToClipboard(exec, buildSessionPrompt({ code, minutes: null, title: null, events }));
+    await openProjectInChrome(exec, "school-session", projects[code], `${code} i ChatGPT`);
+    await recordSession(code);
+    return { action: "school-session", target: "chrome", label: code, minutes: null };
+  },
+  // Kortet «Oppgaver» viser hva Claude og Codex holder på med. Ett trykk skal ta
+  // Ole rett inn i samtalen, ikke bare fram til appen, så Mac-en slår opp øktas
+  // egen adresse og lar macOS åpne appen som eier den.
+  async "open-agent-session"(exec, payload, deps = {}) {
+    const resolveLink = deps.resolveLink ?? resolveAgentSessionLink;
+    const { provider, app, url } = await resolveLink(payload);
+    try {
+      await exec("open", [url]);
+    } catch (error) {
+      throw new Error(`Fikk ikke åpnet økta i ${app} (${firstErrorLine(error, `${app} svarte ikke`)})`);
+    }
+    return { action: "open-agent-session", target: provider, label: app };
   },
   async "calendar-privacy"(exec) {
     await exec("open", ["x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"]);
