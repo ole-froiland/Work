@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowClockwise,
-  CalendarBlank,
-  Clock,
-  CaretLeft,
-  CaretRight,
   Check,
+  Clock,
   CloudSun,
   FolderOpen,
   Footprints,
@@ -20,6 +17,8 @@ import {
   Pulse,
   SkipBack,
   SkipForward,
+  SlidersHorizontal,
+  Sparkle,
   Stop,
   Sun,
   Warning,
@@ -30,7 +29,6 @@ import {
   describeRepair,
   describeSyncAge,
   eventsOnDay,
-  followCalendarDay,
   formatMinutes,
   formatResetTime,
   formatTimer,
@@ -48,7 +46,7 @@ import "./mobile.css";
 
 const PAGES = [
   { id: "na", label: "Nå", icon: Clock },
-  { id: "dagen", label: "Dagen", icon: CalendarBlank },
+  { id: "ai", label: "AI", icon: Sparkle },
   { id: "status", label: "Status", icon: Pulse },
 ];
 
@@ -75,11 +73,6 @@ function clockText(date) {
 function dateText(date) {
   const text = new Intl.DateTimeFormat("nb-NO", { weekday: "long", day: "numeric", month: "long" }).format(date);
   return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function minuteClock(minute) {
-  const safe = Math.max(0, Math.round(minute));
-  return `${String(Math.floor(safe / 60) % 24).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
 }
 
 function useSwipe(onSwipe) {
@@ -232,12 +225,30 @@ function MusicCard({ onToast }) {
   );
 }
 
+// Kortet er det høyeste på siden, og en økt som ikke er i gang trenger ikke
+// hele skjemaet. Sammenlagt er det én rad: start, og lengden du starter med.
+// Tannhjulet åpner lengdene når de faktisk skal endres — som er sjelden.
 function FocusCard({ state, onStart, onPause, onSkip, onStop, onActivity, onSetting }) {
   const { running, phase, seconds, set, sets, activity, workMinutes, breakMinutes } = state;
-  const idle = phase === "idle";
+  const [open, setOpen] = useState(false);
+
+  if (phase !== "idle") {
+    return (
+      <Card className={`m-focus ${phase === "break" ? "is-break" : ""}`}>
+        <span className="m-eyebrow">{phase === "break" ? "Pause" : activity || "Fokus"} · sett {set} av {sets}</span>
+        <strong className="m-timer">{formatTimer(seconds)}</strong>
+        <div className="m-focus-controls">
+          <button type="button" onClick={onPause}>{running ? <Pause size={20} weight="fill" /> : <Play size={20} weight="fill" />}<span>{running ? "Pause" : "Fortsett"}</span></button>
+          <button type="button" onClick={onSkip}><SkipForward size={20} weight="fill" /><span>Hopp</span></button>
+          <button type="button" onClick={onStop}><Stop size={20} weight="fill" /><span>Avslutt</span></button>
+        </div>
+      </Card>
+    );
+  }
+
   return (
-    <Card className={`m-focus ${phase === "break" ? "is-break" : ""}`} title="Fokusøkt">
-      {idle ? (
+    <Card className="m-focus">
+      {open && (
         <>
           <input
             className="m-input"
@@ -251,21 +262,22 @@ function FocusCard({ state, onStart, onPause, onSkip, onStop, onActivity, onSett
             <button type="button" onClick={() => onSetting("break", breakMinutes >= 20 ? 5 : breakMinutes + 5)}>Pause <strong>{breakMinutes} min</strong></button>
             <button type="button" onClick={() => onSetting("sets", sets >= 4 ? 1 : sets + 1)}>Sett <strong>{sets}</strong></button>
           </div>
-          <button className="m-wide-button is-primary" type="button" onClick={onStart}>
-            <PlayCircle size={20} weight="fill" /> Start økt
-          </button>
-        </>
-      ) : (
-        <>
-          <span className="m-eyebrow">{phase === "break" ? "Pause" : activity || "Fokus"} · sett {set} av {sets}</span>
-          <strong className="m-timer">{formatTimer(seconds)}</strong>
-          <div className="m-focus-controls">
-            <button type="button" onClick={onPause}>{running ? <Pause size={20} weight="fill" /> : <Play size={20} weight="fill" />}<span>{running ? "Pause" : "Fortsett"}</span></button>
-            <button type="button" onClick={onSkip}><SkipForward size={20} weight="fill" /><span>Hopp</span></button>
-            <button type="button" onClick={onStop}><Stop size={20} weight="fill" /><span>Avslutt</span></button>
-          </div>
         </>
       )}
+      <div className="m-focus-start">
+        <button className="m-wide-button is-primary" type="button" onClick={onStart}>
+          <PlayCircle size={20} weight="fill" /> {activity ? `Start ${activity}` : "Start fokusøkt"} · {workMinutes} min
+        </button>
+        <button
+          className="m-icon-button"
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          aria-expanded={open}
+          aria-label={open ? "Skjul innstillinger for fokusøkten" : "Endre aktivitet og lengder"}
+        >
+          <SlidersHorizontal size={17} weight="bold" />
+        </button>
+      </div>
     </Card>
   );
 }
@@ -292,83 +304,21 @@ function ActionRow({ actions }) {
   );
 }
 
-function DayPage({ date, events, plan, done, connected, onDone, onMove, onToday }) {
-  const doneIds = new Set((Array.isArray(done) ? done : []).flatMap((entry) => (entry?.id ? [entry.id] : [])));
-  const allDay = events.filter((event) => event.allDay);
-  // Uten en dagsmal finnes ingen skyving, og da er kalenderen selv lista.
-  const rows = plan
-    ? plan.placed.map((block) => ({ id: block.id, title: block.title, tone: block.tone, done: block.done, time: `${minuteClock(block.startMinute)}–${minuteClock(block.endMinute)}` }))
-    : events
-      .filter((event) => !event.allDay)
-      .sort((a, b) => +new Date(a.start) - +new Date(b.start))
-      .map((event) => ({
-        id: event.id,
-        title: event.title,
-        tone: event.tone,
-        done: doneIds.has(event.id),
-        time: `${clockText(new Date(event.start))}–${clockText(new Date(event.end))}`,
-      }));
-
-  return (
-    <>
-      <div className="m-daybar">
-        <button type="button" onClick={() => onMove(-1)} aria-label="I går"><CaretLeft size={20} weight="bold" /></button>
-        <button className="m-daybar-label" type="button" onClick={onToday}>{dateText(date)}</button>
-        <button type="button" onClick={() => onMove(1)} aria-label="I morgen"><CaretRight size={20} weight="bold" /></button>
-      </div>
-
-      {!connected && <Card><p className="m-empty">Apple Kalender kobles til. Åpne Kalender på Mac-en.</p></Card>}
-
-      {plan?.shift > 0 && (
-        <p className="m-shift">Dagen er skjøvet {formatMinutes(plan.shift)} fra oppvåkningen.</p>
-      )}
-
-      {allDay.length > 0 && (
-        <Card title="Hele dagen">
-          <ul className="m-plain-list">
-            {allDay.map((event) => <li key={event.id}>{event.title}</li>)}
-          </ul>
-        </Card>
-      )}
-
-      <Card title={rows.length ? `${rows.length} ${rows.length === 1 ? "avtale" : "avtaler"}` : "Dagen"}>
-        {rows.length === 0 ? (
-          <p className="m-empty">{connected ? "Ingenting står i kalenderen denne dagen." : "Venter på Kalender på Mac-en."}</p>
-        ) : (
-          <ul className="m-day-list">
-            {rows.map((row) => (
-              <li key={row.id} className={row.done ? "is-done" : ""}>
-                <button type="button" onClick={() => onDone(row.id)} aria-label={row.done ? `Angre avhuking av ${row.title}` : `Huk av ${row.title}`}>
-                  <span className="m-check">{row.done && <Check size={14} weight="bold" />}</span>
-                  <span className="m-day-text">
-                    <strong className={`tone-${row.tone}`}>{row.title}</strong>
-                    <small>{row.time}</small>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      {plan?.dropped?.length > 0 && (
-        <Card title="Dette rakk du ikke">
-          <ul className="m-plain-list">
-            {plan.dropped.map((block) => <li key={block.id}>{block.title} · {formatMinutes(block.minutes)}</li>)}
-          </ul>
-        </Card>
-      )}
-    </>
-  );
-}
-
-function UsageCard({ usage, now }) {
+function UsageCard({ usage, now, refreshing, onRefresh }) {
   const providers = [
     { key: "codex", name: "Codex", data: usage?.codex },
     { key: "claude", name: "Claude", data: usage?.claude },
   ];
   return (
-    <Card title="AI-bruk">
+    <Card
+      className="m-usage-card"
+      title="AI-bruk"
+      action={(
+        <button className="m-icon-button" type="button" onClick={onRefresh} disabled={refreshing} aria-label="Hent kvotene på nytt">
+          <ArrowClockwise size={16} weight="bold" />
+        </button>
+      )}
+    >
       {providers.map(({ key, name, data }) => (
         <div className="m-usage" key={key}>
           <div className="m-usage-head">
@@ -514,7 +464,6 @@ function ConnectionCard({ checks, onRepair }) {
 export function MobilePanel() {
   const [page, setPage] = useState(() => readPage(window.sessionStorage));
   const [now, setNow] = useState(() => new Date());
-  const [date, setDate] = useState(() => new Date());
   const [toast, setToast] = useState("");
   const [subjects, setSubjects] = useState([]);
   const [agentSessions, setAgentSessions] = useState(null);
@@ -546,7 +495,7 @@ export function MobilePanel() {
     initial: { notes: [], connected: false },
     onError: (current) => ({ ...current, connected: false }),
   });
-  const [dayPlan, refreshDayPlan, setDayPlan] = usePolledResource("/api/day-plan", {
+  const [dayPlan, refreshDayPlan] = usePolledResource("/api/day-plan", {
     interval: 30_000,
     initial: { template: null, wake: null, connected: false },
     onError: (current) => ({ ...current, connected: false }),
@@ -580,14 +529,6 @@ export function MobilePanel() {
     }
   }, [page]);
 
-  // Panelet står i festet døgnet rundt, så datoen må følge døgnskiftet selv.
-  const trackedToday = useRef(now);
-  useEffect(() => {
-    const rollover = followCalendarDay(date, trackedToday.current, now);
-    trackedToday.current = rollover.today;
-    if (rollover.rolled) setDate(rollover.date);
-  }, [now, date]);
-
   useEffect(() => {
     const controller = createScreenWakeLockController({
       wakeLock: navigator.wakeLock,
@@ -615,7 +556,7 @@ export function MobilePanel() {
   }, []);
 
   useEffect(() => {
-    if (page !== "status") return undefined;
+    if (page !== "ai") return undefined;
     let active = true;
     async function load() {
       try {
@@ -691,21 +632,6 @@ export function MobilePanel() {
     localStorage.setItem("panel-mobile-awake", wanted ? "on" : "off");
   }
 
-  async function markDone(id) {
-    try {
-      const response = await fetch("/api/day-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "done", id, at: new Date().toISOString() }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
-      setDayPlan((current) => ({ ...current, wake: result.wake }));
-    } catch (error) {
-      setToast(`Kunne ikke huke av bolken (${error.message})`);
-    }
-  }
-
   async function repairConnection(id) {
     try {
       const response = await fetch("/api/connections/repair", {
@@ -732,19 +658,6 @@ export function MobilePanel() {
   }
 
   const calendarEvents = Array.isArray(syncCalendar.events) ? syncCalendar.events : [];
-  const selectedDayEvents = eventsOnDay(calendarEvents, date);
-  const plannedDay = useMemo(() => {
-    if (!dayPlan.template) return null;
-    return planCalendarDay({
-      events: selectedDayEvents,
-      wokeAt: dayPlan.wake?.wokeAt ?? null,
-      wakeAnchor: dayPlan.template.wakeAnchor,
-      dayEnd: dayPlan.template.dayEnd,
-      day: date,
-      done: dayPlan.wake?.done ?? [],
-    });
-  }, [dayPlan.template, dayPlan.wake, selectedDayEvents, date]);
-
   // «Akkurat nå» og «Neste» handler om nå, ikke om den dagen man har bladd seg
   // fram til — ellers ville kortene endre seg av å bla i Dagen-siden.
   const todayKey = now.toDateString();
@@ -845,28 +758,15 @@ export function MobilePanel() {
           </>
         )}
 
-        {page === "dagen" && (
-          <DayPage
-            date={date}
-            events={selectedDayEvents}
-            plan={plannedDay}
-            done={dayPlan.wake?.done ?? []}
-            connected={Boolean(syncCalendar.connected)}
-            onDone={markDone}
-            onMove={(direction) => setDate((current) => new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction))}
-            onToday={() => setDate(new Date())}
-          />
+        {page === "ai" && (
+          <>
+            <UsageCard usage={usage} now={now} refreshing={usageRefreshing} onRefresh={refreshAll} />
+            <AgentsCard snapshot={agentSessions} now={now} />
+          </>
         )}
 
         {page === "status" && (
           <>
-            <div className="m-refresh-row">
-              <button type="button" onClick={refreshAll} disabled={usageRefreshing}>
-                <ArrowClockwise size={16} weight="bold" /> {usageRefreshing ? "Oppdaterer …" : "Oppdater"}
-              </button>
-            </div>
-            <UsageCard usage={usage} now={now} />
-            <AgentsCard snapshot={agentSessions} now={now} />
             <MetricsCard metrics={deviceMetrics} rhythm={dayPlan.rhythm} now={now} />
             <ConnectionCard checks={checks} onRepair={repairConnection} />
           </>

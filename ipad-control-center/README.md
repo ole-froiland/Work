@@ -191,12 +191,18 @@ Valgt side huskes i `sessionStorage`, så et panel som står i festet kommer
 tilbake der det sto.
 
 - **Nå** — klokke, «Akkurat nå» og «Neste» med fagknapp, Spotify med cover og
-  enhetsvelger, fokusøkt med nedtelling, og knappene Fokus, Skjerm, Skole og
-  Våken.
-- **Dagen** — dagens avtaler som loddrett liste med avhuking, den skjøvede
-  planen og det som falt ut. Piler for i går og i morgen.
-- **Status** — AI-bruk, agent-øktene, skritt, sosial tid, søvn, vær og
-  tilkoblingsradene med ett-trykks reparasjon.
+  enhetsvelger, fokusøkt, og knappene Fokus, Skjerm, Skole og Våken.
+- **AI** — kvotene for Codex og Claude med gjenstående prosent og nedtelling, og
+  de tre nyeste agent-øktene med hva som jobber, er ferdig eller trenger svar.
+- **Status** — skritt, sosial tid, søvn og vær, og tilkoblingsradene med
+  ett-trykks reparasjon.
+
+Ingen av sidene skal være så lange at de må blas i. Høyden er det knappe på en
+telefon, ikke bredden, så kortene er målt mot skjermen og ikke omvendt:
+fokusøkta ligger sammenlagt som én startknapp til den faktisk er i gang, og
+lengdene åpnes med tannhjulet ved siden av. Rulling står igjen som
+sikkerhetsventil — en side som kan dras noen piksler er bedre enn en side som
+klipper bort bunnen i stillhet — men i vanlig drift skal ventilen ikke brukes.
 
 Datalaget finnes bare én gang. `usePolledResource` ligger i `src/panel-data.js`,
 Spotify Connect-logikken i `src/spotify-client.js` og Mac-kallet i

@@ -5,7 +5,7 @@
    Ingenting her går under 13 px, og ingen trykkflate under 44 px. */
 
 .m-shell {
-  --m-gap: 12px;
+  --m-gap: 9px;
   --m-radius: 18px;
   height: 100dvh;
   display: grid;
@@ -30,11 +30,15 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Kortene skal ikke klemmes sammen for å gi plass til hverandre. Passer alt,
+   står de i sin naturlige høyde; gjør det ikke, er det siden som gir etter. */
+.m-pages > * { flex: 0 0 auto; }
+
 .m-clock { display: flex; flex-direction: column; gap: 2px; padding: 4px 4px 0; }
-.m-clock strong { font-size: 46px; font-weight: 600; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.m-clock strong { font-size: 38px; font-weight: 600; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .m-clock span { color: var(--muted); font-size: 14px; }
 
-.m-card { display: flex; flex-direction: column; gap: 10px; padding: 15px; border: 1px solid var(--line-soft); border-radius: var(--m-radius); background: var(--panel); }
+.m-card { display: flex; flex-direction: column; gap: 9px; padding: 13px; border: 1px solid var(--line-soft); border-radius: var(--m-radius); background: var(--panel); }
 .m-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .m-card-head h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 
@@ -44,9 +48,9 @@
 /* Akkurat nå og Neste deler kortet. Skillestreken gjør at de leses som to svar
    og ikke som én lang setning. */
 .m-activity { gap: 0; padding: 0; }
-.m-activity-slot { display: flex; flex-direction: column; gap: 4px; padding: 15px; }
+.m-activity-slot { display: flex; flex-direction: column; gap: 3px; padding: 11px 13px; }
 .m-activity-slot + .m-activity-slot { border-top: 1px solid var(--line-soft); }
-.m-activity-title { font-size: 19px; font-weight: 650; line-height: 1.25; letter-spacing: -.01em; }
+.m-activity-title { font-size: 18px; font-weight: 650; line-height: 1.22; letter-spacing: -.01em; }
 .m-activity-meta { color: var(--muted); font-size: 14px; }
 
 .tone-violet { color: var(--violet); }
@@ -54,10 +58,10 @@
 .tone-orange { color: var(--orange); }
 .tone-blue { color: var(--blue); }
 
-.m-subject { min-height: 44px; margin-top: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border: 0; border-radius: 13px; background: var(--violet); color: #251d48; font-size: 15px; font-weight: 650; cursor: pointer; }
+.m-subject { min-height: 44px; margin-top: 3px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border: 0; border-radius: 13px; background: var(--violet); color: #251d48; font-size: 15px; font-weight: 650; cursor: pointer; }
 
 .m-music-top { display: flex; align-items: center; gap: 12px; }
-.m-art { width: 60px; height: 60px; flex: 0 0 60px; display: grid; place-items: center; overflow: hidden; border-radius: 13px; background: var(--panel-raised); color: var(--muted); }
+.m-art { width: 54px; height: 54px; flex: 0 0 54px; display: grid; place-items: center; overflow: hidden; border-radius: 13px; background: var(--panel-raised); color: var(--muted); }
 .m-art img { width: 100%; height: 100%; object-fit: cover; }
 .m-music-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .m-music-text strong { overflow: hidden; font-size: 17px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
@@ -67,7 +71,7 @@
 .m-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--lime); transition: width 900ms linear; }
 
 .m-music-controls { display: grid; grid-template-columns: 52px 60px 52px minmax(0, 1fr); align-items: center; gap: 8px; }
-.m-music-controls button { min-height: 48px; display: grid; place-items: center; border: 0; border-radius: 14px; background: var(--panel-raised); color: var(--text); cursor: pointer; }
+.m-music-controls button { min-height: 46px; display: grid; place-items: center; border: 0; border-radius: 14px; background: var(--panel-raised); color: var(--text); cursor: pointer; }
 .m-music-controls button.is-primary { background: var(--lime); color: var(--lime-ink); }
 .m-music-controls button:disabled { opacity: .5; }
 .m-device { min-width: 0; overflow: hidden; padding: 0 12px; color: var(--muted); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -86,7 +90,7 @@
 .m-wide-button.is-primary { background: var(--lime); color: var(--lime-ink); }
 
 .m-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.m-action { min-height: 74px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--line-soft); border-radius: var(--m-radius); background: var(--panel); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
+.m-action { min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--line-soft); border-radius: var(--m-radius); background: var(--panel); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
 /* Av og på skal kunne ses uten å lese: slått på er full farge, slått av er
    kortets egen bakgrunn. */
 .m-action.is-on { border-color: transparent; }
@@ -95,31 +99,20 @@
 .m-action.tone-orange.is-on { background: var(--orange); color: #2b211b; }
 .m-action.tone-blue.is-on { background: var(--blue); color: #10222f; }
 
-.m-daybar { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: center; gap: 6px; }
-.m-daybar button { min-height: 48px; display: grid; place-items: center; border: 0; border-radius: 14px; background: var(--panel); color: var(--text); cursor: pointer; }
-.m-daybar-label { font-size: 16px; font-weight: 650; }
-.m-shift { margin: 0; padding: 0 4px; color: var(--violet); font-size: 14px; }
 
-.m-day-list, .m-plain-list, .m-agent-list, .m-metrics, .m-connections { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.m-plain-list li { color: var(--muted); font-size: 15px; }
+.m-agent-list, .m-metrics, .m-connections { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
 
-.m-day-list li > button { width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 9px 11px; border: 0; border-radius: 14px; background: var(--panel-raised); color: inherit; text-align: left; cursor: pointer; }
-.m-day-list li.is-done > button { opacity: .45; }
-.m-day-list li.is-done strong { text-decoration: line-through; }
-.m-check { width: 26px; height: 26px; flex: 0 0 26px; display: grid; place-items: center; border: 2px solid var(--line); border-radius: 9px; color: var(--lime); }
 .m-day-text { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 2px; }
-.m-day-text strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 16px; font-weight: 600; line-height: 1.3; }
+.m-day-text strong { font-size: 16px; font-weight: 600; line-height: 1.3; }
 .m-day-text small { color: var(--muted); font-size: 14px; }
 
-.m-refresh-row { display: flex; justify-content: flex-end; }
-.m-refresh-row button { min-height: 44px; display: flex; align-items: center; gap: 7px; padding: 0 15px; border: 1px solid var(--line-soft); border-radius: 13px; background: var(--panel); color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; }
 
-.m-usage { display: flex; flex-direction: column; gap: 8px; }
-.m-usage + .m-usage { padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.m-usage { display: flex; flex-direction: column; gap: 7px; }
+.m-usage + .m-usage { padding-top: 10px; border-top: 1px solid var(--line-soft); }
 .m-usage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .m-usage-head strong { font-size: 16px; }
 .m-usage-head small { color: #ff9aa1; font-size: 13px; text-align: right; }
-.m-usage-window { display: flex; flex-direction: column; gap: 5px; }
+.m-usage-window { display: flex; flex-direction: column; gap: 4px; }
 .m-usage-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .m-usage-line span { color: var(--muted); font-size: 14px; }
 .m-usage-line strong { font-size: 17px; font-variant-numeric: tabular-nums; }
@@ -127,7 +120,7 @@
 .m-bar { height: 5px; overflow: hidden; border-radius: 999px; background: #232a33; }
 .m-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--lime); }
 
-.m-agent-list li { display: flex; flex-direction: column; gap: 4px; padding: 11px; border-radius: 14px; background: var(--panel-raised); }
+.m-agent-list li { display: flex; flex-direction: column; gap: 3px; padding: 10px 11px; border-radius: 14px; background: var(--panel-raised); }
 .m-agent-list li.is-working { background: #1e2a1c; }
 .m-agent-list li.is-ended { background: #211d1d; }
 .m-agent-list strong { font-size: 15px; font-weight: 650; }
@@ -147,7 +140,7 @@
 .m-metric-text strong { font-size: 17px; font-weight: 650; }
 .m-metric-text small { color: var(--muted); font-size: 13px; line-height: 1.4; }
 
-.m-connections li > button { width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 10px 11px; border: 0; border-radius: 14px; background: var(--panel-raised); color: inherit; text-align: left; cursor: pointer; }
+.m-connections li > button { width: 100%; min-height: 50px; display: flex; align-items: center; gap: 11px; padding: 8px 11px; border: 0; border-radius: 13px; background: var(--panel-raised); color: inherit; text-align: left; cursor: pointer; }
 .m-dot { width: 26px; height: 26px; flex: 0 0 26px; display: grid; place-items: center; border-radius: 9px; }
 .m-dot.is-ok { background: rgba(216, 255, 98, .16); color: var(--lime); }
 .m-dot.is-bad { background: rgba(255, 125, 134, .16); color: #ff9aa1; }
@@ -174,3 +167,15 @@
 @media (prefers-reduced-motion: reduce) {
   .m-progress > span { transition: none; }
 }
+
+/* Oppdater ligger i kvotekortets egen overskrift. En egen rad over kortene
+   kostet 60 px for én knapp, og høyde er det eneste knappe på en telefon. */
+.m-icon-button { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--panel-raised); color: var(--muted); cursor: pointer; }
+.m-icon-button:disabled { opacity: .5; }
+
+/* Startknappen og tannhjulet deler raden. Knappen tar plassen som er igjen,
+   slik at aktivitetsnavnet får stå i den. */
+.m-focus-start { display: flex; align-items: stretch; gap: 8px; }
+.m-focus-start .m-wide-button { flex: 1; min-width: 0; }
+.m-focus-start .m-wide-button > span, .m-focus-start .m-wide-button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-focus-start .m-icon-button { width: 48px; height: auto; flex: 0 0 48px; }
