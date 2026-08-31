@@ -14,6 +14,7 @@
 		29B2C7BE9C423849B16A9165 /* WakeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1784149B81019906F7A66AA /* WakeDetector.swift */; };
 		2E3470A3BEEE8AB32B2116CD /* pling.caf in Resources */ = {isa = PBXBuildFile; fileRef = 3189D511A4D03F9B76C49245 /* pling.caf */; };
 		A6872E43C7A5C2595E075EA1 /* SocialApps.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF367E00C6A569F789462E37 /* SocialApps.swift */; };
+		B6D894DA6B56CEC91FFB4376 /* PanelEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD55B1B2C01F751DF97B6C9 /* PanelEndpoint.swift */; };
 		B9C47769C54B835B6BC970A6 /* MetricsSyncModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D671052259C864180C513CEA /* MetricsSyncModel.swift */; };
 		E221B7E2F834BCCA3BB46BEA /* SleepAlarms.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA725DC9CD9250B649EE1E37 /* SleepAlarms.swift */; };
 		F201AFA11B4EC4843D506BF1 /* BedtimeWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A75593EF857BB2094BB731EB /* BedtimeWatch.swift */; };
@@ -30,6 +31,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1FD55B1B2C01F751DF97B6C9 /* PanelEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelEndpoint.swift; sourceTree = "<group>"; };
 		2525514BB8E0EE10AED1AF16 /* PanelCompanionUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PanelCompanionUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3189D511A4D03F9B76C49245 /* pling.caf */ = {isa = PBXFileReference; path = pling.caf; sourceTree = "<group>"; };
 		42F90B25E55B24B3FA51E971 /* PanelCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelCompanionApp.swift; sourceTree = "<group>"; };
@@ -60,6 +62,7 @@
 				6C7B1D7A907762B24D03F786 /* LocationProvider.swift */,
 				D671052259C864180C513CEA /* MetricsSyncModel.swift */,
 				42F90B25E55B24B3FA51E971 /* PanelCompanionApp.swift */,
+				1FD55B1B2C01F751DF97B6C9 /* PanelEndpoint.swift */,
 				DA725DC9CD9250B649EE1E37 /* SleepAlarms.swift */,
 				DF367E00C6A569F789462E37 /* SocialApps.swift */,
 				6DB8D89EEDDDDB32E7FE9C6B /* SyncView.swift */,
@@ -93,6 +96,13 @@
 				2525514BB8E0EE10AED1AF16 /* PanelCompanionUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		"TEMP_7543D206-5CE1-4A62-8A35-1C154FF53FEC" /* .claude */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = .claude;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -151,7 +161,7 @@
 					D578E9B25E369E7C74FB9E9E = {
 						DevelopmentTeam = KK679X38PZ;
 						ProvisioningStyle = Automatic;
-						SystemCapabilities = "[\"com.apple.HealthKit\": [\"enabled\": 1], \"com.apple.FamilyControls\": [\"enabled\": 1]]";
+						SystemCapabilities = "[\"com.apple.FamilyControls\": [\"enabled\": 1], \"com.apple.HealthKit\": [\"enabled\": 1]]";
 					};
 				};
 			};
@@ -203,6 +213,7 @@
 				20938863155F270253C4EC61 /* LocationProvider.swift in Sources */,
 				B9C47769C54B835B6BC970A6 /* MetricsSyncModel.swift in Sources */,
 				1B6458F54A82FF8C253386D6 /* PanelCompanionApp.swift in Sources */,
+				B6D894DA6B56CEC91FFB4376 /* PanelEndpoint.swift in Sources */,
 				E221B7E2F834BCCA3BB46BEA /* SleepAlarms.swift in Sources */,
 				A6872E43C7A5C2595E075EA1 /* SocialApps.swift in Sources */,
 				2263B5B4FDE8DE9F91AEBC0C /* SyncView.swift in Sources */,

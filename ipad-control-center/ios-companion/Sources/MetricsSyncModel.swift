@@ -31,18 +31,36 @@ final class MetricsSyncModel: ObservableObject {
     static let shared = MetricsSyncModel()
     static let backgroundTaskIdentifier = "no.olefroiland.PanelCompanion.refresh"
 
-    @Published var endpoint = UserDefaults.standard.string(forKey: "panelEndpoint")
-        ?? "http://Ole-sin-MacBook-Air.local:4173/api/device-metrics"
+    // To adresser, ikke én: hjemmenettet svarer raskest når telefonen er hjemme,
+    // tailnettet er det eneste som svarer resten av døgnet. Rekkefølgen og
+    // gyldigheten avgjøres i `PanelEndpoint`, som WakeDetector og SleepAlarms
+    // deler med denne.
+    @Published var endpoint = PanelEndpoint.primary
+    @Published var fallbackEndpoint = PanelEndpoint.fallback
+    @Published private(set) var deliveredTo = PanelEndpoint.lastGoodHost
     @Published private(set) var screenTimeStatus = "Ikke godkjent"
     @Published private(set) var stepsStatus = "Ikke godkjent"
     @Published private(set) var locationStatus = "Ikke godkjent"
     @Published private(set) var lastSync: Date?
     @Published private(set) var errorMessage: String?
     @Published private(set) var isSyncing = false
+    @Published private(set) var backgroundDeliveryStatus = "Ikke slått på ennå"
+
+    // En synk som har stått lenger enn dette har ikke krav på plassen lenger.
+    // Fristen er romslig nok til at en treg, men levende, kjøring får gjøre seg
+    // ferdig i fred.
+    private static let syncDeadline: TimeInterval = 90
+    private static let retryNormal: TimeInterval = 30 * 60
+    // En feilet synk skyldes nesten alltid at Mac-en sov eller at telefonen var
+    // ute av hjemmenettet. Begge deler går over av seg selv, så da er det verdt
+    // å be om en ny sjanse snart framfor å vente en halvtime.
+    private static let retrySoon: TimeInterval = 5 * 60
 
     private let healthStore = HKHealthStore()
     private let locationProvider = LocationProvider()
     private var stepsObserverQuery: HKObserverQuery?
+    private var syncStartedAt: Date?
+    private var syncGeneration = 0
 
     // BGAppRefresh er bare et ønske til iOS og kan bli utsatt lenge. Skritt har
     // en bedre, datadrevet vekkemekanisme: HealthKit starter appen når nye
@@ -73,7 +91,18 @@ final class MetricsSyncModel: ObservableObject {
         }
         // Første forsøk kan skje før brukeren har godkjent Helse. Metoden
         // kalles derfor også rett etter tillatelsesdialogen og ved hver oppstart.
-        healthStore.enableBackgroundDelivery(for: stepType, frequency: .hourly) { _, _ in }
+        //
+        // Svaret ble tidligere kastet. Sier iOS nei — fordi Helse ikke er
+        // godkjent, eller fordi appen er sveipet vekk fra app-veksleren — er det
+        // nettopp da panelet blir stående stille, og da skal grunnen stå å lese
+        // i appen framfor å være noe man gjetter seg til en uke senere.
+        healthStore.enableBackgroundDelivery(for: stepType, frequency: .hourly) { enabled, error in
+            Task { @MainActor [weak self] in
+                self?.backgroundDeliveryStatus = enabled
+                    ? "På · hver time"
+                    : (error?.localizedDescription ?? "Av")
+            }
+        }
     }
 
     func connectAndSync() async {
@@ -81,16 +110,39 @@ final class MetricsSyncModel: ObservableObject {
     }
 
     func refreshAll(requestPermissions: Bool) async {
-        guard !isSyncing else { return }
+        // Flagget alene var en enveisdør. Sto én synk fast — og opplastingen
+        // hadde ingen egen frist, så den kunne stå i minutter — ble `isSyncing`
+        // aldri satt tilbake, og hver senere automatiske synk snudde i døra uten
+        // å ha forsøkt noe som helst. Panelet så da nøyaktig ut som om telefonen
+        // aldri hadde ringt. Derfor har flagget nå en frist: er den gått ut,
+        // regnes kjøringen som død og den nye overtar plassen.
+        if isSyncing, let startedAt = syncStartedAt, Date.now.timeIntervalSince(startedAt) < Self.syncDeadline {
+            // Den tidlige returen lå også utenfor `defer` og planla ingenting.
+            // Møttes to synker på feil sekund, tok de bakgrunnskjeden med seg.
+            scheduleBackgroundRefresh()
+            return
+        }
+        syncGeneration += 1
+        let generation = syncGeneration
         isSyncing = true
+        syncStartedAt = .now
         errorMessage = nil
         // Neste bakgrunnskjøring må planlegges uansett utfall. Lå kallet bare på
         // suksessgrenen, døde kjeden for godt første gang en synk feilet — for
         // eksempel når telefonen var utenfor hjemmenettet og .local-adressen
         // ikke svarte. Da våknet appen aldri igjen av seg selv.
         defer {
-            isSyncing = false
-            scheduleBackgroundRefresh()
+            // Bare den nyeste kjøringen rydder. En fastlåst synk som endelig gir
+            // opp skal ikke slå av flagget under den som allerede har overtatt.
+            if generation == syncGeneration {
+                isSyncing = false
+                syncStartedAt = nil
+                // Sto adressen igjen fra forrige gang, ville raden i appen si
+                // «levert til hjemmenettet» også etter at hjemmenettet sluttet
+                // å svare. Den skal si hva som gjelder nå.
+                deliveredTo = PanelEndpoint.lastGoodHost
+            }
+            scheduleBackgroundRefresh(after: errorMessage == nil ? Self.retryNormal : Self.retrySoon)
         }
 
         do {
@@ -262,10 +314,12 @@ final class MetricsSyncModel: ObservableObject {
         guard screenTime != nil || steps != nil || location != nil else {
             throw SyncError.nothingToSend
         }
-        guard let url = URL(string: endpoint), url.host?.hasSuffix(".local") == true || url.host?.isPrivateNetworkAddress == true else {
-            throw SyncError.invalidLocalEndpoint
-        }
-        UserDefaults.standard.set(endpoint, forKey: "panelEndpoint")
+        // Adressene lagres før forsøket, ikke etter. Skrives de bare ved en
+        // vellykket synk, ville en adresse Ole nettopp har rettet opp i vært
+        // glemt igjen neste gang appen startet — nettopp i den situasjonen der
+        // den var feil.
+        PanelEndpoint.primary = endpoint
+        PanelEndpoint.fallback = fallbackEndpoint
         let now = Date.now
         // Bare kildene som faktisk svarte føres opp. Panelet måler ferskhet per
         // kilde, så en oppføring uten tall bak ville fått resten til å se friskt
@@ -281,19 +335,16 @@ final class MetricsSyncModel: ObservableObject {
             sources: sources,
             deviceName: UIDevice.current.name
         )
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder.panelEncoder.encode(payload)
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw SyncError.dashboardRejected
-        }
+        try await PanelEndpoint.send(
+            path: "device-metrics",
+            method: "POST",
+            body: JSONEncoder.panelEncoder.encode(payload)
+        )
     }
 
-    func scheduleBackgroundRefresh() {
+    func scheduleBackgroundRefresh(after delay: TimeInterval = MetricsSyncModel.retryNormal) {
         let request = BGAppRefreshTaskRequest(identifier: Self.backgroundTaskIdentifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: delay)
         try? BGTaskScheduler.shared.submit(request)
     }
 }
@@ -321,27 +372,18 @@ private extension JSONEncoder {
     }
 }
 
-// Delt med WakeDetector. Sjekken avgjør hvilke verter appen i det hele tatt
-// snakker med, og skal finnes ett sted framfor å drive fra hverandre i to.
-extension String {
-    var isPrivateNetworkAddress: Bool {
-        self == "localhost" || hasPrefix("192.168.") || hasPrefix("10.") || hasPrefix("172.16.") || hasPrefix("172.17.") || hasPrefix("172.18.") || hasPrefix("172.19.") || hasPrefix("172.2") || hasPrefix("172.30.") || hasPrefix("172.31.")
-    }
-}
-
+// Vertssjekken lå her som en `String`-utvidelse WakeDetector lånte. Den bor nå i
+// `PanelEndpoint` sammen med rekkefølgen adressene prøves i, slik at det finnes
+// ett svar på «hvem snakker appen med» og ikke to som kan drive fra hverandre.
 enum SyncError: LocalizedError {
     case healthUnavailable
     case screenTimeDataAccessRequired
-    case invalidLocalEndpoint
-    case dashboardRejected
     case nothingToSend
 
     var errorDescription: String? {
         switch self {
         case .healthUnavailable: "Helsedata er ikke tilgjengelig på denne enheten."
         case .screenTimeDataAccessRequired: "Gi full tilgang til app- og nettstedbruk for å hente nøyaktig skjermtid."
-        case .invalidLocalEndpoint: "Dashboard-adressen må være en lokal .local- eller privat nettverksadresse."
-        case .dashboardRejected: "Dashboardet avviste synkroniseringen. Kontroller at Mac-en og mobilen er på samme nettverk."
         case .nothingToSend: "Ingen av kildene svarte, så det var ingenting å sende."
         }
     }

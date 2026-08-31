@@ -138,11 +138,7 @@ final class SleepAlarms {
     }
 
     private func fetchSchedule() async -> [[String: Any]]? {
-        guard let url = WakeDetector.shared.dayPlanURL() else { return nil }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 8
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse, http.statusCode == 200,
+        guard let data = try? await PanelEndpoint.send(path: "day-plan"),
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let schedule = payload["schedule"] as? [[String: Any]] else { return nil }
         return schedule

@@ -102,7 +102,7 @@ final class WakeDetector {
 
     func flushPending() async {
         var queue = defaults.array(forKey: queueKey) as? [[String: String]] ?? []
-        guard !queue.isEmpty, let target = WakeDetector.shared.dayPlanURL() else { return }
+        guard !queue.isEmpty else { return }
         let today = isoDay(.now)
         var levert: [String] = []
         for entry in queue {
@@ -115,34 +115,27 @@ final class WakeDetector {
                 : ["kind": "night", "date": date, "wokeAt": wokeAt]
             if let sleepAt = entry["sleepAt"] { body["sleepAt"] = sleepAt }
             if entry["ignoredBedtime"] == "1" { body["ignoredBedtime"] = true }
-            if await post(body, to: target) { levert.append(date) }
+            // Feiler én, feiler resten: de går alle til samme vert. Køen kan
+            // holde nitti netter, og åtte sekunder hver ville blitt tolv minutter
+            // med venting — tid HealthKit-oppvåkningen ikke har, og som gikk rett
+            // fra skrittsynken. Resten blir liggende til Mac-en svarer igjen.
+            guard await post(body) else { break }
+            levert.append(date)
         }
         queue.removeAll { levert.contains($0["date"] ?? "") }
         defaults.set(queue, forKey: queueKey)
     }
 
-    private func post(_ body: [String: Any], to url: URL) async -> Bool {
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 8
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        guard let (_, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
-        return true
+    private func post(_ body: [String: Any]) async -> Bool {
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else { return false }
+        // Adressene og rekkefølgen ligger i PanelEndpoint. Nettene tok tidligere
+        // bare veien over hjemmenettet, mens alarmene og skrittene skulle samme
+        // sted — nå går alle tre samme vei og finner Mac-en der den er å finne.
+        return (try? await PanelEndpoint.send(path: "day-plan", method: "POST", body: data)) != nil
     }
 
     private func isoDay(_ date: Date) -> String {
         let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-    }
-
-    // Endepunktet ligger ved siden av det companion allerede sender til, og
-    // arver den samme begrensningen på hvilke verter appen snakker med.
-    func dayPlanURL() -> URL? {
-        guard let endpoint = defaults.string(forKey: "panelEndpoint"),
-              let url = URL(string: endpoint),
-              url.host?.hasSuffix(".local") == true || url.host?.isPrivateNetworkAddress == true else { return nil }
-        return url.deletingLastPathComponent().appendingPathComponent("day-plan")
     }
 }

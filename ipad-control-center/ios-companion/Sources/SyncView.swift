@@ -14,6 +14,10 @@ struct SyncView: View {
                     sourceRow("Sosiale medier", status: model.screenTimeStatus, icon: "hourglass")
                     sourceRow("Skritt", status: model.stepsStatus, icon: "figure.walk")
                     sourceRow("Posisjon", status: model.locationStatus, icon: "location.fill")
+                    // Uten denne raden fantes det ingen måte å se forskjell på
+                    // «appen synker i bakgrunnen» og «appen har ikke hatt lov til
+                    // det siden sist den ble åpnet». De to ser like ut på panelet.
+                    sourceRow("Bakgrunnslevering", status: model.backgroundDeliveryStatus, icon: "arrow.clockwise")
                 }
 
                 Section("Alarmer") {
@@ -36,13 +40,40 @@ struct SyncView: View {
                 }
                 .task { oppdaterAlarmstatus() }
 
-                Section("Dashboard på Mac") {
+                // To adresser fordi telefonen er ute det meste av døgnet.
+                // .local-navnet svarer bare på hjemmenettet, og med det som
+                // eneste vei sto panelet stille fra Ole gikk ut om morgenen til
+                // han kom hjem igjen — uten at noe sa fra om hvorfor.
+                Section {
                     TextField("Adresse", text: $model.endpoint)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
+                } header: {
+                    Text("Hjemmenett")
+                } footer: {
+                    Text("Bonjour-navnet til Mac-en. Svarer bare når telefonen er på samme wifi.")
+                }
+
+                Section {
+                    TextField("Adresse", text: $model.fallbackEndpoint)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Utenfor hjemmet")
+                } footer: {
+                    Text("Tailnett-navnet, som svarer likt på skolen, på hotspot og på mobildata. Krever at Tailscale er installert og innlogget på telefonen.")
+                }
+
+                Section("Status") {
                     if let lastSync = model.lastSync {
                         LabeledContent("Sist synket", value: lastSync.formatted(date: .abbreviated, time: .shortened))
+                    }
+                    // Hvilken av de to som faktisk kom fram. Uten denne raden ser
+                    // «virker» og «virker bare hjemme» helt like ut herfra.
+                    if let deliveredTo = model.deliveredTo {
+                        LabeledContent("Levert til", value: deliveredTo)
                     }
                     if let error = model.errorMessage {
                         Text(error).foregroundStyle(.red)
@@ -77,7 +108,7 @@ struct SyncView: View {
 
     private func sourceRow(_ title: String, status: String, icon: String) -> some View {
         LabeledContent {
-            Text(status).foregroundStyle(status == "Klar" ? .green : .secondary)
+            Text(status).foregroundStyle(status == "Klar" || status.hasPrefix("På") ? .green : .secondary)
         } label: {
             Label(title, systemImage: icon)
         }

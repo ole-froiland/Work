@@ -57,3 +57,8 @@ echo
 echo "Ferdig. Appen er åpnet på telefonen og synker i forgrunnen med én gang."
 echo "Godkjenn Helse- og posisjonstilgang hvis den spør, og la Bakgrunnsoppdatering"
 echo "stå på i Innstillinger → Generelt → Bakgrunnsoppdatering."
+echo
+echo "Appen har to adresser: .local-navnet svarer bare på hjemmenettet, tailnett-"
+echo "navnet svarer overalt ellers. Det siste krever at Tailscale er installert og"
+echo "logget inn på telefonen med samme konto som Mac-en — uten det står panelet"
+echo "stille hver gang Ole er ute. Og uansett adresse: Mac-en må være våken."
