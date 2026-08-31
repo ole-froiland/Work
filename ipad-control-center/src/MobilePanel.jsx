@@ -45,6 +45,7 @@ import {
 import { usePolledResource } from "./panel-data.js";
 import { callMacAction } from "./mac-action.js";
 import { useSpotify } from "./spotify-client.js";
+import { ClaudeLogo, CodexLogo } from "./provider-logos.jsx";
 import { clipboardSupport, copyBySelection, fetchMacClipboard, fileToDataUrl, readPhoneClipboard, sendToMac, writePhoneClipboard } from "./clipboard-bridge.js";
 import { createScreenWakeLockController } from "./wake-lock.js";
 import "./mobile.css";
@@ -454,8 +455,8 @@ function ActionRow({ actions }) {
 
 function UsageCard({ usage, now, refreshing, onRefresh }) {
   const providers = [
-    { key: "codex", name: "Codex", data: usage?.codex },
-    { key: "claude", name: "Claude", data: usage?.claude },
+    { key: "codex", name: "Codex", logo: CodexLogo, merke: "code", data: usage?.codex },
+    { key: "claude", name: "Claude", logo: ClaudeLogo, merke: "claude", data: usage?.claude },
   ];
   return (
     <Card
@@ -467,9 +468,10 @@ function UsageCard({ usage, now, refreshing, onRefresh }) {
         </button>
       )}
     >
-      {providers.map(({ key, name, data }) => (
+      {providers.map(({ key, name, logo: Logo, merke, data }) => (
         <div className="m-usage" key={key}>
           <div className="m-usage-head">
+            <span className={`m-provider-logo is-${merke}`}><Logo size={17} /></span>
             <strong>{name}</strong>
             {!data?.ok && <small>{data?.error || "Henter data …"}</small>}
           </div>
@@ -482,7 +484,7 @@ function UsageCard({ usage, now, refreshing, onRefresh }) {
                   <strong>{Number.isFinite(window.remainingPercent) ? `${Math.round(window.remainingPercent)} % igjen` : "–"}</strong>
                 </div>
                 <div className="m-bar"><span style={{ width: `${Math.min(100, Math.max(0, window.usedPercent))}%` }} /></div>
-                <small>{reset.countdown}</small>
+                <small className="m-usage-reset">{reset.countdown}</small>
               </div>
             );
           })}
@@ -505,12 +507,17 @@ function AgentsCard({ snapshot, now }) {
       <ul className="m-agent-list">
         {summary.sessions.map((session) => (
           <li key={session.id} className={`is-${session.tone}`}>
-            <strong>{session.title}</strong>
-            <span className="m-agent-meta">
-              <small><FolderOpen size={12} weight="fill" /> {session.project || "Ukjent mappe"}</small>
-              {session.tone !== "done" && <i className={`m-chip is-${session.tone}`}>{session.label}</i>}
+            <span className={`m-provider-logo is-${session.provider === "codex" ? "code" : "claude"}`}>
+              {session.provider === "codex" ? <CodexLogo size={16} /> : <ClaudeLogo size={16} />}
             </span>
-            <small>{session.detail}</small>
+            <span className="m-agent-text">
+              <strong>{session.title}</strong>
+              <span className="m-agent-meta">
+                <small><FolderOpen size={12} weight="fill" /> {session.project || "Ukjent mappe"}</small>
+                {session.tone !== "done" && <i className={`m-chip is-${session.tone}`}>{session.label}</i>}
+                <small>{session.detail}</small>
+              </span>
+            </span>
           </li>
         ))}
       </ul>
@@ -611,6 +618,9 @@ function ConnectionCard({ checks, onRepair }) {
 
 export function MobilePanel() {
   const [page, setPage] = useState(() => readPage(window.sessionStorage));
+  // Retningen siden kom fra. Uten den ville alt glidd inn fra samme kant, og da
+  // sier bevegelsen ingenting om hvor man er på vei — den bare beveger seg.
+  const [retning, setRetning] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const [toast, setToast] = useState("");
   const [subjects, setSubjects] = useState([]);
@@ -835,9 +845,15 @@ export function MobilePanel() {
   );
 
   const index = PAGES.findIndex((entry) => entry.id === page);
+  function gåTil(id) {
+    const til = PAGES.findIndex((entry) => entry.id === id);
+    if (til < 0 || til === index) return;
+    setRetning(til > index ? 1 : -1);
+    setPage(id);
+  }
   const swipe = useSwipe((direction) => {
     const next = PAGES[Math.min(PAGES.length - 1, Math.max(0, index + direction))];
-    if (next) setPage(next.id);
+    if (next) gåTil(next.id);
   });
 
   const actions = [
@@ -868,7 +884,7 @@ export function MobilePanel() {
 
   return (
     <div className="m-shell" {...swipe}>
-      <main className={`m-pages is-${page}`}>
+      <main className={`m-pages is-${page} ${retning > 0 ? "fra-hoyre" : retning < 0 ? "fra-venstre" : ""}`} key={page}>
         {page === "na" && (
           <>
             <header className="m-clock">
@@ -936,7 +952,7 @@ export function MobilePanel() {
               type="button"
               className={page === entry.id ? "is-active" : ""}
               aria-current={page === entry.id ? "page" : undefined}
-              onClick={() => setPage(entry.id)}
+              onClick={() => gåTil(entry.id)}
             >
               <Icon size={21} weight={page === entry.id ? "fill" : "regular"} />
               <span>{entry.label}</span>

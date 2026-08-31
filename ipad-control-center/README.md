@@ -197,6 +197,15 @@ tilbake der det sto.
 - **Status** — skritt, sosial tid, søvn og vær, og tilkoblingsradene med
   ett-trykks reparasjon.
 
+Sidebytte glir i den retningen man gikk: framover kommer siden fra høyre,
+bakover fra venstre. Bevegelsen skal si hvor man er på vei, ikke bare at noe
+skjedde, og den er kort nok til å ikke stå i veien for et blikk i forbifarten.
+`prefers-reduced-motion` slår den av.
+
+Merkene til Codex og Claude ligger i `src/provider-logos.jsx` og brukes av begge
+visningene — på mobilen både i kvotekortet og på hver agentrad, slik at det går
+å se hvem som jobber uten å lese.
+
 Ingen av sidene skal være så lange at de må blas i. Høyden er det knappe på en
 telefon, ikke bredden, så kortene er målt mot skjermen og ikke omvendt:
 fokusøkta ligger sammenlagt som én startknapp til den faktisk er i gang, og
