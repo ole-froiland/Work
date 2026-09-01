@@ -220,6 +220,19 @@ musikk og knapper til venstre, kvoter og oppgaver til høyre — og fanene flytt
 til en 74 px stripe langs høyre kant. En rad nederst ville spist en sjettedel av
 det som er igjen av høyden.
 
+Stripa er `74px + env(safe-area-inset-right)` bred, ikke 74 px med sonen regnet
+inn. Snus telefonen slik at hakket havner på høyre side, tar sonen 59 av dem, og
+med den gamle bredden satt fanen igjen med 15 px — kamerapillen la seg rett oppå
+den. Den ene liggende retningen virket derfor og den andre ikke.
+
+Kvotene får to tredeler av høyden i høyre spalte og oppgavene én. Forholdet er
+satt med `flex: 2 1 0` og `flex: 1 1 0`, altså på null basis: da avhenger det av
+delingen og ikke av hvor mye innhold hvert kort tilfeldigvis har akkurat nå.
+
+Knappene nederst er ikoner uten tekst. Etiketten måtte krympes til 10,5 px for å
+få plass under fem ruter, og små bokstaver er det som er vanskeligst å lese på
+en armlengdes avstand. Navnet ligger fortsatt i `aria-label` og som tooltip.
+
 Høyre spalte er en egen beholder (`.m-na-side`), ikke løse kort i det samme
 rutenettet. Spaltene delte tidligere rader, og et kvotekort som spente over tre
 av dem blåste opp venstre spalte til sin egen høyde — musikken ble presset til

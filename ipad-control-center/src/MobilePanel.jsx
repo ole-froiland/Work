@@ -432,11 +432,13 @@ function ActionRow({ actions }) {
             key={action.id}
             type="button"
             className={`m-action tone-${action.tone} ${action.active ? "is-on" : ""} ${action.venter ? "is-venter" : ""}`}
+            title={action.label}
+            aria-label={action.label}
             onClick={action.onPress}
             aria-pressed={action.toggle ? Boolean(action.active) : undefined}
           >
-            <Icon size={24} weight="fill" />
-            <span>{action.label}</span>
+            <Icon size={30} weight="fill" />
+            <span className="m-only-reader">{action.label}</span>
           </button>
         );
       })}

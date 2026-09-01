@@ -60,15 +60,15 @@
 .m-pages.is-status .m-metrics-card .m-metrics { flex: 1; justify-content: space-between; }
 
 
-.m-clock { display: flex; align-items: baseline; gap: 12px; padding: 2px 4px 2px; }
-.m-clock strong { font-size: 40px; font-weight: 600; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.m-clock { display: flex; align-items: baseline; gap: 12px; padding: 2px 4px 5px; }
+.m-clock strong { font-size: 40px; font-weight: 600; letter-spacing: -.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .m-clock span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 15px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 
 .m-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line-soft); border-radius: var(--m-radius); background: var(--panel); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 1px 2px rgba(0, 0, 0, .3); }
 .m-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.m-card-head h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.m-card-head h2 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 
-.m-eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); }
+.m-eyebrow { font-size: 13.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); }
 .m-empty { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
 /* Nå og Neste er to like kort. Navnet leses fra venstre, klokka fra høyre —
@@ -79,9 +79,9 @@
 .m-slot::before { content: ""; position: absolute; top: 11px; bottom: 11px; left: 0; width: 3px; border-radius: 0 3px 3px 0; background: currentColor; }
 .m-slot.is-empty::before { background: var(--line-soft); }
 .m-slot-line { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.m-slot-title { min-width: 0; overflow: hidden; color: inherit; font-size: 18px; font-weight: 650; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.m-slot-title { min-width: 0; overflow: hidden; color: inherit; font-size: 19px; font-weight: 650; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
 .m-slot .m-eyebrow { color: var(--dim); }
-.m-slot-when, .m-slot-count { flex: 0 0 auto; color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.m-slot-when, .m-slot-count { flex: 0 0 auto; color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
 .m-slot-count { font-weight: 600; }
 .m-slot.is-empty .m-slot-title { color: var(--muted); font-size: 15px; font-weight: 500; }
 
@@ -100,8 +100,8 @@
 .m-art { width: 62px; height: 62px; flex: 0 0 62px; display: grid; place-items: center; overflow: hidden; border-radius: 13px; background: var(--panel-raised); color: var(--muted); }
 .m-art img { width: 100%; height: 100%; object-fit: cover; }
 .m-music-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.m-music-text strong { overflow: hidden; font-size: 17px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.m-music-text small { overflow: hidden; color: var(--muted); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.m-music-text strong { overflow: hidden; font-size: 18px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.m-music-text small { overflow: hidden; color: var(--muted); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 
 .m-progress { height: 5px; overflow: hidden; border-radius: 999px; background: #232a33; }
 .m-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--lime); transition: width 900ms linear; }
@@ -141,7 +141,7 @@
 
 .m-day-text { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 2px; }
 .m-day-text strong { font-size: 16px; font-weight: 600; line-height: 1.3; }
-.m-day-text small { color: var(--muted); font-size: 14px; }
+.m-day-text small { color: var(--muted); font-size: 15px; }
 
 
 .m-usage-body { display: flex; gap: 12px; }
@@ -157,9 +157,9 @@
 .m-usage-head strong { font-size: 16px; }
 .m-usage-window { display: flex; flex-direction: column; gap: 4px; }
 .m-usage-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.m-usage-line span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.m-usage-reset { color: var(--dim); font-size: 12px; line-height: 1.1; }
-.m-usage-line strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+.m-usage-line span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.m-usage-reset { color: var(--dim); font-size: 13px; line-height: 1.1; }
+.m-usage-line strong { font-size: 18px; font-variant-numeric: tabular-nums; }
 .m-bar { height: 5px; overflow: hidden; border-radius: 999px; background: #232a33; }
 .m-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--lime); }
 
@@ -168,8 +168,8 @@
 .m-agent-list li.is-working .m-provider-logo { background: #2a3626; }
 .m-agent-list li.is-working { background: #1e2a1c; }
 .m-agent-list li.is-ended { background: #211d1d; }
-.m-agent-list strong { font-size: 15px; font-weight: 650; }
-.m-agent-list small { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 13px; }
+.m-agent-list strong { font-size: 16px; font-weight: 650; }
+.m-agent-list small { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 14px; }
 .m-agent-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
 .m-chip { flex: 0 0 auto; padding: 3px 7px; border-radius: 7px; background: #2b3540; color: var(--muted); font-size: 11px; font-style: normal; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .m-chip.is-working { background: rgba(216, 255, 98, .16); color: var(--lime); }
@@ -183,7 +183,7 @@
 .m-metric-icon.tone-orange { background: var(--orange); color: #2b211b; }
 .m-metric-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .m-metric-text strong { font-size: 17px; font-weight: 650; }
-.m-metric-text small { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.m-metric-text small { color: var(--muted); font-size: 14px; line-height: 1.4; }
 
 .m-connections li > button { width: 100%; min-height: 50px; display: flex; align-items: center; gap: 11px; padding: 8px 11px; border: 0; border-radius: 13px; background: var(--panel-raised); color: inherit; text-align: left; cursor: pointer; }
 .m-dot { width: 26px; height: 26px; flex: 0 0 26px; display: grid; place-items: center; border-radius: 9px; }
@@ -276,7 +276,7 @@
   .m-tabs {
     grid-template-columns: none;
     grid-auto-rows: 1fr;
-    width: 74px;
+    width: calc(74px + env(safe-area-inset-right, 0px));
     padding-bottom: 0;
     padding-right: env(safe-area-inset-right, 0px);
     border-top: 0;
@@ -310,54 +310,54 @@
   .m-pages.is-na .m-na-side > * { min-height: 0; }
   .m-na-side .m-agent-card { display: flex; }
   .m-pages.is-status .m-agent-card { display: none; }
-  .m-pages.is-na .m-agent-card { flex: 1 1 auto; }
-  .m-pages.is-na .m-clock strong { font-size: 30px; }
+  .m-pages.is-na .m-usage-card { flex: 2 1 0; overflow-y: auto; }
+  .m-pages.is-na .m-agent-card { flex: 1 1 0; }
+  .m-pages.is-na .m-clock { padding: 0 4px 2px; }
+  .m-pages.is-na .m-clock strong { font-size: 28px; }
+  .m-pages.is-na .m-clock span { font-size: 14px; }
 
   /* Høyre spalte har 380 px til to lister. Radene strammes, og oppgavelista —
      som er en liste og tåler det — ruller innvendig hvis det blir flere enn
      det er plass til. Kvotene skal derimot stå hele: en kvote man må rulle til
      er en kvote man ikke ser. */
-  .m-card-head h2 { font-size: 12px; }
+  .m-card-head h2 { font-size: 13px; }
   .m-usage { gap: 5px; }
-  .m-usage-head strong { font-size: 14px; }
+  .m-usage-head strong { font-size: 16px; }
   .m-provider-logo { width: 22px; height: 22px; flex: 0 0 22px; }
-  .m-usage-line span { font-size: 12px; }
+  .m-usage-line span { font-size: 14px; }
   .m-usage-line strong { font-size: 14px; }
   .m-usage-reset { font-size: 11px; }
   .m-usage-window { gap: 3px; }
   .m-agent-list { overflow-y: auto; }
-  .m-usage-card { flex: 0 0 auto; }
   .m-usage-card > .m-usage { flex: 1; min-width: 0; }
   .m-usage-card, .m-agent-card { gap: 7px; padding: 11px 12px; }
   .m-usage { gap: 4px; }
   .m-usage-window { gap: 2px; }
-  .m-usage-reset { font-size: 10.5px; }
-  .m-usage-line strong { font-size: 13.5px; }
-  .m-bar, .m-progress { height: 3px; }
+  .m-usage-reset { font-size: 12.5px; }
+  .m-usage-line strong { font-size: 17px; }
+  .m-bar, .m-progress { height: 4px; }
   .m-agent-list { gap: 6px; }
   .m-agent-list li { padding: 7px 9px; gap: 8px; }
-  .m-provider-logo { width: 20px; height: 20px; flex: 0 0 20px; }
+  .m-provider-logo { width: 23px; height: 23px; flex: 0 0 23px; }
   .m-agent-meta { gap: 3px 6px; }
   .m-agent-list li { padding: 8px 10px; }
-  .m-agent-list strong { font-size: 13.5px; }
-  .m-agent-list small { font-size: 11.5px; }
+  .m-agent-list strong { font-size: 15.5px; }
+  .m-agent-list small { font-size: 13.5px; }
   .m-slot { padding: 8px 12px 8px 15px; gap: 2px; }
   .m-slot::before { top: 8px; bottom: 8px; }
-  .m-slot-title { font-size: 16px; }
-  .m-slot.is-empty .m-slot-title { font-size: 14px; }
-  .m-slot-when, .m-slot-count { font-size: 12.5px; }
+  .m-slot-title { font-size: 18px; }
+  .m-slot.is-empty .m-slot-title { font-size: 16px; }
+  .m-slot-when, .m-slot-count { font-size: 14.5px; }
   .m-subject { min-height: 36px; margin-top: 2px; font-size: 13px; }
-  .m-music { gap: 8px; padding: 10px 12px; }
+  .m-music { gap: 7px; padding: 9px 12px; }
   .m-music-top { gap: 10px; }
-  .m-music-text strong { font-size: 15px; }
-  .m-music-text small { font-size: 12.5px; }
+  .m-music-text strong { font-size: 17px; }
+  .m-music-text small { font-size: 14.5px; }
   .m-music-controls { grid-template-columns: 44px 52px 44px minmax(0, 1fr); gap: 6px; }
   .m-music-controls button { min-height: 42px; }
-  .m-device { font-size: 12.5px; }
+  .m-device { font-size: 14.5px; }
   .m-bar, .m-progress { height: 4px; }
-  .m-action { min-height: 52px; font-size: 10.5px; }
-  /* «Dagens aktivitet» får ikke plass på én linje i en 66 px rute. */
-  .m-action > span { max-width: none; white-space: normal; line-height: 1.15; text-align: center; }
+  .m-action { min-height: 52px; }
 
   /* De to andre sidene er allerede to kort. De legger seg side ved side. */
   .m-pages.is-ai > *, .m-pages.is-status > * { grid-row: 1; }
@@ -401,3 +401,8 @@
 @media (prefers-reduced-motion: reduce) {
   .m-switch-track, .m-switch-track b { transition: none; }
 }
+
+/* Navn som bare finnes for skjermlesere. Knappene nederst er ikoner: teksten
+   under dem måtte krympes for å få plass, og små bokstaver er det som er
+   vanskeligst å lese på en armlengdes avstand. */
+.m-only-reader { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
