@@ -296,7 +296,11 @@ Spotify Connect-logikken i `src/spotify-client.js` og Mac-kallet i
 `src/mac-action.js`; begge visningene bruker de samme. Utseendet er derimot helt
 adskilt: `src/mobile.css` arver bare fargene fra `styles.css`, som ikke røres.
 
-«Våken»-knappen holder skjermen på så lenge panelet står framme. Den bruker
+«Våken»-bryteren står sist i fanelinja, ikke blant hurtigknappene på Nå-siden.
+Den gjelder hele panelet, og en bryter som skal hindre at skjermen slokner må
+kunne nås uansett hvilken side man står på — i liggende, der Nå-siden har sin
+egen spalteinndeling, var den lett å ikke finne i det hele tatt. Den holder
+skjermen på så lenge panelet står framme. Den bruker
 samme Wake Lock som iPad-panelet, men er av som standard og henger ikke sammen
 med Fokus — en telefon som lyser i festet uten lader er tom før kvelden.
 Bryteren huskes under `panel-mobile-awake`.

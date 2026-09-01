@@ -893,7 +893,6 @@ export function MobilePanel() {
       }),
     },
     { id: "clipboard", label: "Utklipp", icon: ClipboardText, tone: "violet", onPress: () => setClipboardOpen(true) },
-    { id: "awake", label: "Våken", icon: Sun, tone: "lime", toggle: true, active: keepAwake, venter: keepAwake && !screenAwake, onPress: toggleScreenAwake },
   ];
 
   return (
@@ -973,6 +972,16 @@ export function MobilePanel() {
             </button>
           );
         })}
+        <button
+          className={`m-awake ${keepAwake ? "is-on" : ""} ${keepAwake && !screenAwake ? "is-venter" : ""}`}
+          type="button"
+          aria-pressed={keepAwake}
+          aria-label={keepAwake ? "Slå av at skjermen holdes våken" : "Hold skjermen våken"}
+          onClick={toggleScreenAwake}
+        >
+          <Sun size={20} weight={keepAwake ? "fill" : "regular"} />
+          <span>Våken</span>
+        </button>
       </nav>
     </div>
   );
