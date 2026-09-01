@@ -245,3 +245,67 @@
   .m-pages.fra-hoyre, .m-pages.fra-venstre { animation: none; }
   .m-tabs button svg { transition: none; }
 }
+
+/* Knappen viser ønsket, ikke låsen. Er ønsket på uten at iOS har gitt låsen —
+   panelet er i bakgrunnen, eller strømsparing er på — pulserer den svakt i
+   stedet for å se avslått ut. En knapp som slår seg av selv ser ødelagt ut. */
+.m-action.is-venter { opacity: .62; animation: m-venter 2.2s ease-in-out infinite; }
+@keyframes m-venter { 0%, 100% { opacity: .62; } 50% { opacity: 1; } }
+
+/* ---- Liggende: telefonen over Mac-en ----
+   Høyden er da rundt 400 px. Tre kort under hverandre har ikke en sjanse, så
+   sidene deles i to spalter og fanene flyttes til en stripe langs kanten —
+   en rad nederst ville spist en sjettedel av det som er igjen av høyden. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .m-shell { grid-template-rows: none; grid-template-columns: minmax(0, 1fr) auto; }
+
+  .m-tabs {
+    grid-template-columns: none;
+    grid-auto-rows: 1fr;
+    width: 74px;
+    padding-bottom: 0;
+    padding-right: env(safe-area-inset-right, 0px);
+    border-top: 0;
+    border-left: 1px solid var(--line-soft);
+  }
+  .m-tabs button { min-height: 0; }
+
+  .m-pages {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-content: stretch;
+    padding:
+      calc(10px + env(safe-area-inset-top, 0px))
+      12px
+      calc(10px + env(safe-area-inset-bottom, 0px))
+      calc(12px + env(safe-area-inset-left, 0px));
+    gap: 10px;
+  }
+
+  /* Klokka og avtalene til venstre, musikken langs hele høyden til høyre, og
+     de to knapperadene under hverandre. Musikken får spenne over to rader:
+     cover, spor og kontroller trenger høyde, mens klokka ikke gjør det. */
+  .m-pages.is-na { grid-template-rows: auto minmax(0, 1fr) auto; }
+  .m-pages.is-na .m-clock { grid-area: 1 / 1 / 2 / 2; }
+  .m-pages.is-na .m-activity { grid-area: 2 / 1 / 3 / 2; }
+  .m-pages.is-na .m-music { grid-area: 1 / 2 / 3 / 3; }
+  .m-pages.is-na .m-focus { grid-area: 3 / 1 / 4 / 2; }
+  .m-pages.is-na .m-actions { grid-area: 3 / 2 / 4 / 3; }
+
+  /* De to andre sidene er allerede to kort. De legger seg side ved side. */
+  .m-pages.is-ai > *, .m-pages.is-status > * { grid-row: 1; }
+  .m-pages.is-ai, .m-pages.is-status { grid-template-rows: minmax(0, 1fr); }
+
+  /* Kortene kan ikke lenger vokse loddrett — spalten er høyden. De ruller
+     innvendig i stedet, slik at siden selv står stille. */
+  .m-pages > * { flex: 0 1 auto; min-height: 0; }
+  .m-card { overflow-y: auto; }
+
+  .m-clock { padding: 0 4px; }
+  .m-clock strong { font-size: 34px; }
+  .m-clock span { font-size: 13px; }
+  .m-art { width: 48px; height: 48px; flex: 0 0 48px; }
+  .m-action { min-height: 58px; font-size: 11px; }
+  .m-actions { gap: 5px; }
+  .m-timer { font-size: 34px; }
+}

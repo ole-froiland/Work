@@ -47,7 +47,7 @@ import { callMacAction } from "./mac-action.js";
 import { useSpotify } from "./spotify-client.js";
 import { ClaudeLogo, CodexLogo } from "./provider-logos.jsx";
 import { clipboardSupport, copyBySelection, fetchMacClipboard, fileToDataUrl, readPhoneClipboard, sendToMac, writePhoneClipboard } from "./clipboard-bridge.js";
-import { createScreenWakeLockController } from "./wake-lock.js";
+import { createScreenWakeLockController, describeWakeLockRefusal } from "./wake-lock.js";
 import "./mobile.css";
 
 const PAGES = [
@@ -440,7 +440,7 @@ function ActionRow({ actions }) {
           <button
             key={action.id}
             type="button"
-            className={`m-action tone-${action.tone} ${action.active ? "is-on" : ""}`}
+            className={`m-action tone-${action.tone} ${action.active ? "is-on" : ""} ${action.venter ? "is-venter" : ""}`}
             onClick={action.onPress}
             aria-pressed={action.toggle ? Boolean(action.active) : undefined}
           >
@@ -626,7 +626,13 @@ export function MobilePanel() {
   const [subjects, setSubjects] = useState([]);
   const [agentSessions, setAgentSessions] = useState(null);
   const [focusModeActive, setFocusModeActive] = useState(false);
+  // Ønsket og den faktiske låsen er to ting. iOS slipper låsen hver gang panelet
+  // skjules, og med knappen bundet til låsen slo den seg «av» av seg selv hver
+  // gang Ole byttet app. Ønsket er det som huskes og som knappen viser; låsen er
+  // noe panelet forsøker å holde så lenge ønsket står.
+  const [keepAwake, setKeepAwake] = useState(() => localStorage.getItem("panel-mobile-awake") === "on");
   const [screenAwake, setScreenAwake] = useState(false);
+  const awakeReason = useRef("");
   const [clipboardOpen, setClipboardOpen] = useState(false);
   const wakeLock = useRef(null);
 
@@ -692,9 +698,12 @@ export function MobilePanel() {
     const controller = createScreenWakeLockController({
       wakeLock: navigator.wakeLock,
       isVisible: () => document.visibilityState === "visible",
-      onActiveChange: setScreenAwake,
+      onActiveChange: (active) => { setScreenAwake(active); if (active) awakeReason.current = ""; },
+      onError: (error) => { awakeReason.current = describeWakeLockRefusal(error); },
     });
     wakeLock.current = controller;
+    // Låsen slippes når panelet skjules, og skal tas igjen når det kommer fram.
+    // Uten dette sto ønsket på mens skjermen slokte som vanlig etter et appbytte.
     const restore = () => controller.handleVisibilityChange();
     document.addEventListener("visibilitychange", restore);
     if (localStorage.getItem("panel-mobile-awake") === "on") controller.setWanted(true);
@@ -782,13 +791,18 @@ export function MobilePanel() {
   }
 
   async function toggleScreenAwake() {
-    const wanted = !screenAwake;
-    const ready = await wakeLock.current?.setWanted(wanted);
-    if (wanted && !ready) {
-      setToast("Safari holdt ikke skjermen våken. Legg panelet på Hjem-skjermen og prøv igjen.");
-      return;
-    }
+    const wanted = !keepAwake;
+    // Ønsket lagres først. Feiler låsen akkurat nå — iOS nekter mens panelet er
+    // i bakgrunnen, og i strømsparing — skal valget stå, slik at neste forsøk
+    // kommer av seg selv når panelet er framme igjen.
+    setKeepAwake(wanted);
     localStorage.setItem("panel-mobile-awake", wanted ? "on" : "off");
+    awakeReason.current = "";
+    const ready = await wakeLock.current?.setWanted(wanted);
+    if (!wanted) { setToast("Skjermen kan slokne som vanlig igjen"); return; }
+    setToast(ready
+      ? "Skjermen holdes våken så lenge panelet står framme"
+      : awakeReason.current || "Fikk ikke holdt skjermen våken ennå — panelet prøver igjen når det er framme");
   }
 
   async function repairConnection(id) {
@@ -879,7 +893,7 @@ export function MobilePanel() {
       }),
     },
     { id: "clipboard", label: "Utklipp", icon: ClipboardText, tone: "violet", onPress: () => setClipboardOpen(true) },
-    { id: "awake", label: "Våken", icon: Sun, tone: "lime", toggle: true, active: screenAwake, onPress: toggleScreenAwake },
+    { id: "awake", label: "Våken", icon: Sun, tone: "lime", toggle: true, active: keepAwake, venter: keepAwake && !screenAwake, onPress: toggleScreenAwake },
   ];
 
   return (

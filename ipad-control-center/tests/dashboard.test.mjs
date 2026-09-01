@@ -11,7 +11,7 @@ function fakeStorage(seed = {}) {
     removeItem: (key) => values.delete(key),
   };
 }
-import { createScreenWakeLockController } from "../src/wake-lock.js";
+import { createScreenWakeLockController, describeWakeLockRefusal } from "../src/wake-lock.js";
 
 test("formats focus time safely", () => {
   assert.equal(formatTimer(45 * 60), "45:00");
@@ -1256,4 +1256,52 @@ test("en https-adresse får ikke panelporten tredd på seg", () => {
   assert.equal(normalizePanelHost("https://ole-mac-panel.tail161d1e.ts.net:8443"), "https://ole-mac-panel.tail161d1e.ts.net:8443");
   // http er fortsatt panelet selv, og der er porten en del av adressen.
   assert.equal(normalizePanelHost("ole-sin-macbook-air.local"), "http://ole-sin-macbook-air.local:4173");
+});
+
+// Knappen skal si hva Ole kan gjøre, ikke gjenta nettleserens engelske unntak.
+test("avvist skjermlås forklares med det som faktisk hjelper", () => {
+  assert.match(
+    describeWakeLockRefusal(Object.assign(new Error("The requesting page is not visible"), { name: "NotAllowedError" })),
+    /st\u00e5r framme/,
+  );
+  assert.match(describeWakeLockRefusal(new Error("Low power mode is enabled")), /Str\u00f8msparing/);
+  assert.match(describeWakeLockRefusal(new Error("noe ukjent")), /noe ukjent/);
+});
+
+// iOS slipper også låsen mens panelet står framme — strømsparing slår inn, og
+// da kommer ingen synlighetshendelse etterpå. Uten et nytt forsøk sto ønsket på
+// mens skjermen slokte som vanlig.
+test("låsen tas igjen om den slippes mens panelet står framme", async () => {
+  const locks = [];
+  const jobber = [];
+  const wakeLock = {
+    async request() {
+      const listeners = new Map();
+      const lock = {
+        released: false,
+        addEventListener: (navn, fn) => listeners.set(navn, fn),
+        release: async function () { this.released = true; listeners.get("release")?.(); },
+      };
+      locks.push(lock);
+      return lock;
+    },
+  };
+  const controller = createScreenWakeLockController({
+    wakeLock,
+    isVisible: () => true,
+    schedule: (job) => jobber.push(job),
+  });
+
+  await controller.setWanted(true);
+  assert.equal(locks.length, 1);
+  await locks[0].release();
+  assert.equal(jobber.length, 1, "et nytt forsøk skal være planlagt");
+  await jobber[0]();
+  assert.equal(locks.length, 2, "låsen skal være tatt igjen");
+
+  // Og ikke i det uendelige: slås ønsket av, skal et planlagt forsøk la være.
+  await locks[1].release();
+  await controller.setWanted(false);
+  await jobber[1]();
+  assert.equal(locks.length, 2, "et forsøk etter at ønsket er av skal ikke ta ny lås");
 });

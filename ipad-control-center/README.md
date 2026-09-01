@@ -296,10 +296,32 @@ Spotify Connect-logikken i `src/spotify-client.js` og Mac-kallet i
 `src/mac-action.js`; begge visningene bruker de samme. Utseendet er derimot helt
 adskilt: `src/mobile.css` arver bare fargene fra `styles.css`, som ikke røres.
 
-«Skjerm våken» på mobilen bruker samme Wake Lock som iPad-panelet, men er av som
-standard og henger ikke sammen med Fokus — en telefon som lyser i festet uten
-lader er tom før kvelden. Bryteren huskes under `panel-mobile-awake`.
+«Våken»-knappen holder skjermen på så lenge panelet står framme. Den bruker
+samme Wake Lock som iPad-panelet, men er av som standard og henger ikke sammen
+med Fokus — en telefon som lyser i festet uten lader er tom før kvelden.
+Bryteren huskes under `panel-mobile-awake`.
+
+Knappen viser **ønsket**, ikke låsen. iOS slipper låsen hver gang panelet
+skjules, og med knappen bundet til låsen slo den seg av av seg selv hvert
+appbytte — den så ødelagt ut. Står ønsket på uten at låsen er gitt, pulserer
+knappen svakt, og panelet tar låsen igjen når det kommer fram. Slippes låsen
+mens panelet står framme, typisk fordi strømsparing slår inn, gjøres ett nytt
+forsøk — ett, ikke flere: en lås som nektes om og om igjen skal ikke bli en
+løkke som tømmer batteriet raskere enn skjermen ville gjort.
+
+Wake Lock krever secure context, som resten av utklippstavla. Over http fantes
+API-et ikke i det hele tatt, og knappen kunne ikke virke.
+
 Fokusøktens innstillinger deles derimot med iPad-panelet.
+
+### Liggende
+
+Telefonen kan ligge over Mac-en. Da er høyden rundt 400 px, og tre kort under
+hverandre har ikke en sjanse. Sidene deles i to spalter, og fanene flyttes til
+en 74 px stripe langs høyre kant — en rad nederst ville spist en sjettedel av
+det som er igjen av høyden. Klokka og avtalene står til venstre, musikken langs
+hele høyden til høyre, og de to knapperadene under. Kortene kan ikke lenger
+vokse loddrett der, så de ruller innvendig i stedet og siden selv står stille.
 
 Mobilpanelet er like avhengig av at Mac-en er våken som iPad-panelet. Med lokket
 lukket viser det ingenting, og sier det.
