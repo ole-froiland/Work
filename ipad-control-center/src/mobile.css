@@ -136,23 +136,22 @@
 .m-day-text small { color: var(--muted); font-size: 15px; }
 
 
-.m-usage-body { display: flex; gap: 12px; }
-.m-usage-body > .m-usage { flex: 1; min-width: 0; }
+.m-usage-body { display: flex; flex-direction: column; gap: 11px; }
 .m-usage { display: flex; flex-direction: column; gap: 7px; }
-.m-usage + .m-usage { padding-left: 12px; border-left: 1px solid var(--line-soft); }
+.m-usage + .m-usage { padding-top: 11px; border-top: 1px solid var(--line-soft); }
 .m-usage-head { display: flex; align-items: center; gap: 9px; }
 .m-usage-head strong { flex: 0 0 auto; }
 .m-usage-head small { min-width: 0; flex: 1; color: #ff9aa1; font-size: 13px; text-align: right; }
-.m-provider-logo { width: 26px; height: 26px; flex: 0 0 26px; display: grid; place-items: center; border-radius: 8px; background: #252b33; }
+.m-provider-logo { width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; border-radius: 10px; background: #252b33; }
 .m-provider-logo.is-code { color: var(--blue); }
 .m-provider-logo.is-claude { color: var(--orange); }
-.m-usage-head strong { font-size: 16px; }
+.m-usage-head strong { font-size: 19px; }
 .m-usage-window { display: flex; flex-direction: column; gap: 4px; }
 .m-usage-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.m-usage-line span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.m-usage-reset { color: var(--dim); font-size: 13px; line-height: 1.1; }
-.m-usage-line strong { font-size: 18px; font-variant-numeric: tabular-nums; }
-.m-bar { height: 5px; overflow: hidden; border-radius: 999px; background: #232a33; }
+.m-usage-line span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.m-usage-reset { color: var(--muted); font-size: 13.5px; line-height: 1.1; }
+.m-usage-line strong { flex: 0 0 auto; font-size: 25px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.m-bar { height: 8px; overflow: hidden; border-radius: 999px; background: #232a33; }
 .m-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--lime); }
 
 .m-agent-list li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 11px; border-radius: 14px; background: var(--panel-raised); }
@@ -291,20 +290,25 @@
   /* Klokka og avtalene til venstre, musikken langs hele høyden til høyre, og
      de to knapperadene under hverandre. Musikken får spenne over to rader:
      cover, spor og kontroller trenger høyde, mens klokka ikke gjør det. */
-  .m-pages.is-na { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+  /* Nå i liggende: klokke og de to avtalene til venstre, musikk, fokusøkt og
+     knapperaden til høyre. Høyre side er en egen beholder, ikke løse kort i det
+     samme rutenettet — spaltene delte tidligere rader, og et høyt kort i den ene
+     blåste opp den andre. */
+  .m-pages.is-na { grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); }
   .m-pages.is-na .m-clock { grid-column: 1; grid-row: 1; }
   .m-pages.is-na .m-slot-now { grid-column: 1; grid-row: 2; }
   .m-pages.is-na .m-slot-next { grid-column: 1; grid-row: 3; }
-  .m-pages.is-na .m-music { grid-column: 1; grid-row: 4; }
-  .m-pages.is-na .m-actions { grid-column: 1; grid-row: 5; }
-  .m-pages.is-na .m-focus { display: none; }
+  .m-pages.is-na .m-slot { justify-content: center; }
   .m-pages.is-na .m-na-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; grid-column: 2; grid-row: 1 / -1; }
   .m-pages.is-na .m-na-side > * { min-height: 0; }
-  .m-pages.is-na .m-usage-card { flex: 2 1 0; overflow-y: auto; }
-  .m-pages.is-na .m-agent-card { flex: 1 1 0; }
+  .m-pages.is-na .m-music { flex: 1 1 auto; }
   .m-pages.is-na .m-clock { padding: 0 4px 2px; }
-  .m-pages.is-na .m-clock strong { font-size: 28px; }
+  .m-pages.is-na .m-clock strong { font-size: 30px; }
   .m-pages.is-na .m-clock span { font-size: 14px; }
+
+  /* AI og Status er to kort hver, og legger seg side ved side. */
+  .m-pages.is-ai > *, .m-pages.is-status > * { grid-row: 1; }
+  .m-pages.is-ai, .m-pages.is-status { grid-template-rows: minmax(0, 1fr); }
 
   /* Høyre spalte har 380 px til to lister. Radene strammes, og oppgavelista —
      som er en liste og tåler det — ruller innvendig hvis det blir flere enn
@@ -312,24 +316,28 @@
      er en kvote man ikke ser. */
   .m-card-head h2 { font-size: 13px; }
   .m-usage { gap: 5px; }
-  .m-usage-head strong { font-size: 16px; }
+  .m-usage-head strong { font-size: 17px; }
   .m-provider-logo { width: 22px; height: 22px; flex: 0 0 22px; }
-  .m-usage-line span { font-size: 14px; }
+  .m-usage-line span { font-size: 15px; }
   .m-usage-line strong { font-size: 14px; }
   .m-usage-reset { font-size: 11px; }
   .m-usage-window { gap: 3px; }
   .m-agent-list, .m-connections { min-height: 0; overflow-y: auto; }
   .m-pages.is-status .m-connection-card { min-height: 0; }
   .m-usage-card > .m-usage { flex: 1; min-width: 0; }
-  .m-usage-card, .m-agent-card { gap: 7px; padding: 11px 12px; }
-  .m-usage { gap: 4px; }
-  .m-usage-window { gap: 2px; }
+  .m-usage-card, .m-agent-card { gap: 8px; padding: 10px 13px; }
+  .m-usage { gap: 5px; }
+  .m-usage-body { gap: 8px; }
+  .m-usage + .m-usage { padding-top: 8px; }
+  .m-bar { height: 7px; }
+  .m-usage-head { gap: 8px; }
+  .m-usage-window { gap: 3px; }
   .m-usage-reset { font-size: 12.5px; }
-  .m-usage-line strong { font-size: 17px; }
-  .m-bar, .m-progress { height: 4px; }
+  .m-usage-line strong { font-size: 22px; }
+  .m-progress { height: 4px; }
   .m-agent-list { gap: 6px; }
   .m-agent-list li { padding: 7px 9px; gap: 8px; }
-  .m-provider-logo { width: 23px; height: 23px; flex: 0 0 23px; }
+  .m-provider-logo { width: 26px; height: 26px; flex: 0 0 26px; }
   .m-agent-meta { gap: 3px 6px; }
   .m-agent-list li { padding: 8px 10px; }
   .m-agent-list strong { font-size: 15.5px; }
@@ -403,3 +411,6 @@
    side som blir for lang. */
 .m-pages.is-ai .m-agent-card { flex: 0 1 auto; min-height: 0; }
 .m-pages.is-ai .m-agent-card .m-agent-list { min-height: 0; overflow-y: auto; }
+
+/* Agentradene deler klasse med kvotekortet, men trenger ikke like stort merke. */
+.m-agent-list .m-provider-logo { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 9px; }
