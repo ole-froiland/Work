@@ -22,7 +22,6 @@ import {
   SkipBack,
   SkipForward,
   SlidersHorizontal,
-  Sparkle,
   Stop,
   Sun,
   Warning,
@@ -52,7 +51,6 @@ import "./mobile.css";
 
 const PAGES = [
   { id: "na", label: "Nå", icon: Clock },
-  { id: "ai", label: "AI", icon: Sparkle },
   { id: "status", label: "Status", icon: Pulse },
 ];
 
@@ -130,35 +128,28 @@ function SubjectButton({ session, onStart }) {
   );
 }
 
-function ActivityCard({ activity, subjects, onStartSubject }) {
-  const { current, next } = activity;
+// To egne kort i stedet for ett med to felt. Hvert kort svarer på ett spørsmål,
+// og tiden står til høyre for seg selv: navnet leses fra venstre, klokka fra
+// høyre, og de kolliderer ikke når tittelen er lang.
+function SlotCard({ slot, kicker, entry, tomTekst, primary, secondary, subjects, onStartSubject }) {
+  const session = entry ? subjectSession(entry, subjects) : null;
   return (
-    <Card className="m-activity">
-      <div className={`m-activity-slot ${current ? `tone-${current.tone}` : "is-empty"}`}>
-        <span className="m-eyebrow">Akkurat nå</span>
-        {current ? (
-          <>
-            <strong className="m-activity-title">{current.title}</strong>
-            <span className="m-activity-meta">{current.when} · {current.remaining}</span>
-            <SubjectButton session={subjectSession(current, subjects)} onStart={onStartSubject} />
-          </>
-        ) : (
-          <span className="m-empty">Ingenting pågår</span>
-        )}
+    <section className={`m-card m-slot ${slot} ${entry ? `tone-${entry.tone}` : "is-empty"}`}>
+      <div className="m-slot-line">
+        <span className="m-eyebrow">{kicker}</span>
+        <span className="m-slot-when">{entry ? primary(entry) : ""}</span>
       </div>
-      <div className={`m-activity-slot ${next ? `tone-${next.tone}` : "is-empty"}`}>
-        <span className="m-eyebrow">Neste</span>
-        {next ? (
-          <>
-            <strong className="m-activity-title">{next.title}</strong>
-            <span className="m-activity-meta">{next.when} · {next.countdown}</span>
-            <SubjectButton session={subjectSession(next, subjects)} onStart={onStartSubject} />
-          </>
-        ) : (
-          <span className="m-empty">Ingen flere avtaler</span>
-        )}
+      <div className="m-slot-line">
+        <strong className="m-slot-title">{entry ? entry.title : tomTekst}</strong>
+        <span className="m-slot-count">{entry ? secondary(entry) : ""}</span>
       </div>
-    </Card>
+      {session && (
+        <button className="m-subject" type="button" onClick={() => onStartSubject(session)}>
+          <GraduationCap size={17} weight="fill" />
+          {session.minutes ? `Start ${session.code} · ${session.minutes} min` : `Start ${session.code}`}
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -431,27 +422,6 @@ function ClipboardSheet({ onClose, onToast }) {
   );
 }
 
-function AwakeSwitch({ wanted, held, onToggle }) {
-  return (
-    <button
-      className={`m-switch ${wanted ? "is-on" : ""} ${wanted && !held ? "is-venter" : ""}`}
-      type="button"
-      role="switch"
-      aria-checked={wanted}
-      onClick={onToggle}
-    >
-      <span className="m-switch-icon"><Sun size={19} weight="fill" /></span>
-      <span className="m-switch-text">
-        <strong>Hold skjermen våken</strong>
-        <small>{wanted
-          ? (held ? "Skjermen slokner ikke mens panelet står framme" : "Venter — iOS gir låsen når panelet er framme")
-          : "Skjermen slokner som vanlig"}</small>
-      </span>
-      <i className="m-switch-track"><b /></i>
-    </button>
-  );
-}
-
 function ActionRow({ actions }) {
   return (
     <div className="m-actions">
@@ -489,6 +459,7 @@ function UsageCard({ usage, now, refreshing, onRefresh }) {
         </button>
       )}
     >
+      <div className="m-usage-body">
       {providers.map(({ key, name, logo: Logo, merke, data }) => (
         <div className="m-usage" key={key}>
           <div className="m-usage-head">
@@ -511,6 +482,7 @@ function UsageCard({ usage, now, refreshing, onRefresh }) {
           })}
         </div>
       ))}
+      </div>
     </Card>
   );
 }
@@ -713,7 +685,7 @@ export function MobilePanel() {
     } catch {
       // Privat vindu: siden huskes da bare så lenge panelet står åpent.
     }
-  }, [page]);
+  }, []);
 
   useEffect(() => {
     const controller = createScreenWakeLockController({
@@ -745,7 +717,6 @@ export function MobilePanel() {
   }, []);
 
   useEffect(() => {
-    if (page !== "ai") return undefined;
     let active = true;
     async function load() {
       try {
@@ -879,6 +850,13 @@ export function MobilePanel() {
     [syncCalendar, syncNotes, deviceMetrics, usage, now],
   );
 
+  function startSubject({ code, minutes, title }) {
+    return runOnMac({ action: "subject-session", code, minutes, title }, {
+      done: () => (minutes ? `${code} er åpnet i ChatGPT — planen for ${minutes} min er fylt inn` : `${code} er åpnet i ChatGPT`),
+      failed: `Fikk ikke startet ${code}-økta på Mac-en`,
+    });
+  }
+
   const index = PAGES.findIndex((entry) => entry.id === page);
   function gåTil(id) {
     const til = PAGES.findIndex((entry) => entry.id === id);
@@ -905,7 +883,7 @@ export function MobilePanel() {
     },
     {
       id: "school",
-      label: "Skole",
+      label: "Dagens aktivitet",
       icon: GraduationCap,
       tone: "blue",
       onPress: () => runOnMac({ action: "school-session" }, {
@@ -914,6 +892,7 @@ export function MobilePanel() {
       }),
     },
     { id: "clipboard", label: "Utklipp", icon: ClipboardText, tone: "violet", onPress: () => setClipboardOpen(true) },
+    { id: "awake", label: "Hold våken", icon: Sun, tone: "lime", toggle: true, active: keepAwake, venter: keepAwake && !screenAwake, onPress: toggleScreenAwake },
   ];
 
   return (
@@ -925,13 +904,25 @@ export function MobilePanel() {
               <strong>{clockText(now)}</strong>
               <span>{dateText(now)}</span>
             </header>
-            <ActivityCard
-              activity={activity}
+            <SlotCard
+              slot="m-slot-now"
+              kicker="Nå"
+              entry={activity.current}
+              tomTekst="Ingenting pågår"
+              primary={(e) => e.when}
+              secondary={(e) => e.remaining}
               subjects={subjects}
-              onStartSubject={({ code, minutes, title }) => runOnMac({ action: "subject-session", code, minutes, title }, {
-                done: () => (minutes ? `${code} er åpnet i ChatGPT — planen for ${minutes} min er fylt inn` : `${code} er åpnet i ChatGPT`),
-                failed: `Fikk ikke startet ${code}-økta på Mac-en`,
-              })}
+              onStartSubject={startSubject}
+            />
+            <SlotCard
+              slot="m-slot-next"
+              kicker="Neste"
+              entry={activity.next}
+              tomTekst="Ingen flere avtaler"
+              primary={(e) => e.when}
+              secondary={(e) => e.countdown}
+              subjects={subjects}
+              onStartSubject={startSubject}
             />
             <MusicCard onToast={setToast} />
             <FocusCard
@@ -955,19 +946,19 @@ export function MobilePanel() {
               onStop={() => setFocus((current) => ({ ...current, running: false, phase: "idle", set: 1, seconds: current.workMinutes * 60 }))}
             />
             <ActionRow actions={actions} />
-            <AwakeSwitch wanted={keepAwake} held={screenAwake} onToggle={toggleScreenAwake} />
-          </>
-        )}
-
-        {page === "ai" && (
-          <>
-            <UsageCard usage={usage} now={now} refreshing={usageRefreshing} onRefresh={refreshAll} />
-            <AgentsCard snapshot={agentSessions} now={now} />
+            <div className="m-na-side">
+              <UsageCard usage={usage} now={now} refreshing={usageRefreshing} onRefresh={refreshAll} />
+              <AgentsCard snapshot={agentSessions} now={now} />
+            </div>
           </>
         )}
 
         {page === "status" && (
           <>
+            {/* Oppgavene står på Nå i liggende, der høyre spalte har plass til
+                dem. I portrett er den plassen ikke der, og et kort som faller
+                utenfor skjermkanten er verre enn et kort på nabosiden. */}
+            <AgentsCard snapshot={agentSessions} now={now} />
             <MetricsCard metrics={deviceMetrics} rhythm={dayPlan.rhythm} now={now} />
             <ConnectionCard checks={checks} onRepair={repairConnection} />
           </>

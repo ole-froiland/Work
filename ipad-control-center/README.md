@@ -185,33 +185,45 @@ Valget kan overstyres og huskes under `panelLayout`:
     http://ole-sin-macbook-air.local:4173/?layout=mobil
     http://ole-sin-macbook-air.local:4173/?layout=ipad
 
-Tre sider, med faner nederst og sveip mellom dem. Sveipet begynner 24 px inn fra
+To sider, med faner nederst og sveip mellom dem. Sveipet begynner 24 px inn fra
 skjermkanten: der ute eier Safari gesten, og en side som kjemper om den taper.
-Valgt side huskes i `sessionStorage`, så et panel som står i festet kommer
-tilbake der det sto.
+Valgt side huskes i `sessionStorage`. Sidebytte glir i den retningen man gikk —
+framover fra høyre, bakover fra venstre; `prefers-reduced-motion` slår det av.
 
-- **Nå** — klokke, «Akkurat nå» og «Neste» med fagknapp, Spotify med cover og
-  enhetsvelger, fokusøkt, og knappene Fokus, Skjerm, Skole og Våken.
-- **AI** — kvotene for Codex og Claude med gjenstående prosent og nedtelling, og
-  de tre nyeste agent-øktene med hva som jobber, er ferdig eller trenger svar.
+- **Nå** — klokke og dato på én linje, «Nå» og «Neste» som to like kort med
+  navnet til venstre og klokka til høyre, Spotify med cover og enhetsvelger,
+  fokusøkt, knapperaden, og kvotene med agent-øktene.
 - **Status** — skritt, sosial tid, søvn og vær, og tilkoblingsradene med
   ett-trykks reparasjon.
 
-Sidebytte glir i den retningen man gikk: framover kommer siden fra høyre,
-bakover fra venstre. Bevegelsen skal si hvor man er på vei, ikke bare at noe
-skjedde, og den er kort nok til å ikke stå i veien for et blikk i forbifarten.
-`prefers-reduced-motion` slår den av.
+Knapperaden er Fokus, Skjerm, Dagens aktivitet, Utklipp og Hold våken. «Dagens
+aktivitet» er fagøkta: Mac-en velger fag og fyller inn prompten i ChatGPT.
 
-Merkene til Codex og Claude ligger i `src/provider-logos.jsx` og brukes av begge
-visningene — på mobilen både i kvotekortet og på hver agentrad, slik at det går
-å se hvem som jobber uten å lese.
+Ingen av sidene skal være så lange at de må blas i, og det er den regelen som
+avgjør hvor ting står når plassen ikke strekker til. To ting flytter seg derfor
+med retningen:
 
-Ingen av sidene skal være så lange at de må blas i. Høyden er det knappe på en
-telefon, ikke bredden, så kortene er målt mot skjermen og ikke omvendt:
-fokusøkta ligger sammenlagt som én startknapp til den faktisk er i gang, og
-lengdene åpnes med tannhjulet ved siden av. Rulling står igjen som
-sikkerhetsventil — en side som kan dras noen piksler er bedre enn en side som
-klipper bort bunnen i stillhet — men i vanlig drift skal ventilen ikke brukes.
+- **Oppgaver** står på Nå i liggende, der høyre spalte har plass, og på Status i
+  portrett, der den ikke har det. Et kort på nabosiden er bedre enn et kort
+  under skjermkanten.
+- **Fokusøkta** vises bare i portrett. Venstre spalte i liggende har 342 px til
+  klokke, to avtalekort, musikk og knapperad, og de fyller den.
+
+Kvotene står side ved side, ikke stablet: stablet tok kortet 364 px, som er
+nesten halve skjermen for fire tall.
+
+### Liggende
+
+Telefonen kan ligge over Mac-en. Da er høyden rundt 400 px, og alt under
+hverandre har ikke en sjanse. Nå-siden deles i to spalter — klokke, avtaler,
+musikk og knapper til venstre, kvoter og oppgaver til høyre — og fanene flyttes
+til en 74 px stripe langs høyre kant. En rad nederst ville spist en sjettedel av
+det som er igjen av høyden.
+
+Høyre spalte er en egen beholder (`.m-na-side`), ikke løse kort i det samme
+rutenettet. Spaltene delte tidligere rader, og et kvotekort som spente over tre
+av dem blåste opp venstre spalte til sin egen høyde — musikken ble presset til
+22 px. I portrett er beholderen `display: contents`, altså ikke der.
 
 ### Utklippstavle mellom telefonen og Mac-en
 
