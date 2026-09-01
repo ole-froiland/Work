@@ -19,6 +19,7 @@ import {
   Play,
   PlayCircle,
   Pulse,
+  Sparkle,
   SkipBack,
   SkipForward,
   SlidersHorizontal,
@@ -49,10 +50,30 @@ import { clipboardSupport, copyBySelection, fetchMacClipboard, fileToDataUrl, re
 import { createScreenWakeLockController, describeWakeLockRefusal } from "./wake-lock.js";
 import "./mobile.css";
 
-const PAGES = [
-  { id: "na", label: "Nå", icon: Clock },
-  { id: "status", label: "Status", icon: Pulse },
-];
+// Liggende har to spalter og dermed dobbelt så mye plass per side. Stående har
+// det ikke: med sikkerhetssonene er det 698 px igjen til innhold, og alt panelet
+// viser er rundt 1500. To sider går derfor opp liggende og ikke stående — så
+// fanene følger retningen i stedet for at én av dem må blas i.
+export const LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 560px)";
+
+const NA = { id: "na", label: "Nå", icon: Clock };
+const AI = { id: "ai", label: "AI", icon: Sparkle };
+const STATUS = { id: "status", label: "Status", icon: Pulse };
+const PAGES_PORTRAIT = [NA, AI, STATUS];
+const PAGES_LANDSCAPE = [NA, STATUS];
+
+function useLandscape() {
+  const [landscape, setLandscape] = useState(() => window.matchMedia?.(LANDSCAPE_QUERY).matches ?? false);
+  useEffect(() => {
+    const query = window.matchMedia?.(LANDSCAPE_QUERY);
+    if (!query) return undefined;
+    const følg = (event) => setLandscape(event.matches);
+    query.addEventListener("change", følg);
+    setLandscape(query.matches);
+    return () => query.removeEventListener("change", følg);
+  }, []);
+  return landscape;
+}
 
 const PAGE_KEY = "panelMobilePage";
 // Safari eier sveipet i kanten av skjermen: der er det tilbake og fram i
@@ -64,7 +85,7 @@ const SWIPE_DISTANCE = 56;
 function readPage(session) {
   try {
     const stored = session?.getItem(PAGE_KEY);
-    return PAGES.some((page) => page.id === stored) ? stored : "na";
+    return PAGES_PORTRAIT.some((page) => page.id === stored) ? stored : "na";
   } catch {
     return "na";
   }
@@ -613,6 +634,8 @@ function ConnectionCard({ checks, onRepair }) {
 
 export function MobilePanel() {
   const [page, setPage] = useState(() => readPage(window.sessionStorage));
+  const landscape = useLandscape();
+  const PAGES = landscape ? PAGES_LANDSCAPE : PAGES_PORTRAIT;
   // Retningen siden kom fra. Uten den ville alt glidd inn fra samme kant, og da
   // sier bevegelsen ingenting om hvor man er på vei — den bare beveger seg.
   const [retning, setRetning] = useState(0);
@@ -680,6 +703,12 @@ export function MobilePanel() {
     const timer = window.setInterval(() => setNow(new Date()), 15_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  // AI-siden finnes ikke i liggende — der står innholdet i høyre spalte på Nå.
+  // Snus telefonen mens den er framme, må vi et sted som finnes.
+  useEffect(() => {
+    if (!PAGES.some((entry) => entry.id === page)) setPage("na");
+  }, [PAGES, page]);
 
   useEffect(() => {
     try {
@@ -948,19 +977,24 @@ export function MobilePanel() {
               onStop={() => setFocus((current) => ({ ...current, running: false, phase: "idle", set: 1, seconds: current.workMinutes * 60 }))}
             />
             <ActionRow actions={actions} />
-            <div className="m-na-side">
-              <UsageCard usage={usage} now={now} refreshing={usageRefreshing} onRefresh={refreshAll} />
-              <AgentsCard snapshot={agentSessions} now={now} />
-            </div>
+            {landscape && (
+              <div className="m-na-side">
+                <UsageCard usage={usage} now={now} refreshing={usageRefreshing} onRefresh={refreshAll} />
+                <AgentsCard snapshot={agentSessions} now={now} />
+              </div>
+            )}
+          </>
+        )}
+
+        {page === "ai" && (
+          <>
+            <UsageCard usage={usage} now={now} refreshing={usageRefreshing} onRefresh={refreshAll} />
+            <AgentsCard snapshot={agentSessions} now={now} />
           </>
         )}
 
         {page === "status" && (
           <>
-            {/* Oppgavene står på Nå i liggende, der høyre spalte har plass til
-                dem. I portrett er den plassen ikke der, og et kort som faller
-                utenfor skjermkanten er verre enn et kort på nabosiden. */}
-            <AgentsCard snapshot={agentSessions} now={now} />
             <MetricsCard metrics={deviceMetrics} rhythm={dayPlan.rhythm} now={now} />
             <ConnectionCard checks={checks} onRepair={repairConnection} />
           </>

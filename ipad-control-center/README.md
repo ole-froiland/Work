@@ -185,16 +185,34 @@ Valget kan overstyres og huskes under `panelLayout`:
     http://ole-sin-macbook-air.local:4173/?layout=mobil
     http://ole-sin-macbook-air.local:4173/?layout=ipad
 
-To sider, med faner nederst og sveip mellom dem. Sveipet begynner 24 px inn fra
-skjermkanten: der ute eier Safari gesten, og en side som kjemper om den taper.
-Valgt side huskes i `sessionStorage`. Sidebytte glir i den retningen man gikk —
-framover fra høyre, bakover fra venstre; `prefers-reduced-motion` slår det av.
+Fanene følger retningen: **tre sider i stående** (Nå, AI, Status) og **to i
+liggende** (Nå, Status), der høyre spalte på Nå bærer AI-innholdet. Grunnen er
+plass og ikke smak. Liggende har to spalter og dermed dobbelt så mye flate per
+side; stående har rundt 698 px igjen til innhold når sikkerhetssonene har tatt
+sitt, og alt panelet viser er omtrent 1500. To sider går derfor opp liggende og
+ikke stående.
+
+Spørringen som avgjør dette står to steder — som mediespørring i `mobile.css` og
+som `LANDSCAPE_QUERY` i `MobilePanel.jsx`. En test vokter at de er like: endres
+den ene alene, sier fanelinja én ting mens oppsettet gjør en annen.
+
+Sveipet begynner 24 px inn fra skjermkanten: der ute eier Safari gesten, og en
+side som kjemper om den taper. Valgt side huskes i `sessionStorage`. Sidebytte
+glir i den retningen man gikk — framover fra høyre, bakover fra venstre;
+`prefers-reduced-motion` slår det av.
 
 - **Nå** — klokke og dato på én linje, «Nå» og «Neste» som to like kort med
   navnet til venstre og klokka til høyre, Spotify med cover og enhetsvelger,
-  fokusøkt, knapperaden, og kvotene med agent-øktene.
+  fokusøkt og knapperaden. I liggende også kvotene og agent-øktene til høyre.
+- **AI** (bare stående) — kvotene og de nyeste agent-øktene.
 - **Status** — skritt, sosial tid, søvn og vær, og tilkoblingsradene med
   ett-trykks reparasjon.
+
+**Sikkerhetssonene må regnes med når høyden måles.** En nettleser på Mac-en
+rapporterer null for dem, og et oppsett som går akkurat opp der, blir 93 px for
+langt på en ekte iPhone: statuslinja tar 59 px av innholdet og hjemindikatoren
+34 av fanelinja. I liggende tar hjemindikatoren rundt 21. Måles høyden uten
+dem, måles feil telefon.
 
 Knapperaden er Fokus, Skjerm, Dagens aktivitet, Utklipp og Hold våken. «Dagens
 aktivitet» er fagøkta: Mac-en velger fag og fyller inn prompten i ChatGPT.

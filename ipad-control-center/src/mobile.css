@@ -36,14 +36,6 @@
 /* I portrett skal ikke beholderen finnes: kortene står i sidens egen flyt.
    `contents` gjør nettopp det — elementet forsvinner, barna blir igjen. */
 .m-na-side { display: contents; }
-/* Oppgavene hører til Nå i liggende og Status i portrett — samme kort, den
-   plassen som finnes. */
-.m-na-side .m-agent-card { display: none; }
-/* Kjører tre agenter samtidig, vokser kortet med ~100 px. Det skal ikke skyve
-   Status-siden utenfor skjermen: kortet gir etter, og lista ruller innvendig.
-   Rulling i en liste er noe annet enn en side som blir for lang. */
-.m-pages.is-status .m-agent-card { flex: 0 1 auto; min-height: 0; }
-.m-pages.is-status .m-agent-card .m-agent-list { min-height: 0; overflow-y: auto; }
 /* `auto` som basis, ikke 0: innholdet er fortsatt gulvet, og bare det som er
    til overs fordeles — 3 deler til avtalene, 2 til musikken. Med basis 0 ville
    kortene fått høyde etter forholdstallet alene og klemt teksten. */
@@ -308,8 +300,6 @@
   .m-pages.is-na .m-focus { display: none; }
   .m-pages.is-na .m-na-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; grid-column: 2; grid-row: 1 / -1; }
   .m-pages.is-na .m-na-side > * { min-height: 0; }
-  .m-na-side .m-agent-card { display: flex; }
-  .m-pages.is-status .m-agent-card { display: none; }
   .m-pages.is-na .m-usage-card { flex: 2 1 0; overflow-y: auto; }
   .m-pages.is-na .m-agent-card { flex: 1 1 0; }
   .m-pages.is-na .m-clock { padding: 0 4px 2px; }
@@ -328,7 +318,8 @@
   .m-usage-line strong { font-size: 14px; }
   .m-usage-reset { font-size: 11px; }
   .m-usage-window { gap: 3px; }
-  .m-agent-list { overflow-y: auto; }
+  .m-agent-list, .m-connections { min-height: 0; overflow-y: auto; }
+  .m-pages.is-status .m-connection-card { min-height: 0; }
   .m-usage-card > .m-usage { flex: 1; min-width: 0; }
   .m-usage-card, .m-agent-card { gap: 7px; padding: 11px 12px; }
   .m-usage { gap: 4px; }
@@ -343,21 +334,21 @@
   .m-agent-list li { padding: 8px 10px; }
   .m-agent-list strong { font-size: 15.5px; }
   .m-agent-list small { font-size: 13.5px; }
-  .m-slot { padding: 8px 12px 8px 15px; gap: 2px; }
+  .m-slot { padding: 7px 12px 7px 15px; gap: 1px; }
   .m-slot::before { top: 8px; bottom: 8px; }
   .m-slot-title { font-size: 18px; }
   .m-slot.is-empty .m-slot-title { font-size: 16px; }
   .m-slot-when, .m-slot-count { font-size: 14.5px; }
   .m-subject { min-height: 36px; margin-top: 2px; font-size: 13px; }
-  .m-music { gap: 7px; padding: 9px 12px; }
+  .m-music { gap: 6px; padding: 8px 12px; }
   .m-music-top { gap: 10px; }
   .m-music-text strong { font-size: 17px; }
   .m-music-text small { font-size: 14.5px; }
   .m-music-controls { grid-template-columns: 44px 52px 44px minmax(0, 1fr); gap: 6px; }
-  .m-music-controls button { min-height: 42px; }
+  .m-music-controls button { min-height: 40px; }
   .m-device { font-size: 14.5px; }
   .m-bar, .m-progress { height: 4px; }
-  .m-action { min-height: 52px; }
+  .m-action { min-height: 48px; }
 
   /* De to andre sidene er allerede to kort. De legger seg side ved side. */
   .m-pages.is-ai > *, .m-pages.is-status > * { grid-row: 1; }
@@ -371,7 +362,7 @@
   .m-clock { padding: 0 4px; }
   .m-clock strong { font-size: 34px; }
   .m-clock span { font-size: 13px; }
-  .m-art { width: 44px; height: 44px; flex: 0 0 44px; }
+  .m-art { width: 40px; height: 40px; flex: 0 0 40px; }
   .m-action { min-height: 58px; font-size: 11px; }
   .m-actions { gap: 5px; }
   .m-timer { font-size: 34px; }
@@ -406,3 +397,9 @@
    under dem måtte krympes for å få plass, og små bokstaver er det som er
    vanskeligst å lese på en armlengdes avstand. */
 .m-only-reader { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* AI-siden i portrett. Kommer det flere økter enn det er plass til, gir kortet
+   etter og lista ruller innvendig — en liste som ruller er noe annet enn en
+   side som blir for lang. */
+.m-pages.is-ai .m-agent-card { flex: 0 1 auto; min-height: 0; }
+.m-pages.is-ai .m-agent-card .m-agent-list { min-height: 0; overflow-y: auto; }

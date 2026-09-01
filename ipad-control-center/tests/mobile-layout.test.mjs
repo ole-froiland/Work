@@ -62,3 +62,17 @@ test("blokkert lagring stopper ikke valget", () => {
   assert.equal(chooseLayout({ location: { search: "?layout=mobil" }, storage: blokkert, viewport: iPadLandskap }), "mobil");
   assert.equal(chooseLayout({ location: { search: "" }, storage: blokkert, viewport: iPhone }), "mobil");
 });
+
+// Fanene følger retningen: to sider i liggende, tre i stående. Regelen finnes
+// to steder — som mediespørring i mobile.css og som streng i MobilePanel.jsx —
+// og endres den ene alene, sier fanelinja én ting mens oppsettet gjør en annen.
+test("CSS og JavaScript er enige om hva liggende betyr", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const query = "(orientation: landscape) and (max-height: 560px)";
+
+  const panel = await readFile(new URL("../src/MobilePanel.jsx", import.meta.url), "utf8");
+  assert.ok(panel.includes(`LANDSCAPE_QUERY = "${query}"`), "MobilePanel.jsx må eie spørringen som en konstant");
+
+  const css = await readFile(new URL("../src/mobile.css", import.meta.url), "utf8");
+  assert.ok(css.includes(`@media ${query}`), "mobile.css må bruke nøyaktig samme spørring");
+});
