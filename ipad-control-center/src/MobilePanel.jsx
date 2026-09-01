@@ -431,6 +431,27 @@ function ClipboardSheet({ onClose, onToast }) {
   );
 }
 
+function AwakeSwitch({ wanted, held, onToggle }) {
+  return (
+    <button
+      className={`m-switch ${wanted ? "is-on" : ""} ${wanted && !held ? "is-venter" : ""}`}
+      type="button"
+      role="switch"
+      aria-checked={wanted}
+      onClick={onToggle}
+    >
+      <span className="m-switch-icon"><Sun size={19} weight="fill" /></span>
+      <span className="m-switch-text">
+        <strong>Hold skjermen våken</strong>
+        <small>{wanted
+          ? (held ? "Skjermen slokner ikke mens panelet står framme" : "Venter — iOS gir låsen når panelet er framme")
+          : "Skjermen slokner som vanlig"}</small>
+      </span>
+      <i className="m-switch-track"><b /></i>
+    </button>
+  );
+}
+
 function ActionRow({ actions }) {
   return (
     <div className="m-actions">
@@ -934,6 +955,7 @@ export function MobilePanel() {
               onStop={() => setFocus((current) => ({ ...current, running: false, phase: "idle", set: 1, seconds: current.workMinutes * 60 }))}
             />
             <ActionRow actions={actions} />
+            <AwakeSwitch wanted={keepAwake} held={screenAwake} onToggle={toggleScreenAwake} />
           </>
         )}
 
@@ -972,16 +994,6 @@ export function MobilePanel() {
             </button>
           );
         })}
-        <button
-          className={`m-awake ${keepAwake ? "is-on" : ""} ${keepAwake && !screenAwake ? "is-venter" : ""}`}
-          type="button"
-          aria-pressed={keepAwake}
-          aria-label={keepAwake ? "Slå av at skjermen holdes våken" : "Hold skjermen våken"}
-          onClick={toggleScreenAwake}
-        >
-          <Sun size={20} weight={keepAwake ? "fill" : "regular"} />
-          <span>Våken</span>
-        </button>
       </nav>
     </div>
   );
