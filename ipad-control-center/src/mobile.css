@@ -216,6 +216,53 @@
 .m-focus-start .m-wide-button > span, .m-focus-start .m-wide-button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-focus-start .m-icon-button { width: 48px; height: auto; flex: 0 0 48px; }
 
+/* ---- Fokusøkt i fullskjerm ----
+   En økt som er i gang tar hele skjermen, i begge retninger. Det er hele
+   grunnen til at knappen finnes: musikken, kvotene og fanelinja er ting som
+   kan vente, og en nedtelling som må dele plassen med dem er en nedtelling man
+   blar seg vekk fra. Laget ligger under toasten (30) slik at «Pause i 10 min»
+   fortsatt kommer fram, og under arkene (40) som uansett ikke kan nås herfra.
+
+   Visningen er den samme i stående og liggende — bare målene skiller. Derfor
+   `vmin` på tallet: det er høyden som er knapp i liggende og bredden i
+   stående, og vmin er den av dem som til enhver tid er minst. */
+.m-focus-full {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding:
+    calc(16px + env(safe-area-inset-top, 0px))
+    calc(16px + env(safe-area-inset-right, 0px))
+    calc(16px + env(safe-area-inset-bottom, 0px))
+    calc(16px + env(safe-area-inset-left, 0px));
+  background: var(--bg);
+  color: var(--text);
+}
+.m-focus-full-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.m-focus-full-head .m-eyebrow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-focus-full-clock { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 16px; font-variant-numeric: tabular-nums; }
+
+.m-focus-full-body { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+.m-focus-full-timer { font-size: clamp(64px, 24vmin, 180px); font-weight: 600; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.m-focus-full-bar { width: min(100%, 420px); height: 6px; overflow: hidden; border-radius: 999px; background: #232a33; }
+.m-focus-full-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--lime); transition: width 900ms linear; }
+.m-focus-full.is-break .m-focus-full-bar > span { background: var(--violet); }
+.m-focus-full-note { margin: 0; max-width: 30ch; color: var(--muted); font-size: 17px; line-height: 1.4; text-align: center; }
+.m-focus-full .m-focus-controls { flex: 0 0 auto; }
+.m-focus-full .m-focus-controls button { min-height: 60px; font-size: 14px; }
+
+/* Kortet er den skjulte utgaven av det samme: veien tilbake til fullskjerm
+   ligger i tallet, som er det største man treffer uten å se ned. */
+.m-focus-open { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.m-focus-open > svg { flex: 0 0 auto; color: var(--dim); }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-focus-full-bar > span { transition: none; }
+}
+
 /* Radene i utklippsarket har ikon og forklaring ved siden av hverandre.
    Forklaringen er halve poenget: den sier hva som faktisk ligger klart. */
 .m-sheet-row { display: flex; align-items: flex-start; gap: 11px; }
@@ -374,6 +421,18 @@
   .m-action { min-height: 58px; font-size: 11px; }
   .m-actions { gap: 5px; }
   .m-timer { font-size: 34px; }
+
+  /* Liggende har rundt 350 px høyde igjen når sikkerhetssonene er trukket fra.
+     Luften strammes, men tallet står — det er det eneste på skjermen som skal
+     kunne leses fra der telefonen ligger. */
+  .m-focus-full {
+    gap: 8px;
+    padding-top: calc(9px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(9px + env(safe-area-inset-bottom, 0px));
+  }
+  .m-focus-full-body { gap: 10px; }
+  .m-focus-full-note { font-size: 15px; }
+  .m-focus-full .m-focus-controls button { min-height: 48px; }
   .m-activity-slot { padding: 9px 12px 9px 16px; gap: 2px; }
   .m-activity-title { font-size: 17px; }
   .m-switch { min-height: 48px; }

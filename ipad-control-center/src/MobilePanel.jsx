@@ -7,6 +7,8 @@ import {
   ClipboardText,
   Clock,
   CloudSun,
+  CornersIn,
+  CornersOut,
   FolderOpen,
   Footprints,
   GraduationCap,
@@ -48,6 +50,21 @@ import { useSpotify } from "./spotify-client.js";
 import { ClaudeLogo, CodexLogo } from "./provider-logos.jsx";
 import { clipboardSupport, copyBySelection, fetchMacClipboard, fileToDataUrl, readPhoneClipboard, sendToMac, writePhoneClipboard } from "./clipboard-bridge.js";
 import { createScreenWakeLockController, describeWakeLockRefusal } from "./wake-lock.js";
+import {
+  createFocusSession,
+  describeFocusEvent,
+  focusPhaseProgress,
+  focusSecondsLeft,
+  loadFocusSession,
+  pauseFocusSession,
+  readFocusSettings,
+  resumeFocusSession,
+  saveFocusSession,
+  settleFocusSession,
+  skipFocusPhase,
+  startFocusSession,
+  stopFocusSession,
+} from "./focus-session.js";
 import "./mobile.css";
 
 // Spørringen som skiller liggende fra stående. Den står også i mobile.css, og
@@ -229,23 +246,64 @@ function MusicCard({ onToast }) {
   );
 }
 
+// Knappene er de samme enten økta står i kortet eller fyller skjermen, og de
+// skal si det samme begge steder.
+function FocusControls({ running, onPause, onSkip, onStop }) {
+  return (
+    <div className="m-focus-controls">
+      <button type="button" onClick={onPause}>{running ? <Pause size={20} weight="fill" /> : <Play size={20} weight="fill" />}<span>{running ? "Pause" : "Fortsett"}</span></button>
+      <button type="button" onClick={onSkip}><SkipForward size={20} weight="fill" /><span>Hopp</span></button>
+      <button type="button" onClick={onStop}><Stop size={20} weight="fill" /><span>Avslutt</span></button>
+    </div>
+  );
+}
+
+// En økt i gang tar hele skjermen. Det er hele grunnen til at knappen finnes:
+// alt annet på panelet — musikk, kvoter, fanelinja — er ting som kan vente, og
+// en nedtelling som må konkurrere med dem er en nedtelling man går ut av.
+// Visningen er den samme i stående og liggende; bare målene endrer seg, og de
+// er satt i vmin slik at tallet er like stort begge veier.
+function FocusFullScreen({ state, seconds, progress, clock, onPause, onSkip, onStop, onMinimize }) {
+  const { running, phase, set, sets, activity } = state;
+  return (
+    <section className={`m-focus-full ${phase === "break" ? "is-break" : ""}`} aria-label="Fokusøkt">
+      <header className="m-focus-full-head">
+        <span className="m-eyebrow">{phase === "break" ? "Pause" : "Fokus"} · sett {set} av {sets}</span>
+        <div className="m-focus-full-clock">
+          <span>{clock}</span>
+          <button className="m-icon-button" type="button" onClick={onMinimize} aria-label="Vis panelet uten å avslutte økten">
+            <CornersIn size={17} weight="bold" />
+          </button>
+        </div>
+      </header>
+      <div className="m-focus-full-body">
+        <strong className="m-focus-full-timer">{formatTimer(seconds)}</strong>
+        <div className="m-focus-full-bar" aria-hidden="true"><span style={{ width: `${Math.round(progress * 100)}%` }} /></div>
+        <p className="m-focus-full-note">{phase === "break" ? "Reis deg og strekk på deg" : activity || "Én ting av gangen"}</p>
+      </div>
+      <FocusControls running={running} onPause={onPause} onSkip={onSkip} onStop={onStop} />
+    </section>
+  );
+}
+
 // Kortet er det høyeste på siden, og en økt som ikke er i gang trenger ikke
 // hele skjemaet. Sammenlagt er det én rad: start, og lengden du starter med.
 // Tannhjulet åpner lengdene når de faktisk skal endres — som er sjelden.
-function FocusCard({ state, onStart, onPause, onSkip, onStop, onActivity, onSetting }) {
-  const { running, phase, seconds, set, sets, activity, workMinutes, breakMinutes } = state;
+function FocusCard({ state, seconds, onStart, onPause, onSkip, onStop, onActivity, onSetting, onOpen }) {
+  const { running, phase, set, sets, activity, workMinutes, breakMinutes } = state;
   const [open, setOpen] = useState(false);
 
   if (phase !== "idle") {
     return (
       <Card className={`m-focus ${phase === "break" ? "is-break" : ""}`}>
         <span className="m-eyebrow">{phase === "break" ? "Pause" : activity || "Fokus"} · sett {set} av {sets}</span>
-        <strong className="m-timer">{formatTimer(seconds)}</strong>
-        <div className="m-focus-controls">
-          <button type="button" onClick={onPause}>{running ? <Pause size={20} weight="fill" /> : <Play size={20} weight="fill" />}<span>{running ? "Pause" : "Fortsett"}</span></button>
-          <button type="button" onClick={onSkip}><SkipForward size={20} weight="fill" /><span>Hopp</span></button>
-          <button type="button" onClick={onStop}><Stop size={20} weight="fill" /><span>Avslutt</span></button>
-        </div>
+        {/* Kortet er den skjulte utgaven av fullskjermsvisningen, så veien
+            tilbake dit må stå der tallet står. */}
+        <button className="m-focus-open" type="button" onClick={onOpen} aria-label="Vis fokusøkten på hele skjermen">
+          <strong className="m-timer">{formatTimer(seconds)}</strong>
+          <CornersOut size={17} weight="bold" />
+        </button>
+        <FocusControls running={running} onPause={onPause} onSkip={onSkip} onStop={onStop} />
       </Card>
     );
   }
@@ -672,21 +730,42 @@ export function MobilePanel() {
   // Fokusøkta deler innstillinger med iPad-panelet. Skjerm våken gjør det ikke:
   // på iPad henger den sammen med Fokus på Mac-en, og en telefon som lyser i
   // festet skal ikke slå på Fokus for alle enhetene.
-  const [focus, setFocus] = useState(() => ({
-    running: false,
-    phase: "idle",
-    set: 1,
-    seconds: (Number(localStorage.getItem("panel-focus-work")) || 45) * 60,
-    activity: localStorage.getItem("panel-focus-activity") || "",
-    workMinutes: Number(localStorage.getItem("panel-focus-work")) || 45,
-    breakMinutes: Number(localStorage.getItem("panel-focus-break")) || 10,
-    sets: Number(localStorage.getItem("panel-focus-sets")) || 2,
-  }));
+  //
+  // Selve økta er derimot telefonens egen, og den overlever at panelet legges
+  // bort: den hentes tilbake dit klokka har gått i mellomtiden, ikke dit den
+  // ble forlatt. Safari kaster fanen når telefonen har ligget lenge nok, og da
+  // er lagringen det eneste som er igjen av økta.
+  const gjenopptatt = useRef(null);
+  const [focus, setFocus] = useState(() => {
+    const lagret = loadFocusSession(window.localStorage);
+    if (!lagret) return createFocusSession(readFocusSettings(window.localStorage));
+    const { session, events } = settleFocusSession(lagret, Date.now());
+    gjenopptatt.current = events.at(-1) ?? null;
+    return session;
+  });
+  // Fullskjerm er utgangspunktet så lenge økta er i gang: kommer Ole tilbake
+  // til telefonen midt i en økt, er det nedtellingen han kommer tilbake til.
+  const [focusFull, setFocusFull] = useState(() => focus.phase !== "idle");
+  const [focusNow, setFocusNow] = useState(() => Date.now());
+  const focusRef = useRef(focus);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 15_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => { focusRef.current = focus; });
+
+  useEffect(() => {
+    if (gjenopptatt.current) {
+      setToast(describeFocusEvent(gjenopptatt.current));
+      gjenopptatt.current = null;
+    }
+  }, []);
+
+  // Økta ligger lagret så lenge den varer, og bare da. Er den ferdig, tar
+  // modulen bort nøkkelen igjen.
+  useEffect(() => { saveFocusSession(window.localStorage, focus); }, [focus]);
 
   useEffect(() => {
     try {
@@ -742,15 +821,33 @@ export function MobilePanel() {
     return () => { active = false; window.clearInterval(timer); };
   }, [page]);
 
+  // Tidtakeren teller ikke ned — den leser klokka. Safari fryser `setInterval`
+  // når telefonen låses eller panelet legges bak en annen app, og en nedtelling
+  // som trekker fra ett sekund om gangen blir derfor stående i lomma. Her er
+  // sluttpunktet det som er lagret, og hvert tikk regner ut resten på nytt.
+  // Tikket kommer dessuten med én gang panelet er framme igjen: da har det
+  // gjerne gått mer enn ett sekund siden sist, og noen ganger hele faser.
   useEffect(() => {
     if (!focus.running) return undefined;
-    const timer = window.setInterval(() => {
-      setFocus((current) => {
-        if (current.seconds > 1) return { ...current, seconds: current.seconds - 1 };
-        return advanceFocus(current);
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
+    const tikk = () => {
+      const na = Date.now();
+      setFocusNow(na);
+      const { session, events } = settleFocusSession(focusRef.current, na);
+      if (events.length) {
+        setFocus(session);
+        setToast(describeFocusEvent(events.at(-1)));
+      }
+    };
+    const framme = () => { if (document.visibilityState === "visible") tikk(); };
+    tikk();
+    const timer = window.setInterval(tikk, 1000);
+    document.addEventListener("visibilitychange", framme);
+    window.addEventListener("pageshow", tikk);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", framme);
+      window.removeEventListener("pageshow", tikk);
+    };
   }, [focus.running]);
 
   useEffect(() => {
@@ -759,17 +856,26 @@ export function MobilePanel() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  function advanceFocus(current) {
-    if (current.phase === "work" && current.set < current.sets) {
-      setToast(`Pause i ${current.breakMinutes} min`);
-      return { ...current, phase: "break", seconds: current.breakMinutes * 60 };
-    }
-    if (current.phase === "break") {
-      setToast(`Sett ${current.set + 1} av ${current.sets}`);
-      return { ...current, phase: "work", set: current.set + 1, seconds: current.workMinutes * 60 };
-    }
-    setToast("Fokusøkten er fullført");
-    return { ...current, running: false, phase: "idle", set: 1, seconds: current.workMinutes * 60 };
+  function startFocus() {
+    setFocus(startFocusSession(focus, Date.now()));
+    setFocusFull(true);
+  }
+
+  function vekslePause() {
+    const na = Date.now();
+    setFocus(focus.running ? pauseFocusSession(focus, na) : resumeFocusSession(focus, na));
+  }
+
+  function avsluttFokus() {
+    setFocus(stopFocusSession(focus));
+    setFocusFull(false);
+  }
+
+  function hoppFokus() {
+    const { session, events } = skipFocusPhase(focus, Date.now());
+    setFocus(session);
+    setToast(describeFocusEvent(events.at(-1)));
+    if (session.phase === "idle") setFocusFull(false);
   }
 
   async function runOnMac(body, { done, failed }) {
@@ -866,6 +972,10 @@ export function MobilePanel() {
     });
   }
 
+  // Tallet regnes ut ved hver tegning, ikke lagres. Da kan det ikke bli
+  // stående igjen på noe som var sant før telefonen ble lagt fra seg.
+  const focusSeconds = focusSecondsLeft(focus, focusNow);
+
   const index = PAGES.findIndex((entry) => entry.id === page);
   function gåTil(id) {
     const til = PAGES.findIndex((entry) => entry.id === id);
@@ -937,23 +1047,25 @@ export function MobilePanel() {
             <MusicCard onToast={setToast} />
             <FocusCard
               state={focus}
+              seconds={focusSeconds}
               onActivity={(value) => {
                 setFocus((current) => ({ ...current, activity: value }));
                 localStorage.setItem("panel-focus-activity", value);
               }}
               onSetting={(key, value) => {
                 localStorage.setItem(`panel-focus-${key}`, String(value));
-                setFocus((current) => ({
+                setFocus((current) => createFocusSession({
                   ...current,
-                  ...(key === "work" ? { workMinutes: value, seconds: value * 60 } : {}),
+                  ...(key === "work" ? { workMinutes: value } : {}),
                   ...(key === "break" ? { breakMinutes: value } : {}),
                   ...(key === "sets" ? { sets: value } : {}),
                 }));
               }}
-              onStart={() => setFocus((current) => ({ ...current, running: true, phase: "work", set: 1, seconds: current.workMinutes * 60 }))}
-              onPause={() => setFocus((current) => ({ ...current, running: !current.running }))}
-              onSkip={() => setFocus((current) => advanceFocus(current))}
-              onStop={() => setFocus((current) => ({ ...current, running: false, phase: "idle", set: 1, seconds: current.workMinutes * 60 }))}
+              onStart={startFocus}
+              onPause={vekslePause}
+              onSkip={hoppFokus}
+              onStop={avsluttFokus}
+              onOpen={() => setFocusFull(true)}
             />
             <ActionRow actions={actions} />
             </div>
@@ -974,6 +1086,19 @@ export function MobilePanel() {
           </>
         )}
       </main>
+
+      {focus.phase !== "idle" && focusFull && (
+        <FocusFullScreen
+          state={focus}
+          seconds={focusSeconds}
+          progress={focusPhaseProgress(focus, focusNow)}
+          clock={clockText(now)}
+          onPause={vekslePause}
+          onSkip={hoppFokus}
+          onStop={avsluttFokus}
+          onMinimize={() => setFocusFull(false)}
+        />
+      )}
 
       {clipboardOpen && <ClipboardSheet onClose={() => setClipboardOpen(false)} onToast={setToast} />}
 
