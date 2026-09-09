@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { resolveAgentSessionLink } from "./agent-session-service.mjs";
 import { getSyncCalendar } from "./sync-calendar-service.mjs";
 import { buildSessionPrompt, normalizeSessionRequest, readSubjectHistory, readSubjectProjects, recordSubjectSession, selectBalancedSubject } from "./subject-service.mjs";
+import { switchHeadphone } from "./bluetooth-service.mjs";
 
 const runCommand = promisify(execFile);
 const sidecarSource = fileURLToPath(new URL("./sidecar-tool.m", import.meta.url));
@@ -300,6 +301,17 @@ const macActions = {
   },
   async "codex-login"(exec) {
     return openInTerminal(exec, "codex-login", "codex login", "Codex");
+  },
+  // Hodetelefonene til og fra Mac-en. Frakoblingen er like viktig som
+  // tilkoblingen: Mac-en kan ikke be telefonen om å ta dem, men den kan slippe
+  // taket, og da hopper AirPods dit av seg selv.
+  async "bluetooth-connect"(exec, payload) {
+    const result = await switchHeadphone({ address: payload?.address, mode: "connect", exec });
+    return { action: "bluetooth-connect", ...result };
+  },
+  async "bluetooth-disconnect"(exec, payload) {
+    const result = await switchHeadphone({ address: payload?.address, mode: "disconnect", exec });
+    return { action: "bluetooth-disconnect", ...result };
   },
   async "screen-mirror"(exec, payload) {
     const device = normalizeDeviceName(payload?.device);

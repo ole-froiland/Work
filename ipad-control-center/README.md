@@ -6,6 +6,13 @@ AI-brukskortet henter leverandørrapporterte kvotetall fra de lokale, innloggede
 
 Oppgavekortet rett under viser hva Claude og Codex faktisk holder på med akkurat nå: hvilke økter som kjører, hva de gjør (kjører kommandoer, endrer filer, leter på nettet), hva som har stoppet opp, og hva som er ferdig og venter på svar. Kilden er samtaleloggene klientene selv skriver på Mac-en (`~/.claude/projects` og `~/.codex/sessions`); ingenting spørres fra en leverandør, og ingen del av samtalene sendes til nettleseren utover navnet på økta og hvilket verktøy som er i bruk. Kortet leser bare slutten av hver logg og oppdateres hvert tiende sekund. En økt regnes som aktiv i fem minutter etter siste hendelse — går det lengre tid midt i en oppgave, står den merket «står stille» i stedet for å se ut som at den jobber.
 
+Lyd-knappen på mobilpanelet flytter hodetelefonene. Arket viser hvilke som er paret
+med Mac-en og hvilken som står tilkoblet der, og kobler til og fra med ett trykk.
+Mac-en kan ikke koble hodetelefoner til iPhone eller iPad — en Bluetooth-forbindelse
+startes av enheten som vil ha lyden — så veien dit er «koble fra Mac-en», som slipper
+AirPodsene videre, eller en snarvei på telefonen med handlingen «Angi avspillingsmål».
+Navnet på snarveien legges inn i arket én gang per hodetelefon.
+
 ## Kjør lokalt
 
 ```bash

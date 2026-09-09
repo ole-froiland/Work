@@ -117,7 +117,9 @@
 .m-wide-button { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 14px; background: var(--panel-raised); color: var(--text); font-size: 16px; font-weight: 600; cursor: pointer; }
 .m-wide-button.is-primary { background: var(--lime); color: var(--lime-ink); }
 
-.m-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+/* Seks knapper. På 375 px blir hver 53,5 px bred — over 44 px-grensen, og
+   ikonene er uansett det som leses, ikke teksten under dem. */
+.m-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
 .m-action { min-height: 70px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0 2px; border: 1px solid var(--line-soft); border-radius: 15px; background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
 .m-action > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Av og på skal kunne ses uten å lese: slått på er full farge, slått av er
@@ -269,6 +271,17 @@
 .m-sheet-row > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .m-sheet-row small { line-height: 1.4; }
 .m-sheet-note { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.5; }
+
+/* De to veiene ut av en hodetelefonrad. Mac-veien er ekte og står øverst;
+   telefonveien går gjennom en snarvei Ole lager selv, og får derfor plass til
+   oppskriften når den ennå ikke finnes. */
+.m-bt-ways { display: flex; flex-direction: column; gap: 7px; padding: 8px 0 2px; }
+.m-bt-setup { display: flex; flex-direction: column; gap: 7px; }
+.m-bt-forget { padding: 4px; border: 0; background: none; color: var(--dim); font-size: 13px; text-align: center; cursor: pointer; }
+.m-sheet li > button[aria-expanded="true"] { border-color: var(--blue); }
+/* Raden er en knapp med ikon og to linjer tekst ved siden av. Uten dette
+   arver den kolonneretningen fra arkets egne rader og stabler ikonet oppå. */
+.m-sheet li > button .m-sheet-row { width: 100%; align-items: center; }
 
 /* Filvelgeren er systemets, ikke vår. Den skal utløses av knappen over, ikke
    tegnes som en grå «Velg fil»-kontroll ved siden av den. */

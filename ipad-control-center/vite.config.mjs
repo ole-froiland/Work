@@ -8,6 +8,7 @@ import { getUsageSnapshot } from "./server/usage-service.mjs";
 import { getAgentSessions } from "./server/agent-session-service.mjs";
 import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
 import { listConnectedSubjects } from "./server/subject-service.mjs";
+import { listHeadphones } from "./server/bluetooth-service.mjs";
 import { getDayPlan, markBlockDone, recordNight, recordWake, saveTargetWake } from "./server/day-plan-service.mjs";
 // Reglene for rytmen bor i dashboard.js sammen med resten av utregningene.
 // Telefonen skal hente alarmtidene herfra og ikke ha sin egen kopi av dem.
@@ -428,6 +429,28 @@ function subjectsApi() {
   };
 }
 
+// Hvilke hodetelefoner som finnes, og hvilken som står på Mac-en. Bare navn,
+// adresse og tilkoblingsstatus svares ut — resten av det IOBluetooth vet om
+// enhetene (serienumre, fastvare) blir liggende igjen her.
+function bluetoothApi() {
+  return {
+    name: "local-bluetooth-api",
+    configureServer(server) {
+      server.middlewares.use("/api/bluetooth", async (request, response) => {
+        if (request.method !== "GET") {
+          sendJson(response, 405, { error: "Method not allowed" });
+          return;
+        }
+        try {
+          sendJson(response, 200, await listHeadphones());
+        } catch (error) {
+          sendJson(response, 500, { ok: false, powered: false, devices: [], error: error instanceof Error ? error.message : "Ukjent feil" });
+        }
+      });
+    },
+  };
+}
+
 function macActionApi() {
   return {
     name: "local-mac-action-api",
@@ -535,5 +558,5 @@ export default defineConfig({
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), dayPlanApi(), spotifyApi(), panelHelloApi(), subjectsApi(), macActionApi(), clipboardApi(), connectionRepairApi(), react()],
+  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), dayPlanApi(), spotifyApi(), panelHelloApi(), subjectsApi(), bluetoothApi(), macActionApi(), clipboardApi(), connectionRepairApi(), react()],
 });

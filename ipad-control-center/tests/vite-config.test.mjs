@@ -55,3 +55,10 @@ test("utklippstavla er montert som eget endepunkt", () => {
   const names = viteConfig.plugins.flat(Infinity).map((plugin) => plugin?.name);
   assert.ok(names.includes("local-clipboard-api"));
 });
+
+// Uten dette endepunktet har Lyd-knappen ingen liste å vise, og arket kan ikke
+// si hvilken hodetelefon som står på Mac-en.
+test("bluetooth er montert som eget endepunkt", () => {
+  const names = viteConfig.plugins.flat(Infinity).map((plugin) => plugin?.name);
+  assert.ok(names.includes("local-bluetooth-api"));
+});
