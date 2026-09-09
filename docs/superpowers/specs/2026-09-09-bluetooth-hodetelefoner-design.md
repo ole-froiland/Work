@@ -55,17 +55,20 @@ den inn.
 allerede på Mac-en, snur knappen til «Koble fra Mac-en» — det er den som slipper
 hodetelefonene til telefonen, og den er halve poenget med arket.
 
-**Til telefonen** starter en snarvei Ole lager én gang per hodetelefon.
-Panelet husker navnet under `panel-bt-shortcut-<adresse>` i `localStorage`.
-Uten et lagret navn sier målet «Trykk for å sette opp» og fører til oppsettet i
-stedet for å gjøre noe: panelet skal aldri tilby en knapp som ikke fører noe
-sted, og en `shortcuts://`-adresse til en snarvei som ikke finnes ender i en
-feilmelding fra Snarveier-appen. En snarvei kan få nytt navn senere, så veien
-tilbake til oppsettet finnes — men bare når det er noe å endre.
+**Til telefonen** er den samme bryteren sett fra andre siden: den kobler fra
+Mac-en, slik at telefonen kan ta hodetelefonene. Teksten sier hva trykket gjør og
+ikke hva det håper på — panelet kan ikke love at telefonen tar den.
 
 **iPaden** står i lista og er avslått, med «Kan ikke styres herfra» under seg.
 Å skjule den ville latt som om målet ikke finnes; avslått med grunnen skrevet
 svarer på hvorfor. Spotify-arket viser en enhet det ikke kan styre på samme måte.
+
+En tredje vei ble prøvd og forkastet: en iOS-snarvei med «Angi avspillingsmål»,
+startet med `shortcuts://`. Den virket bare hvis Ole først laget snarveien selv,
+og en knapp som krever at du bygger noe før den gjør noe, er en knapp som ser
+ødelagt ut — han trykket på den og meldte den som en feil. Det som faktisk gir
+sømløst bytte ligger i hodetelefonene: multipoint på XM5, og automatisk bytte på
+AirPods. Panelet skal gjøre Mac-siden godt og ikke konkurrere med de to.
 
 ## Statusen
 

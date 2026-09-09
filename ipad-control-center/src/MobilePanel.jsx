@@ -56,7 +56,7 @@ import { useSpotify } from "./spotify-client.js";
 import { ClaudeLogo, CodexLogo } from "./provider-logos.jsx";
 import { clipboardSupport, copyBySelection, fetchMacClipboard, fileToDataUrl, readPhoneClipboard, sendToMac, writePhoneClipboard } from "./clipboard-bridge.js";
 import { createScreenWakeLockController, describeWakeLockRefusal } from "./wake-lock.js";
-import { fetchHeadphones, readShortcutName, saveShortcutName, shortcutUrl } from "./bluetooth-client.js";
+import { fetchHeadphones } from "./bluetooth-client.js";
 import {
   createFocusSession,
   describeFocusEvent,
@@ -352,93 +352,45 @@ function FocusCard({ state, seconds, onStart, onPause, onSkip, onStop, onActivit
 }
 
 // Hodetelefonene står fast på én enhet, og veien ut har vært å slå dem av og på
-// til de fant riktig sted. Arket gjør det samme med to trykk: hvilken
-// hodetelefon, og hvor den skal.
+// til de fant riktig sted. Arket gjør det med to trykk: hvilken hodetelefon, og
+// hvor den skal.
 //
-// To steg og ikke ett skjema. Første utgave la begge veiene og hele
-// forklaringen ut i samme rad, og da var arket mest tekst — man leste seg fram
-// til en knapp i stedet for å peke på den. Oppskriften på snarveien hører
-// hjemme der man setter den opp, én gang, og ingen andre steder.
+// Panelet rår over nøyaktig én ting: om hodetelefonen står på Mac-en. Det er
+// ikke en begrensning som kan bygges bort — en Bluetooth-forbindelse startes av
+// enheten som vil ha lyden, og Mac-en kan verken be telefonen eller iPaden om å
+// ta noe. Målene er derfor to sider av den ene bryteren: «Mac-en» henter den
+// hit, «Telefonen» slipper den, slik at telefonen kan ta den.
 //
-// Målene er ikke like ekte, og det skal listen si i stedet for å skjule det.
-// Mac-en kan koble til og fra seg selv, og det er hele det panelet rår over: en
-// Bluetooth-forbindelse startes av enheten som vil ha lyden. Telefonen kan kjøre
-// sin egen snarvei. iPaden kan ingen av delene herfra, og står derfor avslått
-// med grunnen skrevet — samme måte som Spotify-arket viser en enhet den ikke
-// kan styre.
+// Det sto en tredje vei her en stund: en iOS-snarvei med «Angi avspillingsmål»,
+// startet med `shortcuts://`. Den virket bare hvis Ole først bygde snarveien
+// selv, og en knapp som krever at du lager noe før den gjør noe, er en knapp som
+// ser ødelagt ut. Den er borte igjen. Det som faktisk gir sømløst bytte ligger i
+// hodetelefonene: multipoint på XM5, og automatisk bytte på AirPods.
 function BluetoothSheet({ onClose, onToast }) {
   const [snapshot, setSnapshot] = useState(null);
   const [valgt, setValgt] = useState(null);
-  const [setup, setSetup] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [utkast, setUtkast] = useState("");
-  // Snarveinavnene bor i `localStorage`, men de må stå i tilstanden også:
-  // leses lagringen under tegningen, har React ingen måte å vite at et navn ble
-  // lagret på, og raden blir stående og be om det som allerede er der.
-  const [shortcuts, setShortcuts] = useState({});
 
   async function last() {
-    const neste = await fetchHeadphones();
-    setSnapshot(neste);
-    const navn = {};
-    for (const enhet of neste.devices ?? []) navn[enhet.id] = readShortcutName(window.localStorage, enhet.id);
-    setShortcuts(navn);
+    setSnapshot(await fetchHeadphones());
   }
 
   useEffect(() => { last(); }, []);
 
   const devices = snapshot?.devices ?? [];
   const device = devices.find((enhet) => enhet.id === valgt) ?? null;
-  const snarvei = device ? shortcuts[device.id] ?? "" : "";
 
-  async function tilMac(mode) {
+  async function bytt(mode, melding) {
     setBusy(true);
     try {
-      onToast((await callMacAction({ action: `bluetooth-${mode}`, address: device.id })).message);
+      await callMacAction({ action: `bluetooth-${mode}`, address: device.id });
+      onToast(melding);
     } catch (error) {
       onToast(error.message);
     } finally {
       setBusy(false);
       last();
     }
-  }
-
-  function tilbake() {
-    if (setup) return setSetup(false);
-    setValgt(null);
-  }
-
-  // Steg 3: snarveien settes opp én gang per hodetelefon, og forklaringen bor
-  // her — ikke i veien for de to trykkene man gjør hver dag.
-  if (device && setup) {
-    return (
-      <Sheet label={`Snarvei for ${device.name}`} onClose={onClose}>
-        <SheetHead title="Til telefonen" onBack={tilbake} />
-        <p className="m-sheet-note">
-          Telefonen må koble seg til selv. Lag en snarvei i Snarveier med handlingen
-          «Angi avspillingsmål» og velg {device.name} — så kjører panelet den herfra.
-        </p>
-        <input
-          className="m-input"
-          value={utkast}
-          onChange={(event) => setUtkast(event.target.value)}
-          placeholder="Navn på snarveien"
-          aria-label={`Navn på snarveien som sender lyden til ${device.name}`}
-        />
-        <button
-          className="m-wide-button is-primary"
-          type="button"
-          disabled={!utkast.trim()}
-          onClick={() => {
-            const lagret = saveShortcutName(window.localStorage, device.id, utkast);
-            setShortcuts((current) => ({ ...current, [device.id]: lagret }));
-            setSetup(false);
-          }}
-        >
-          <Check size={18} weight="bold" /> Lagre
-        </button>
-      </Sheet>
-    );
   }
 
   // Steg 2: hvor skal den?
@@ -448,31 +400,40 @@ function BluetoothSheet({ onClose, onToast }) {
         id: "mac",
         icon: Laptop,
         navn: "Mac-en",
-        // Frakoblingen er halve poenget: Mac-en kan ikke be telefonen om å ta
-        // hodetelefonene, men den kan slippe taket, og da hopper AirPods dit selv.
-        under: device.onMac ? "Tilkoblet — trykk for å koble fra" : null,
         aktiv: device.onMac,
-        onPress: () => tilMac(device.onMac ? "disconnect" : "connect"),
+        under: device.onMac ? "Tilkoblet" : null,
+        onPress: () => (device.onMac ? null : bytt("connect", `${device.name} er koblet til Mac-en`)),
       },
       {
         id: "telefon",
         icon: DeviceMobile,
-        navn: "Denne telefonen",
-        under: snarvei ? null : "Trykk for å sette opp",
-        onPress: () => (snarvei ? (window.location.href = shortcutUrl(snarvei)) : (setUtkast(snarvei), setSetup(true))),
+        navn: "Telefonen",
+        aktiv: !device.onMac,
+        // Frakoblingen er det ekte her. Panelet kan ikke love at telefonen tar
+        // den — det avgjør hodetelefonen og telefonen seg imellom — så teksten
+        // sier hva trykket gjør, ikke hva det håper på.
+        under: device.onMac ? "Slipper den fra Mac-en" : "Ledig for telefonen",
+        onPress: () => (device.onMac
+          ? bytt("disconnect", `${device.name} er sluppet fra Mac-en — telefonen kan ta den nå`)
+          : null),
       },
       { id: "ipad", icon: DeviceTablet, navn: "iPad", under: "Kan ikke styres herfra", disabled: true },
     ];
 
     return (
       <Sheet label={`Hvor skal ${device.name}?`} onClose={onClose}>
-        <SheetHead title={device.name} onBack={tilbake} />
+        <SheetHead title={device.name} onBack={() => setValgt(null)} />
         <ul>
           {mål.map((rad) => {
             const Icon = rad.icon;
             return (
               <li key={rad.id}>
-                <button type="button" className={rad.aktiv ? "is-active" : ""} disabled={rad.disabled || busy} onClick={rad.onPress}>
+                <button
+                  type="button"
+                  className={rad.aktiv ? "is-active" : ""}
+                  disabled={rad.disabled || busy || rad.aktiv}
+                  onClick={rad.onPress}
+                >
                   <span className="m-sheet-row">
                     <Icon size={22} weight="fill" />
                     <span>
@@ -487,14 +448,6 @@ function BluetoothSheet({ onClose, onToast }) {
           })}
         </ul>
         {busy && <p className="m-empty">Kobler …</p>}
-        {/* Snarveier kan få nytt navn, og da åpner knappen over ingenting. Veien
-            tilbake til oppsettet finnes derfor — men bare når det er noe å
-            endre, og bare som en stille linje under det man faktisk kommer for. */}
-        {snarvei && (
-          <button className="m-sheet-quiet" type="button" onClick={() => { setUtkast(snarvei); setSetup(true); }}>
-            Endre snarveien «{snarvei}»
-          </button>
-        )}
       </Sheet>
     );
   }
@@ -511,7 +464,7 @@ function BluetoothSheet({ onClose, onToast }) {
       <ul>
         {devices.map((enhet) => (
           <li key={enhet.id}>
-            <button type="button" className={enhet.onMac ? "is-active" : ""} onClick={() => { setValgt(enhet.id); setUtkast(shortcuts[enhet.id] ?? ""); }}>
+            <button type="button" className={enhet.onMac ? "is-active" : ""} onClick={() => setValgt(enhet.id)}>
               <span className="m-sheet-row">
                 <Headphones size={22} weight="fill" />
                 <span>
@@ -531,7 +484,7 @@ function BluetoothSheet({ onClose, onToast }) {
   );
 }
 
-// Arkskallet og overskriften deles av de tre stegene, slik at de ikke kan komme
+// Arkskallet og overskriften deles av begge stegene, slik at de ikke kan komme
 // i utakt med hverandre.
 function Sheet({ label, onClose, children }) {
   return (

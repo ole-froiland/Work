@@ -9,7 +9,6 @@ import {
   readBluetoothSnapshot,
   switchHeadphone,
 } from "../server/bluetooth-service.mjs";
-import { readShortcutName, saveShortcutName, shortcutUrl } from "../src/bluetooth-client.js";
 
 // Slik Mac-en faktisk svarer. Klassekodene er lest av Oles egne enheter, ikke
 // funnet på: hodetelefoner er 4/6, Sony-headsettet 4/1, TV-en 4/14, og mus,
@@ -169,56 +168,4 @@ test("en lesing som feiler tar ikke ned arket", async () => {
   assert.equal(snapshot.ok, false);
   assert.deepEqual(snapshot.devices, []);
   assert.match(snapshot.error, /Fikk ikke lest Bluetooth/);
-});
-
-// --- Nettleserens side ---
-
-function fakeStorage(seed = {}) {
-  const values = new Map(Object.entries(seed));
-  return {
-    getItem: (key) => (values.has(key) ? values.get(key) : null),
-    setItem: (key, value) => values.set(key, String(value)),
-    removeItem: (key) => values.delete(key),
-  };
-}
-
-// En snarvei kan hete «AirPods & meg», og et navn med skråstrek eller ampersand
-// ville ellers delt adressen i to og startet feil snarvei — eller ingen.
-test("snarveinavnet overlever veien gjennom adressen", () => {
-  const url = shortcutUrl("Sony & meg / hjem");
-  assert.equal(new URL(url).searchParams.get("name"), "Sony & meg / hjem");
-  assert.match(url, /^shortcuts:\/\/run-shortcut\?name=/);
-});
-
-// Uten navn skal raden vise oppskriften, ikke en knapp: en `shortcuts://`-adresse
-// til en snarvei som ikke finnes ender i en feilmelding fra Snarveier, og det
-// ser ut som at panelet er ødelagt.
-test("uten et navn finnes det ingen adresse å åpne", () => {
-  assert.equal(shortcutUrl(""), null);
-  assert.equal(shortcutUrl("   "), null);
-  assert.equal(shortcutUrl(null), null);
-});
-
-test("snarveien huskes per hodetelefon", () => {
-  const storage = fakeStorage();
-  saveShortcutName(storage, "58-18-62-01-4f-bd", "  Sony til telefonen  ");
-  assert.equal(readShortcutName(storage, "58-18-62-01-4f-bd"), "Sony til telefonen");
-  assert.equal(readShortcutName(storage, "34-0e-22-d1-6d-3b"), "", "en annen enhet skal ikke arve navnet");
-});
-
-test("et tomt navn fjerner snarveien i stedet for å lagre tomheten", () => {
-  const storage = fakeStorage();
-  saveShortcutName(storage, "58-18-62-01-4f-bd", "Sony");
-  saveShortcutName(storage, "58-18-62-01-4f-bd", "   ");
-  assert.equal(readShortcutName(storage, "58-18-62-01-4f-bd"), "");
-});
-
-test("blokkert lagring tar ikke ned arket", () => {
-  const blokkert = {
-    getItem() { throw new Error("blokkert"); },
-    setItem() { throw new Error("blokkert"); },
-    removeItem() { throw new Error("blokkert"); },
-  };
-  assert.equal(readShortcutName(blokkert, "58-18-62-01-4f-bd"), "");
-  assert.doesNotThrow(() => saveShortcutName(blokkert, "58-18-62-01-4f-bd", "Sony"));
 });

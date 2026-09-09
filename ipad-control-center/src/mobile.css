@@ -279,9 +279,10 @@
 .m-sheet li > button .m-sheet-row > span { flex: 1; }
 .m-sheet li > button .m-sheet-row > svg:last-child { flex: 0 0 auto; color: var(--dim); }
 .m-sheet li > button.is-active .m-sheet-row > svg:last-child { color: var(--lime); }
-
-/* En vei som finnes, men ikke skal konkurrere med den man kom for. */
-.m-sheet-quiet { padding: 4px; border: 0; background: none; color: var(--dim); font-size: 13px; text-align: center; cursor: pointer; }
+/* Raden man allerede står på kan ikke trykkes — det er ingenting å gjøre der —
+   men den skal ikke se avslått ut av den grunn. Nedtoningen er forbeholdt mål
+   panelet ikke rår over, som iPaden. */
+.m-sheet li > button.is-active:disabled { opacity: 1; }
 
 /* Tilbake-pila står i overskriften, ikke som en rad i lista: den hører til
    arket og ikke til noe man kan velge. */
