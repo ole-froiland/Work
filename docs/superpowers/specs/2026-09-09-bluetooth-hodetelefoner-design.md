@@ -34,9 +34,15 @@ stå på to. Panelet skal si dette, ikke love noe annet.
 En sjette hurtigknapp på Nå-siden, «Lyd», ved siden av Fokus. Fokus blir
 stående — den gjør noe annet, og Ole bruker den.
 
-Knappen åpner et ark, samme mønster som Utklipp og Spotify-enhetsvelgeren. Én
-rad per hodetelefon, med navnet og hvor den står. Trykk på en rad åpner de to
-veiene ut.
+Knappen åpner et ark, samme mønster som Utklipp og Spotify-enhetsvelgeren.
+Arket er en liste man peker i, ikke et skjema man leser: først hvilken
+hodetelefon, så hvor den skal. Trykk på en hodetelefon bytter arket til målene —
+Mac-en, telefonen, iPaden — og trykk på et mål er hele handlingen.
+
+Den første utgaven la begge veiene og hele forklaringen ut i samme rad. Da var
+arket mest tekst, og man leste seg fram til en knapp i stedet for å peke på den.
+Oppskriften på snarveien hører hjemme der man setter den opp, én gang, og ingen
+andre steder.
 
 Lista er parede enheter av Bluetooth-klasse hodetelefon eller headset. Mus,
 tastatur, TV, iPad og iPhone faller bort av seg selv; filteret er klassekoden og
@@ -51,9 +57,15 @@ hodetelefonene til telefonen, og den er halve poenget med arket.
 
 **Til telefonen** starter en snarvei Ole lager én gang per hodetelefon.
 Panelet husker navnet under `panel-bt-shortcut-<adresse>` i `localStorage`.
-Uten et lagret navn viser raden oppskriften i stedet for en knapp: panelet skal
-aldri tilby en knapp som ikke fører noe sted, og en `shortcuts://`-adresse til
-en snarvei som ikke finnes ender i en feilmelding fra Snarveier-appen.
+Uten et lagret navn sier målet «Trykk for å sette opp» og fører til oppsettet i
+stedet for å gjøre noe: panelet skal aldri tilby en knapp som ikke fører noe
+sted, og en `shortcuts://`-adresse til en snarvei som ikke finnes ender i en
+feilmelding fra Snarveier-appen. En snarvei kan få nytt navn senere, så veien
+tilbake til oppsettet finnes — men bare når det er noe å endre.
+
+**iPaden** står i lista og er avslått, med «Kan ikke styres herfra» under seg.
+Å skjule den ville latt som om målet ikke finnes; avslått med grunnen skrevet
+svarer på hvorfor. Spotify-arket viser en enhet det ikke kan styre på samme måte.
 
 ## Statusen
 

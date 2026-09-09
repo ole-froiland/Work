@@ -272,16 +272,22 @@
 .m-sheet-row small { line-height: 1.4; }
 .m-sheet-note { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.5; }
 
-/* De to veiene ut av en hodetelefonrad. Mac-veien er ekte og står øverst;
-   telefonveien går gjennom en snarvei Ole lager selv, og får derfor plass til
-   oppskriften når den ennå ikke finnes. */
-.m-bt-ways { display: flex; flex-direction: column; gap: 7px; padding: 8px 0 2px; }
-.m-bt-setup { display: flex; flex-direction: column; gap: 7px; }
-.m-bt-forget { padding: 4px; border: 0; background: none; color: var(--dim); font-size: 13px; text-align: center; cursor: pointer; }
-.m-sheet li > button[aria-expanded="true"] { border-color: var(--blue); }
-/* Raden er en knapp med ikon og to linjer tekst ved siden av. Uten dette
-   arver den kolonneretningen fra arkets egne rader og stabler ikonet oppå. */
+/* Arket er en liste man peker i, ikke et skjema man leser. Raden er en knapp
+   med ikon til venstre, navnet i midten og pila til høyre — uten dette arver
+   den kolonneretningen fra arkets egne rader og stabler ikonet oppå navnet. */
 .m-sheet li > button .m-sheet-row { width: 100%; align-items: center; }
+.m-sheet li > button .m-sheet-row > span { flex: 1; }
+.m-sheet li > button .m-sheet-row > svg:last-child { flex: 0 0 auto; color: var(--dim); }
+.m-sheet li > button.is-active .m-sheet-row > svg:last-child { color: var(--lime); }
+
+/* En vei som finnes, men ikke skal konkurrere med den man kom for. */
+.m-sheet-quiet { padding: 4px; border: 0; background: none; color: var(--dim); font-size: 13px; text-align: center; cursor: pointer; }
+
+/* Tilbake-pila står i overskriften, ikke som en rad i lista: den hører til
+   arket og ikke til noe man kan velge. */
+.m-sheet-head { display: flex; align-items: center; gap: 10px; }
+.m-sheet-head h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-sheet-head .m-icon-button { flex: 0 0 38px; }
 
 /* Filvelgeren er systemets, ikke vår. Den skal utløses av knappen over, ikke
    tegnes som en grå «Velg fil»-kontroll ved siden av den. */

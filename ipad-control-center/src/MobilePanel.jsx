@@ -4,6 +4,8 @@ import {
   ArrowSquareIn,
   ArrowSquareOut,
   Bluetooth,
+  CaretLeft,
+  CaretRight,
   Check,
   ClipboardText,
   Clock,
@@ -11,6 +13,7 @@ import {
   CornersIn,
   CornersOut,
   DeviceMobile,
+  DeviceTablet,
   FolderOpen,
   Footprints,
   GraduationCap,
@@ -349,170 +352,207 @@ function FocusCard({ state, seconds, onStart, onPause, onSkip, onStop, onActivit
 }
 
 // Hodetelefonene står fast på én enhet, og veien ut har vært å slå dem av og på
-// til de fant riktig sted. Arket gjør det samme med ett trykk.
+// til de fant riktig sted. Arket gjør det samme med to trykk: hvilken
+// hodetelefon, og hvor den skal.
 //
-// De to veiene er ikke like ekte, og det skal arket si. Mac-en kan koble til og
-// fra seg selv, og det er hele sannheten om hva panelet rår over: en Bluetooth-
-// forbindelse startes av enheten som vil ha lyden, så Mac-en kan ikke be
-// telefonen om å ta hodetelefonene. Derfor er «Koble fra Mac-en» like viktig som
-// «Koble til» — den slipper taket, og AirPods hopper videre av seg selv.
+// To steg og ikke ett skjema. Første utgave la begge veiene og hele
+// forklaringen ut i samme rad, og da var arket mest tekst — man leste seg fram
+// til en knapp i stedet for å peke på den. Oppskriften på snarveien hører
+// hjemme der man setter den opp, én gang, og ingen andre steder.
 //
-// Veien til telefonen går gjennom en snarvei Ole lager én gang. Uten et lagret
-// navn viser raden oppskriften i stedet for en knapp: en `shortcuts://`-adresse
-// til en snarvei som ikke finnes ender i en feilmelding fra Snarveier, og det
-// ser ut som at panelet er ødelagt.
+// Målene er ikke like ekte, og det skal listen si i stedet for å skjule det.
+// Mac-en kan koble til og fra seg selv, og det er hele det panelet rår over: en
+// Bluetooth-forbindelse startes av enheten som vil ha lyden. Telefonen kan kjøre
+// sin egen snarvei. iPaden kan ingen av delene herfra, og står derfor avslått
+// med grunnen skrevet — samme måte som Spotify-arket viser en enhet den ikke
+// kan styre.
 function BluetoothSheet({ onClose, onToast }) {
   const [snapshot, setSnapshot] = useState(null);
   const [valgt, setValgt] = useState(null);
-  const [busy, setBusy] = useState("");
+  const [setup, setSetup] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [utkast, setUtkast] = useState("");
-  // Snarveinavnene bor i `localStorage`, men de må stå i tilstanden også.
-  // Første utgave leste lagringen under tegningen, og da hadde React ingen måte
-  // å vite at et navn var lagret på: raden ble stående med «Lagre snarveien»
-  // mens navnet lå trygt på plass.
+  // Snarveinavnene bor i `localStorage`, men de må stå i tilstanden også:
+  // leses lagringen under tegningen, har React ingen måte å vite at et navn ble
+  // lagret på, og raden blir stående og be om det som allerede er der.
   const [shortcuts, setShortcuts] = useState({});
 
   async function last() {
     const neste = await fetchHeadphones();
     setSnapshot(neste);
     const navn = {};
-    for (const device of neste.devices ?? []) navn[device.id] = readShortcutName(window.localStorage, device.id);
+    for (const enhet of neste.devices ?? []) navn[enhet.id] = readShortcutName(window.localStorage, enhet.id);
     setShortcuts(navn);
   }
 
   useEffect(() => { last(); }, []);
 
-  function lagreSnarvei(id, navn) {
-    const lagret = saveShortcutName(window.localStorage, id, navn);
-    setShortcuts((current) => ({ ...current, [id]: lagret }));
-    setUtkast(lagret);
-  }
+  const devices = snapshot?.devices ?? [];
+  const device = devices.find((enhet) => enhet.id === valgt) ?? null;
+  const snarvei = device ? shortcuts[device.id] ?? "" : "";
 
-  async function bytt(device, mode) {
-    setBusy(device.id);
+  async function tilMac(mode) {
+    setBusy(true);
     try {
-      const result = await callMacAction({ action: `bluetooth-${mode}`, address: device.id });
-      onToast(result.message);
+      onToast((await callMacAction({ action: `bluetooth-${mode}`, address: device.id })).message);
     } catch (error) {
       onToast(error.message);
     } finally {
-      setBusy("");
+      setBusy(false);
       last();
     }
   }
 
-  function tilTelefonen(device) {
-    const url = shortcutUrl(shortcuts[device.id]);
-    if (!url) return;
-    // Snarveier tar over skjermen, kjører, og gir den tilbake. Panelet blir
-    // liggende i Safari bak den.
-    window.location.href = url;
+  function tilbake() {
+    if (setup) return setSetup(false);
+    setValgt(null);
   }
 
-  const devices = snapshot?.devices ?? [];
+  // Steg 3: snarveien settes opp én gang per hodetelefon, og forklaringen bor
+  // her — ikke i veien for de to trykkene man gjør hver dag.
+  if (device && setup) {
+    return (
+      <Sheet label={`Snarvei for ${device.name}`} onClose={onClose}>
+        <SheetHead title="Til telefonen" onBack={tilbake} />
+        <p className="m-sheet-note">
+          Telefonen må koble seg til selv. Lag en snarvei i Snarveier med handlingen
+          «Angi avspillingsmål» og velg {device.name} — så kjører panelet den herfra.
+        </p>
+        <input
+          className="m-input"
+          value={utkast}
+          onChange={(event) => setUtkast(event.target.value)}
+          placeholder="Navn på snarveien"
+          aria-label={`Navn på snarveien som sender lyden til ${device.name}`}
+        />
+        <button
+          className="m-wide-button is-primary"
+          type="button"
+          disabled={!utkast.trim()}
+          onClick={() => {
+            const lagret = saveShortcutName(window.localStorage, device.id, utkast);
+            setShortcuts((current) => ({ ...current, [device.id]: lagret }));
+            setSetup(false);
+          }}
+        >
+          <Check size={18} weight="bold" /> Lagre
+        </button>
+      </Sheet>
+    );
+  }
 
-  return (
-    <div className="m-sheet-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="m-sheet" role="dialog" aria-modal="true" aria-label="Hodetelefoner">
-        <h3>Hodetelefoner</h3>
+  // Steg 2: hvor skal den?
+  if (device) {
+    const mål = [
+      {
+        id: "mac",
+        icon: Laptop,
+        navn: "Mac-en",
+        // Frakoblingen er halve poenget: Mac-en kan ikke be telefonen om å ta
+        // hodetelefonene, men den kan slippe taket, og da hopper AirPods dit selv.
+        under: device.onMac ? "Tilkoblet — trykk for å koble fra" : null,
+        aktiv: device.onMac,
+        onPress: () => tilMac(device.onMac ? "disconnect" : "connect"),
+      },
+      {
+        id: "telefon",
+        icon: DeviceMobile,
+        navn: "Denne telefonen",
+        under: snarvei ? null : "Trykk for å sette opp",
+        onPress: () => (snarvei ? (window.location.href = shortcutUrl(snarvei)) : (setUtkast(snarvei), setSetup(true))),
+      },
+      { id: "ipad", icon: DeviceTablet, navn: "iPad", under: "Kan ikke styres herfra", disabled: true },
+    ];
 
-        {!snapshot && <p className="m-empty">Leser Bluetooth på Mac-en …</p>}
-        {snapshot && snapshot.error && <p className="m-empty">{snapshot.error}</p>}
-        {snapshot && !snapshot.error && devices.length === 0 && (
-          <p className="m-empty">Ingen hodetelefoner er paret med Mac-en.</p>
-        )}
-
+    return (
+      <Sheet label={`Hvor skal ${device.name}?`} onClose={onClose}>
+        <SheetHead title={device.name} onBack={tilbake} />
         <ul>
-          {devices.map((device) => {
-            const åpen = valgt === device.id;
-            const snarvei = shortcuts[device.id] ?? "";
+          {mål.map((rad) => {
+            const Icon = rad.icon;
             return (
-              <li key={device.id}>
-                <button
-                  type="button"
-                  className={device.onMac ? "is-active" : ""}
-                  onClick={() => { setValgt(åpen ? null : device.id); setUtkast(snarvei); }}
-                  aria-expanded={åpen}
-                >
+              <li key={rad.id}>
+                <button type="button" className={rad.aktiv ? "is-active" : ""} disabled={rad.disabled || busy} onClick={rad.onPress}>
                   <span className="m-sheet-row">
-                    <Headphones size={22} weight="fill" />
+                    <Icon size={22} weight="fill" />
                     <span>
-                      <strong>{device.name}</strong>
-                      {/* Panelet vet bare hva Mac-en har. Står den ikke der, kan den
-                          like gjerne stå på telefonen som være slått av, og da skal
-                          raden si det den vet i stedet for å gjette. */}
-                      <small>{device.onMac ? "På Mac-en" : "Ikke på Mac-en"}</small>
+                      <strong>{rad.navn}</strong>
+                      {rad.under && <small>{rad.under}</small>}
                     </span>
+                    {rad.aktiv && <Check size={18} weight="bold" />}
                   </span>
                 </button>
-
-                {åpen && (
-                  <div className="m-bt-ways">
-                    <button
-                      className={`m-wide-button ${device.onMac ? "" : "is-primary"}`}
-                      type="button"
-                      disabled={busy === device.id}
-                      onClick={() => bytt(device, device.onMac ? "disconnect" : "connect")}
-                    >
-                      <Laptop size={18} weight="fill" />
-                      {busy === device.id ? "Kobler …" : device.onMac ? "Koble fra Mac-en" : "Koble til Mac-en"}
-                    </button>
-
-                    {snarvei ? (
-                      <button className="m-wide-button" type="button" onClick={() => tilTelefonen(device)}>
-                        <DeviceMobile size={18} weight="fill" /> Til telefonen
-                      </button>
-                    ) : (
-                      <div className="m-bt-setup">
-                        <p className="m-sheet-note">
-                          Mac-en kan ikke koble hodetelefonene til telefonen — det må telefonen gjøre selv.
-                          Lag én snarvei i Snarveier med handlingen «Angi avspillingsmål» og velg {device.name},
-                          og skriv navnet på den her.
-                        </p>
-                        <input
-                          className="m-input"
-                          value={utkast}
-                          onChange={(event) => setUtkast(event.target.value)}
-                          placeholder="Navn på snarveien"
-                          aria-label={`Navn på snarveien som sender lyden til ${device.name}`}
-                        />
-                        <button
-                          className="m-wide-button"
-                          type="button"
-                          disabled={!utkast.trim()}
-                          onClick={() => lagreSnarvei(device.id, utkast)}
-                        >
-                          <Check size={18} weight="bold" /> Lagre snarveien
-                        </button>
-                      </div>
-                    )}
-
-                    {snarvei && (
-                      <button
-                        className="m-bt-forget"
-                        type="button"
-                        onClick={() => lagreSnarvei(device.id, "")}
-                      >
-                        Bytt snarvei («{snarvei}»)
-                      </button>
-                    )}
-                  </div>
-                )}
               </li>
             );
           })}
         </ul>
+        {busy && <p className="m-empty">Kobler …</p>}
+        {/* Snarveier kan få nytt navn, og da åpner knappen over ingenting. Veien
+            tilbake til oppsettet finnes derfor — men bare når det er noe å
+            endre, og bare som en stille linje under det man faktisk kommer for. */}
+        {snarvei && (
+          <button className="m-sheet-quiet" type="button" onClick={() => { setUtkast(snarvei); setSetup(true); }}>
+            Endre snarveien «{snarvei}»
+          </button>
+        )}
+      </Sheet>
+    );
+  }
 
-        {/* AirPods holder én enhet av gangen og hopper automatisk; XM5 har
-            multipoint og kan stå på to. Det er hodetelefonenes egenskap og ikke
-            panelets, og da skal panelet si det i stedet for å love noe annet. */}
-        <p className="m-sheet-note">
-          AirPods står på én enhet av gangen og hopper selv når du starter lyd et annet sted.
-          Sony-headsettet kan stå på to samtidig, men det slås på fra hver enhet.
-        </p>
+  // Steg 1: hvilken hodetelefon?
+  return (
+    <Sheet label="Hodetelefoner" onClose={onClose}>
+      <SheetHead title="Hodetelefoner" />
+      {!snapshot && <p className="m-empty">Leser Bluetooth på Mac-en …</p>}
+      {snapshot?.error && <p className="m-empty">{snapshot.error}</p>}
+      {snapshot && !snapshot.error && devices.length === 0 && (
+        <p className="m-empty">Ingen hodetelefoner er paret med Mac-en.</p>
+      )}
+      <ul>
+        {devices.map((enhet) => (
+          <li key={enhet.id}>
+            <button type="button" className={enhet.onMac ? "is-active" : ""} onClick={() => { setValgt(enhet.id); setUtkast(shortcuts[enhet.id] ?? ""); }}>
+              <span className="m-sheet-row">
+                <Headphones size={22} weight="fill" />
+                <span>
+                  <strong>{enhet.name}</strong>
+                  {/* Panelet vet bare hva Mac-en har. Står den ikke der, kan den
+                      like gjerne stå på telefonen som være slått av, så raden
+                      sier ingenting i stedet for å gjette. */}
+                  {enhet.onMac && <small>På Mac-en</small>}
+                </span>
+                <CaretRight size={16} weight="bold" />
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Sheet>
+  );
+}
 
+// Arkskallet og overskriften deles av de tre stegene, slik at de ikke kan komme
+// i utakt med hverandre.
+function Sheet({ label, onClose, children }) {
+  return (
+    <div className="m-sheet-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="m-sheet" role="dialog" aria-modal="true" aria-label={label}>
+        {children}
         <button className="m-wide-button" type="button" onClick={onClose}>Lukk</button>
       </section>
+    </div>
+  );
+}
+
+function SheetHead({ title, onBack }) {
+  return (
+    <div className="m-sheet-head">
+      {onBack && (
+        <button className="m-icon-button" type="button" onClick={onBack} aria-label="Tilbake">
+          <CaretLeft size={17} weight="bold" />
+        </button>
+      )}
+      <h3>{title}</h3>
     </div>
   );
 }
