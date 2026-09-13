@@ -8,7 +8,7 @@ import { getUsageSnapshot } from "./server/usage-service.mjs";
 import { getAgentSessions } from "./server/agent-session-service.mjs";
 import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
 import { listConnectedSubjects } from "./server/subject-service.mjs";
-import { getMailDigest } from "./server/mail-digest-service.mjs";
+import { getMailDigest, saveDigest } from "./server/mail-digest-service.mjs";
 import { listHeadphones } from "./server/bluetooth-service.mjs";
 import { getDayPlan, markBlockDone, recordNight, recordWake, saveTargetWake } from "./server/day-plan-service.mjs";
 // Reglene for rytmen bor i dashboard.js sammen med resten av utregningene.
@@ -417,15 +417,39 @@ function mailDigestApi() {
     name: "local-mail-digest-api",
     configureServer(server) {
       server.middlewares.use("/api/mail-digest", async (request, response) => {
-        if (request.method !== "GET") {
-          sendJson(response, 405, { error: "Method not allowed" });
+        if (!setSyncCors(request, response)) {
+          sendJson(response, 403, { error: "Origin not allowed" });
+          return;
+        }
+        if (request.method === "OPTIONS") {
+          response.statusCode = 204;
+          response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+          response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          response.end();
           return;
         }
         try {
-          const requested = new URL(request.url ?? "/", "http://local").searchParams.get("date");
-          sendJson(response, 200, await getMailDigest(requested));
+          if (request.method === "GET") {
+            const requested = new URL(request.url ?? "/", "http://local").searchParams.get("date");
+            sendJson(response, 200, await getMailDigest(requested));
+            return;
+          }
+          // Nattjobben kjører på den stasjonære, ikke her. Den sender dagen sin
+          // hit framfor å skrive en fil, for panelet leser bare det som ligger
+          // på Mac-en — og en fil skrevet på en annen maskin når aldri fram.
+          // Sammendraget normaliseres før det lagres, så en jobb som skriver
+          // noe uventet ender med en tom dag framfor en side som ikke tegnes.
+          if (request.method === "POST") {
+            const body = await readJsonBody(request, 512_000);
+            const digest = await saveDigest(body, body?.date);
+            console.log(`[panel] mail-sammendrag for ${digest.date} fra ${request.socket.remoteAddress ?? "ukjent"}: ${digest.counts.total} mail, ${digest.counts.action} krever noe`);
+            sendJson(response, 200, { date: digest.date, counts: digest.counts });
+            return;
+          }
+          sendJson(response, 405, { error: "Method not allowed" });
         } catch (error) {
-          sendJson(response, 500, { error: error instanceof Error ? error.message : "Ukjent feil" });
+          const reason = error instanceof Error ? error.message : "Ukjent feil";
+          sendJson(response, request.method === "POST" ? 400 : 500, { error: reason });
         }
       });
     },
