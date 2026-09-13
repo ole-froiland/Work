@@ -10,6 +10,7 @@ import {
   ClipboardText,
   Clock,
   CloudSun,
+  EnvelopeSimple,
   CornersIn,
   CornersOut,
   DeviceMobile,
@@ -81,6 +82,7 @@ export const LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 560px)
 
 const PAGES = [
   { id: "na", label: "Nå", icon: Clock },
+  { id: "mail", label: "Mail", icon: EnvelopeSimple },
   { id: "ai", label: "AI", icon: Sparkle },
   { id: "status", label: "Status", icon: Pulse },
 ];
@@ -751,6 +753,125 @@ function AgentsCard({ snapshot, now }) {
   );
 }
 
+// Datoen kommer som «2026-09-13» og skal bli til en norsk dag. Klokka settes
+// midt på dagen først: `new Date("2026-09-13")` er midnatt i UTC, og i norsk
+// sommertid er det fortsatt kvelden før.
+function dayText(key) {
+  if (!key) return "";
+  const date = new Date(`${key}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return key;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+  const diff = Math.round((today - date) / 86_400_000);
+  if (diff === 0) return "I dag";
+  if (diff === 1) return "I går";
+  return dateText(date);
+}
+
+function mailTime(value) {
+  const date = new Date(value ?? "");
+  return Number.isNaN(date.getTime()) ? "" : clockText(date);
+}
+
+function MailRow({ item }) {
+  return (
+    <li className={item.action ? "is-action" : ""}>
+      <span className="m-mail-top">
+        <strong>{item.from}</strong>
+        <small>{mailTime(item.at)}</small>
+      </span>
+      <span className="m-mail-subject">{item.subject}</span>
+      {item.summary && <span className="m-mail-summary">{item.summary}</span>}
+      <span className="m-mail-meta">
+        {item.action && <i className="m-chip is-action">{item.why || "Krever noe av deg"}</i>}
+        {item.label && <i className="m-chip">{item.label}</i>}
+      </span>
+    </li>
+  );
+}
+
+// Én dag med post, slik den så ut da nattjobben gikk. Siden henter bare det
+// som allerede ligger skrevet på disk — den spør aldri Gmail selv, og kan
+// derfor verken vente på nett eller koste noe å åpne.
+function MailPage() {
+  const [valgt, setValgt] = useState(null);
+  const [state, setState] = useState({ status: "laster", dates: [], digest: null, date: null });
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const response = await fetch(valgt ? `/api/mail-digest?date=${valgt}` : "/api/mail-digest", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (alive) setState({ status: "klar", ...data });
+      } catch {
+        if (alive) setState((current) => ({ ...current, status: "feil" }));
+      }
+    })();
+    return () => { alive = false; };
+  }, [valgt]);
+
+  const { dates = [], digest, date } = state;
+  const index = dates.indexOf(date ?? "");
+  // Listen står nyest først, så «eldre» er ett hakk lenger ut i den.
+  const eldre = index >= 0 && index + 1 < dates.length ? dates[index + 1] : null;
+  const nyere = index > 0 ? dates[index - 1] : null;
+
+  const handling = digest?.items.filter((item) => item.action) ?? [];
+  const resten = digest?.items.filter((item) => !item.action) ?? [];
+
+  return (
+    <>
+      <Card
+        className="m-mail-card"
+        title={dayText(date) || "Mail"}
+        action={
+          <span className="m-mail-nav">
+            <button type="button" onClick={() => eldre && setValgt(eldre)} disabled={!eldre} aria-label="Dagen før">
+              <CaretLeft size={18} weight="bold" />
+            </button>
+            <button type="button" onClick={() => setValgt(nyere)} disabled={!nyere} aria-label="Dagen etter">
+              <CaretRight size={18} weight="bold" />
+            </button>
+          </span>
+        }
+      >
+        {state.status === "laster" && <p className="m-empty">Henter …</p>}
+        {state.status === "feil" && <p className="m-empty">Fikk ikke tak i sammendraget. Panelet må kjøre på Mac-en for å lese det.</p>}
+        {state.status === "klar" && !digest && (
+          <p className="m-empty">Ingen sammendrag skrevet ennå. Nattjobben går klokka 07:00.</p>
+        )}
+        {digest && (
+          <p className="m-mail-count">
+            <strong>{digest.counts.total}</strong> {digest.counts.total === 1 ? "mail" : "mailer"}
+            {digest.counts.action > 0 && <em> · {digest.counts.action} krever noe av deg</em>}
+          </p>
+        )}
+        {digest?.note && <p className="m-empty">{digest.note}</p>}
+      </Card>
+
+      {handling.length > 0 && (
+        <Card className="m-mail-card" title="Krever noe av deg">
+          <ul className="m-mail-list">
+            {handling.map((item, i) => <MailRow key={item.id ?? `h${i}`} item={item} />)}
+          </ul>
+        </Card>
+      )}
+
+      {resten.length > 0 && (
+        <Card className="m-mail-card" title={handling.length ? "Resten" : "Det som kom"}>
+          <ul className="m-mail-list">
+            {resten.map((item, i) => <MailRow key={item.id ?? `r${i}`} item={item} />)}
+          </ul>
+        </Card>
+      )}
+
+      {digest && digest.counts.total === 0 && <p className="m-empty">Ingen post dette døgnet.</p>}
+    </>
+  );
+}
+
 function MetricsCard({ metrics, rhythm, now }) {
   const outdated = needsCompanionUpdate(metrics, now);
   const hasScreenTime = Number.isFinite(metrics?.screenTime?.socialMinutes) && !outdated;
@@ -1239,6 +1360,8 @@ export function MobilePanel() {
             </div>
           </>
         )}
+
+        {page === "mail" && <MailPage />}
 
         {page === "ai" && (
           <>

@@ -8,6 +8,7 @@ import { getUsageSnapshot } from "./server/usage-service.mjs";
 import { getAgentSessions } from "./server/agent-session-service.mjs";
 import { getSyncCalendar, mutateMacAppleCalendar, updateSyncCalendar } from "./server/sync-calendar-service.mjs";
 import { listConnectedSubjects } from "./server/subject-service.mjs";
+import { getMailDigest } from "./server/mail-digest-service.mjs";
 import { listHeadphones } from "./server/bluetooth-service.mjs";
 import { getDayPlan, markBlockDone, recordNight, recordWake, saveTargetWake } from "./server/day-plan-service.mjs";
 // Reglene for rytmen bor i dashboard.js sammen med resten av utregningene.
@@ -407,6 +408,30 @@ function panelHelloApi() {
   };
 }
 
+// Nattjobben skriver ett sammendrag per dag til disk. Panelet leser dem her.
+// Selve posten blir aldri med: det som svares ut er avsender, tid, emne og en
+// setning om hva mailen ville — aldri innholdet. Ingen skriving over HTTP
+// heller, så en åpen port kan ikke finne på å lage falske dager.
+function mailDigestApi() {
+  return {
+    name: "local-mail-digest-api",
+    configureServer(server) {
+      server.middlewares.use("/api/mail-digest", async (request, response) => {
+        if (request.method !== "GET") {
+          sendJson(response, 405, { error: "Method not allowed" });
+          return;
+        }
+        try {
+          const requested = new URL(request.url ?? "/", "http://local").searchParams.get("date");
+          sendJson(response, 200, await getMailDigest(requested));
+        } catch (error) {
+          sendJson(response, 500, { error: error instanceof Error ? error.message : "Ukjent feil" });
+        }
+      });
+    },
+  };
+}
+
 // Panelet skal aldri tilby en knapp som ikke fører noe sted, så nettleseren
 // spør hvilke fag som faktisk har et ChatGPT-prosjekt på Mac-en. Bare kodene
 // svares ut — adressene blir liggende igjen her.
@@ -558,5 +583,5 @@ export default defineConfig({
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), dayPlanApi(), spotifyApi(), panelHelloApi(), subjectsApi(), bluetoothApi(), macActionApi(), clipboardApi(), connectionRepairApi(), react()],
+  plugins: [usageApi(), agentSessionsApi(), deviceMetricsApi(), syncCalendarApi(), syncNotesApi(), dayPlanApi(), spotifyApi(), panelHelloApi(), subjectsApi(), mailDigestApi(), bluetoothApi(), macActionApi(), clipboardApi(), connectionRepairApi(), react()],
 });

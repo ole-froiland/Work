@@ -196,9 +196,37 @@
 
 .m-toast { position: fixed; left: 12px; right: 12px; bottom: calc(78px + env(safe-area-inset-bottom, 0px)); z-index: 30; padding: 13px 15px; border-radius: 14px; background: #232a33; color: var(--text); font-size: 14px; line-height: 1.45; box-shadow: 0 12px 30px rgba(0, 0, 0, .4); }
 
+/* Mail-siden. Hver rad er en hel mail komprimert til fire linjer: hvem, når,
+   hva det gjaldt, og hva den vil ha. Den som krever noe av Ole får oransje
+   kant og en merkelapp som sier hva — resten skal kunne skummes uten å stoppe.
+   Fargen er den samme --orange som resten av panelet bruker til «se her». */
+.m-mail-card .m-card-head { align-items: center; }
+.m-mail-nav { display: flex; gap: 6px; }
+/* 44 px er gulvet for alt man skal treffe med tommelen, også her hvor knappen
+   bare er en pil. */
+.m-mail-nav button { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--panel-raised); color: var(--text); cursor: pointer; }
+.m-mail-nav button:disabled { opacity: .35; cursor: default; }
+.m-mail-count { margin: 0; color: var(--muted); font-size: 14px; }
+.m-mail-count strong { color: var(--text); font-size: 17px; font-weight: 700; }
+.m-mail-count em { color: var(--orange); font-style: normal; font-weight: 650; }
+
+.m-mail-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.m-mail-list li { display: flex; flex-direction: column; gap: 3px; padding: 10px 11px; border-radius: 14px; background: var(--panel-raised); }
+/* Kanten, ikke en fylt flate: en liste der tre av sytten rader lyser opp blir
+   uleselig. Stripa i venstre marg finnes i øyekroken og roper likevel ikke. */
+.m-mail-list li.is-action { border-left: 3px solid var(--orange); background: #241d16; }
+.m-mail-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.m-mail-top strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 650; }
+.m-mail-top small { flex: 0 0 auto; color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+.m-mail-subject { color: var(--text); font-size: 14px; line-height: 1.35; }
+.m-mail-summary { color: var(--muted); font-size: 14px; line-height: 1.45; }
+.m-mail-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.m-mail-meta:empty { display: none; }
+.m-chip.is-action { background: rgba(255, 174, 112, .16); color: var(--orange); }
+
 /* Fanene ligger nederst fordi det er der tommelen er. Sikkerhetssonen legges
    under, slik at raden ikke havner oppå hjemindikatoren. */
-.m-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line-soft); background: var(--panel); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.m-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line-soft); background: var(--panel); padding-bottom: env(safe-area-inset-bottom, 0px); }
 .m-tabs button { min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; background: none; color: var(--dim); font-size: 13px; font-weight: 600; cursor: pointer; }
 .m-tabs button.is-active { color: var(--lime); }
 

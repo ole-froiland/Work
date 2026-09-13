@@ -13,6 +13,23 @@ startes av enheten som vil ha lyden — så veien dit er «koble fra Mac-en», s
 AirPodsene videre, eller en snarvei på telefonen med handlingen «Angi avspillingsmål».
 Navnet på snarveien legges inn i arket én gang per hodetelefon.
 
+Mail-siden viser ett døgn med post om gangen, slik den så ut da nattjobben gikk
+klokka sju. Hver rad er en mail komprimert til fire linjer: hvem som sendte,
+når, hva emnet var, og én setning om hva mailen faktisk vil. Det som krever noe
+av Ole — et svar, en betaling, en frist — får oransje kant og en merkelapp som
+sier hva, og står øverst i sin egen bolk. Resten kan skummes. Pilene i toppen
+blar bakover i dagene, og hver dag som er skrevet blir liggende.
+
+Siden spør aldri Gmail selv. En planlagt jobb i Claude Code henter døgnet én
+gang hver morgen og skriver en JSON-fil til
+`~/Library/Application Support/ipad-control-center/mail-digests/ÅÅÅÅ-MM-DD.json`;
+panelet leser bare den. Derfor koster det ingenting å åpne siden, den virker
+uten nett mot Google, og et sammendrag som først er skrevet kan ikke forsvinne
+fordi posten senere blir arkivert. Selve sorteringen gjøres av Gmail-filtre og
+koster heller ingenting — nattjobben leser bare utdragene, aldri hele meldinger.
+Endepunktet `/api/mail-digest` svarer bare ut avsender, tid, emne og setningen;
+innholdet i posten forlater aldri Mac-en.
+
 ## Kjør lokalt
 
 ```bash
